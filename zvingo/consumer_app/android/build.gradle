@@ -1,0 +1,32 @@
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.buildDir = "../build"
+
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+}
+subprojects {
+    project.evaluationDependsOn(":app")
+}
+
+// Expose flutter SDK version properties to plugin subprojects
+// that reference `flutter.compileSdkVersion` in their build.gradle
+// (e.g. geolocator_android). Skip :app since it uses the real Flutter plugin.
+subprojects { subproject ->
+    if (subproject.name != "app") {
+        subproject.ext.flutter = [
+            compileSdkVersion: 35,
+            minSdkVersion: 21,
+            targetSdkVersion: 35,
+        ]
+    }
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
+}

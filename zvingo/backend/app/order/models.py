@@ -1,0 +1,53 @@
+from typing import List, Optional
+from datetime import datetime
+from beanie import Document, Indexed
+from pydantic import BaseModel, Field
+from app.order.state_machine import OrderState
+
+class OrderItem(BaseModel):
+    name: str
+    quantity: int
+    price: float
+    special_instructions: Optional[str] = None
+
+class OrderEvent(BaseModel):
+    state: OrderState
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    actor_id: Optional[str] = None
+    metadata: dict = {}
+
+class Order(Document):
+    merchant_id: Indexed(str)
+    consumer_id: Indexed(str)
+    driver_id: Optional[Indexed(str)] = None
+
+    state: OrderState = OrderState.CREATED
+    items: List[OrderItem]
+    total_amount: float
+
+    pickup_location: dict # GeoJSON
+    dropoff_location: dict # GeoJSON
+
+    delivery_instructions: Optional[str] = None
+    tip_amount: float = 0.0
+    delivery_fee: float = 0.0
+    service_fee: float = 0.0
+    tax_amount: float = 0.0
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    events: List[OrderEvent] = []
+
+    idempotency_key: Optional[str] = None
+
+    # Retry tracking for stuck orders
+    retry_count: int = 0
+    last_retry_at: Optional[datetime] = None
+
+    class Settings:
+        name = "orders"
+        indexes = [
+            [("pickup_location", "2dsphere")],
+            [("idempotency_key", 1)],
+        ]

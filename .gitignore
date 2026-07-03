@@ -1,0 +1,44 @@
+# --- Secrets & credentials (never commit) ---
+.env
+.env.local
+.env.production
+**/.env
+**/.env.local
+**/.env.production
+**/firebase-credentials.json
+**/key.properties
+*.jks
+*.keystore
+**/nginx/certs/
+
+# --- Python (backend) ---
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# --- Node / Next.js (merchant-dashboard) ---
+node_modules/
+.next/
+out/
+
+# --- Flutter / Dart (consumer_app, driver_app) ---
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+.idea/
+
+# --- Backend runtime data ---
+zvingo/backend/static/uploads/
+
+# --- Logs & temp artifacts ---
+*.log
+tmpclaude-*
+nul
+
+# --- OS junk ---
+Thumbs.db
+.DS_Store

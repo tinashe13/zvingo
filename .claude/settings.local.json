@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(ls -la \"C:\\\\Users\\\\tinas\\\\Documents\\\\Github\\\\Doordash\\\\zvingo\\\\backend\\\\app\\\\finance\"\" && ls -la \"C:UserstinasDocumentsGithubDoordashzvingobackendapp \")",
+      "Bash(docker-compose logs:*)",
+      "Bash(dart run build_runner:*)",
+      "Bash(cmd /c:*)",
+      "Bash(powershell -Command:*)",
+      "Read(//c/Users/tinas/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/1008c88a-8ac4-4251-901a-d5090a0bfa57/c8fd584f-31b6-4bc2-8f08-01c33dffe8e8/skills/docx/**)",
+      "Bash(pandoc \"C:\\\\Users\\\\tinas\\\\Downloads\\\\resume-projects\\(9\\).docx\" -o /tmp/template.md)",
+      "Bash(where pandoc:*)",
+      "Bash(pip install:*)",
+      "Bash(python3 -c \":*)",
+      "Bash(python -c \":*)",
+      "Bash(\"C:\\\\Users\\\\tinas\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python313\\\\python.exe\" -c \":*)",
+      "Bash(flutter --version)",
+      "PowerShell(\"---\")",
+      "PowerShell($tmp = \"C:\\\\Users\\\\tinas\\\\Documents\\\\Github\\\\Doordash\\\\zvingo\\\\.env.validate.tmp\"; docker compose -f C:\\\\Users\\\\tinas\\\\Documents\\\\Github\\\\Doordash\\\\zvingo\\\\docker-compose.prod.yml --env-file $tmp config | Select-String -Pattern \"MONGODB_URL|REDIS_URL|test:|-a |mongosh|command:\" | ForEach-Object { $_.Line.Trim\\(\\) })",
+      "Bash(rm -rf .next)",
+      "Bash(npm run *)",
+      "Bash(python -m compileall -q app)",
+      "Bash(flutter analyze *)",
+      "Bash(poetry run *)",
+      "Bash(tee /tmp/driver_analyze.txt)",
+      "Bash(poetry install *)",
+      "Bash(cd /c/Users/tinas/Documents/Github/Doordash/zvingo/backend && head -15 tests/test_binproto_codec.py tests/test_dispatch_state.py tests/test_order_state_machine.py tests/test_sms_parser.py)",
+      "Bash(echo \"exit=$?\")",
+      "PowerShell($env:PYTHONIOENCODING='utf-8'; poetry run python -c \"from app.main import app; from app.config import settings; print\\('APP IMPORT OK env=' + settings.ENVIRONMENT + ' cors=' + str\\(settings.cors_origins\\)\\)\")",
+      "Bash(rm -f nul zvingo/nul)",
+      "Read(//c/c/Users/tinas/Documents/Github/**)",
+      "PowerShell(git init -b main; git add -A; Write-Output \"---SECRETS CHECK---\"; git status --porcelain | Select-String -Pattern \"\\\\.env$|firebase-credentials|key\\\\.properties|\\\\.jks\"; Write-Output \"---COUNT---\"; \\(git status --porcelain | Measure-Object -Line\\).Lines)"
+    ]
+  }
+}

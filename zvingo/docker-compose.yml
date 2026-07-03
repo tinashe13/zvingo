@@ -1,0 +1,73 @@
+services:
+  backend:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    ports:
+      - "8000:8000"
+      - "9090:9090/udp"
+      - "9091:9091"
+    environment:
+      - MONGODB_URL=mongodb://mongo:27017/zvingo
+      - REDIS_URL=redis://redis:6379/0
+      - SMS_GATEWAY_URL=http://sms-mock:8000
+      - PAYNOW_INTEGRATION_ID=${PAYNOW_INTEGRATION_ID:-}
+      - PAYNOW_INTEGRATION_KEY=${PAYNOW_INTEGRATION_KEY:-}
+      - PAYNOW_RETURN_URL=${PAYNOW_RETURN_URL:-http://localhost/payment/return}
+      - PAYNOW_RESULT_URL=${PAYNOW_RESULT_URL:-http://localhost/api/payment/webhook}
+      - UPLOAD_BASE_URL=${UPLOAD_BASE_URL:-http://localhost:8000}
+      - SECRET_KEY=${SECRET_KEY:-changethis}
+      # FIREBASE_CREDENTIALS_PATH is intentionally omitted here so the value
+      # from env_file (./backend/.env) is used without being overridden.
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  nginx:
+    build: ./nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+  mongo:
+    image: mongo:7-jammy
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: [ "CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok" ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  sms-mock:
+    image: python:3.12-slim
+    command: >
+      sh -c "pip install fastapi uvicorn && 
+             echo 'from fastapi import FastAPI, Request; import logging; logger = logging.getLogger(\"uvicorn\"); app = FastAPI(); @app.post(\"/send\")\nasync def send(request: Request):\n    data = await request.json()\n    logger.info(f\"SMS SENT: {data}\")\n    return {\"status\": \"success\"}' > main.py && 
+             uvicorn main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8001:8000"
+
+volumes:
+  mongo_data:
+  redis_data:
