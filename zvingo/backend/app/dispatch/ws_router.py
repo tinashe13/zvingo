@@ -21,6 +21,7 @@ Protocol (JSON messages in both directions):
 import asyncio
 import json
 from datetime import datetime
+from app.time_utils import utc_now
 
 import redis.asyncio as aioredis
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -222,7 +223,7 @@ async def _handle_location_update(driver_id: str, msg: dict):
         lng = float(msg["lng"])
         status = msg.get("status", "ONLINE")
         battery = int(msg.get("battery", 0))
-        timestamp = datetime.utcnow()
+        timestamp = utc_now()
 
         update = DriverLocationUpdate(
             driver_id=driver_id,

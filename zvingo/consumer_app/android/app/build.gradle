@@ -7,10 +7,13 @@ plugins {
 
 // Release signing is read from android/key.properties (never committed — see
 // android/.gitignore). When the file is absent (e.g. dev machines / CI without
-// secrets), the release build type falls back to debug signing so
-// `flutter run --release` keeps working. See BUILD.md for setup.
+// secrets), release tasks fail unless debug signing is explicitly opted into.
+// See BUILD.md for setup.
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('key.properties')
+def allowDebugReleaseSigning =
+        project.findProperty('allowDebugReleaseSigning') == 'true' ||
+        System.getenv('ZVINGO_ALLOW_DEBUG_RELEASE_SIGNING') == 'true'
 if (keystorePropertiesFile.exists()) {
     keystorePropertiesFile.withReader('UTF-8') { reader ->
         keystoreProperties.load(reader)
@@ -32,10 +35,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.zvingo.consumer_app"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -55,12 +55,23 @@ android {
 
     buildTypes {
         release {
-            // Use the real release keystore when key.properties exists,
-            // otherwise fall back to debug signing for local development.
             signingConfig = keystorePropertiesFile.exists()
                     ? signingConfigs.release
-                    : signingConfigs.debug
+                    : (allowDebugReleaseSigning ? signingConfigs.debug : null)
         }
+    }
+}
+
+gradle.taskGraph.whenReady { graph ->
+    def requestedRelease = graph.allTasks.any {
+        it.name.toLowerCase().contains('release') &&
+                (it.name.toLowerCase().contains('assemble') ||
+                 it.name.toLowerCase().contains('bundle'))
+    }
+    if (requestedRelease && !keystorePropertiesFile.exists() && !allowDebugReleaseSigning) {
+        throw new GradleException(
+                'Release signing is not configured. Add android/key.properties ' +
+                'or explicitly set -PallowDebugReleaseSigning=true for a non-deployable test build.')
     }
 }
 

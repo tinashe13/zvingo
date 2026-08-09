@@ -33,6 +33,22 @@ pytest-asyncio = "^0.23.5"
 black = "^24.3.0"
 isort = "^5.13.2"
 mypy = "^1.9.0"
+pytest-cov = "^7.1.0"
+fakeredis = "^2.37.0"
+mongomock-motor = "^0.0.36"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_mode = "auto"
+cache_dir = ".test-cache"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["app"]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
 
 [build-system]
 requires = ["poetry-core"]

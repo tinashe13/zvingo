@@ -21,8 +21,7 @@ class OrderStatusBottomSheet extends ConsumerStatefulWidget {
       _OrderStatusBottomSheetState();
 }
 
-class _OrderStatusBottomSheetState
-    extends ConsumerState<OrderStatusBottomSheet>
+class _OrderStatusBottomSheetState extends ConsumerState<OrderStatusBottomSheet>
     with SingleTickerProviderStateMixin {
   String _status = 'Preparing';
   String _orderState = 'CREATED';
@@ -31,7 +30,6 @@ class _OrderStatusBottomSheetState
   double? _driverLng;
   String? _driverId;
   String? _driverName;
-  bool _loading = true;
   Timer? _statusPollTimer;
 
   // For the progress bar animation
@@ -83,9 +81,7 @@ class _OrderStatusBottomSheetState
       }
     } catch (e) {
       debugPrint('Error fetching order: $e');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
+    } finally {}
   }
 
   void _updateState(Map<String, dynamic> data) {
@@ -98,7 +94,7 @@ class _OrderStatusBottomSheetState
       _orderState = state;
       final rawName = data['driver_name'] as String?;
       _driverName = rawName?.split(' ').first;
-      
+
       switch (state) {
         case 'CREATED':
           _status = 'Order Confirmed';
@@ -162,12 +158,12 @@ class _OrderStatusBottomSheetState
         if (state.startsWith('OrderState.')) {
           state = state.replaceFirst('OrderState.', '');
         }
-        
+
         // Only update if state changed
         if (state != _orderState) {
           _updateState(data);
         }
-        
+
         // Start driver tracking if driver just got assigned
         if (data['driver_id'] != null && _driverId == null) {
           _driverId = data['driver_id'];
@@ -184,9 +180,9 @@ class _OrderStatusBottomSheetState
 
   void _subscribeToDriver(String driverId) {
     if (driverId.isEmpty) return;
-    
+
     final url = '${AppConfig.apiBaseUrl}/location/driver/$driverId/track';
-    
+
     SSEClient.subscribeToSSE(
       method: SSERequestType.GET,
       url: url,
@@ -200,7 +196,7 @@ class _OrderStatusBottomSheetState
           final parsed = jsonDecode(event.data!);
           final lat = (parsed['lat'] as num?)?.toDouble();
           final lng = (parsed['lng'] as num?)?.toDouble();
-          
+
           if (lat != null && lng != null && mounted) {
             setState(() {
               _driverLat = lat;
@@ -236,7 +232,9 @@ class _OrderStatusBottomSheetState
         }
         return 'Driver is on the way';
       case 'ARRIVED_AT_CUSTOMER':
-        return _driverName != null ? '$_driverName has arrived!' : 'Driver has arrived!';
+        return _driverName != null
+            ? '$_driverName has arrived!'
+            : 'Driver has arrived!';
       case 'DELIVERED':
         return 'Enjoy your meal!';
       case 'CANCELLED':
@@ -287,12 +285,13 @@ class _OrderStatusBottomSheetState
                     child: Lottie.asset(
                       _lottieAsset,
                       fit: BoxFit.cover,
-                      errorBuilder: (ctx, _, __) => const Icon(Icons.fastfood, color: AppColors.primary),
+                      errorBuilder: (ctx, _, __) =>
+                          const Icon(Icons.fastfood, color: AppColors.primary),
                     ),
                   ),
                 ),
                 const SizedBox(width: 14),
-                
+
                 // Text Info
                 Expanded(
                   child: Column(
@@ -300,7 +299,7 @@ class _OrderStatusBottomSheetState
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        _status, 
+                        _status,
                         style: AppTextStyles.titleMedium,
                       ),
                       const SizedBox(height: 2),
@@ -320,10 +319,9 @@ class _OrderStatusBottomSheetState
                               backgroundColor: AppColors.background,
                               valueColor: AlwaysStoppedAnimation<Color>(
                                 Color.lerp(
-                                  AppColors.primary, 
-                                  AppColors.primaryDark, 
-                                  _progressController.value
-                                )!,
+                                    AppColors.primary,
+                                    AppColors.primaryDark,
+                                    _progressController.value)!,
                               ),
                               minHeight: 4,
                             );
@@ -333,17 +331,18 @@ class _OrderStatusBottomSheetState
                     ],
                   ),
                 ),
-                
+
                 const SizedBox(width: 12),
-                
+
                 // View Button
                 Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: AppColors.background,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.arrow_forward_ios, size: 16, color: AppColors.textSecondary),
+                  child: const Icon(Icons.arrow_forward_ios,
+                      size: 16, color: AppColors.textSecondary),
                 ),
               ],
             ),

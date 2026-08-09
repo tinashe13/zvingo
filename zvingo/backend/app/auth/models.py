@@ -1,5 +1,6 @@
 from typing import Optional, List
 from datetime import datetime
+from app.time_utils import utc_now
 from beanie import Document, Indexed
 from pydantic import EmailStr, Field, BaseModel
 
@@ -14,7 +15,7 @@ class User(Document):
     full_name: str
     role: str = "driver"
     is_active: bool = True
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
     
     # Favourites
     favourite_restaurant_ids: List[str] = []

@@ -17,7 +17,7 @@ class AccountScreen extends ConsumerWidget {
       body: SafeArea(
         child: profileAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(child: Text('Error loading profile')),
+          error: (e, _) => const Center(child: Text('Error loading profile')),
           data: (profile) => ListView(
             children: [
               const SizedBox(height: 24),
@@ -32,10 +32,12 @@ class AccountScreen extends ConsumerWidget {
                         color: AppColors.primarySurface,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.person, size: 36, color: AppColors.primary),
+                      child: const Icon(Icons.person,
+                          size: 36, color: AppColors.primary),
                     ),
                     const SizedBox(height: 12),
-                    Text(profile['full_name'] ?? 'User', style: AppTextStyles.titleLarge),
+                    Text(profile['full_name'] ?? 'User',
+                        style: AppTextStyles.titleLarge),
                     const SizedBox(height: 4),
                     Text(
                       profile['email'] ?? profile['phone'] ?? '',
@@ -47,23 +49,29 @@ class AccountScreen extends ConsumerWidget {
               const SizedBox(height: 28),
               const Divider(),
 
-              _settingsTile(context, Icons.person_outline, 'Manage Account', onTap: () {
+              _settingsTile(context, Icons.person_outline, 'Manage Account',
+                  onTap: () {
                 // Could navigate to profile edit screen
               }),
-              _settingsTile(context, Icons.payment, 'Payment Methods', onTap: () {
+              _settingsTile(context, Icons.payment, 'Payment Methods',
+                  onTap: () {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Payment methods coming soon')),
                 );
               }),
-              _settingsTile(context, Icons.location_on_outlined, 'Saved Addresses', onTap: () {
+              _settingsTile(
+                  context, Icons.location_on_outlined, 'Saved Addresses',
+                  onTap: () {
                 context.push('/addresses');
               }),
-              _settingsTile(context, Icons.favorite_border, 'Saved Stores', onTap: () {
+              _settingsTile(context, Icons.favorite_border, 'Saved Stores',
+                  onTap: () {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Saved stores coming soon')),
                 );
               }),
-              _settingsTile(context, Icons.local_offer_outlined, 'Promotions', onTap: () {
+              _settingsTile(context, Icons.local_offer_outlined, 'Promotions',
+                  onTap: () {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Promotions coming soon')),
                 );
@@ -82,7 +90,8 @@ class AccountScreen extends ConsumerWidget {
                   children: [const Text('Food delivery made easy.')],
                 );
               }),
-              _settingsTile(context, Icons.logout, 'Sign Out', isDestructive: true, onTap: () async {
+              _settingsTile(context, Icons.logout, 'Sign Out',
+                  isDestructive: true, onTap: () async {
                 await ref.read(authProvider.notifier).signOut();
                 if (context.mounted) {
                   context.go('/login');
@@ -107,7 +116,8 @@ class AccountScreen extends ConsumerWidget {
           color: isDestructive ? AppColors.error : AppColors.textPrimary,
         ),
       ),
-      trailing: const Icon(Icons.chevron_right, color: AppColors.textHint, size: 20),
+      trailing:
+          const Icon(Icons.chevron_right, color: AppColors.textHint, size: 20),
       onTap: onTap,
     );
   }

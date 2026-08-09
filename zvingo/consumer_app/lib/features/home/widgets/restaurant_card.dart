@@ -76,7 +76,8 @@ class RestaurantCard extends ConsumerWidget {
                   top: 12,
                   right: 12,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       color: AppColors.white.withOpacity(0.9),
                       borderRadius: BorderRadius.circular(20),
@@ -91,7 +92,8 @@ class RestaurantCard extends ConsumerWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.access_time_filled, size: 14, color: AppColors.primary),
+                        const Icon(Icons.access_time_filled,
+                            size: 14, color: AppColors.primary),
                         const SizedBox(width: 4),
                         Text(
                           restaurant.deliveryTime,
@@ -111,8 +113,9 @@ class RestaurantCard extends ConsumerWidget {
                   top: 12,
                   left: 12,
                   child: GestureDetector(
-                    onTap: () =>
-                        ref.read(favouritesProvider.notifier).toggle(restaurant.id),
+                    onTap: () => ref
+                        .read(favouritesProvider.notifier)
+                        .toggle(restaurant.id),
                     child: Container(
                       width: 36,
                       height: 36,
@@ -130,7 +133,8 @@ class RestaurantCard extends ConsumerWidget {
                       child: Icon(
                         isFav ? Icons.favorite : Icons.favorite_border,
                         size: 18,
-                        color: isFav ? AppColors.error : AppColors.textSecondary,
+                        color:
+                            isFav ? AppColors.error : AppColors.textSecondary,
                       ),
                     ),
                   ),
@@ -141,17 +145,19 @@ class RestaurantCard extends ConsumerWidget {
                   bottom: 12,
                   left: 12,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: AppColors.primary,
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: Row(
+                    child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.verified, size: 12, color: Colors.white),
-                        const SizedBox(width: 3),
-                        Text('Zvingo+',
+                        Icon(Icons.verified, size: 12, color: Colors.white),
+                        SizedBox(width: 3),
+                        Text(
+                          'Zvingo+',
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
@@ -188,7 +194,8 @@ class RestaurantCard extends ConsumerWidget {
                       ),
                       // Rating badge
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 3),
                         decoration: BoxDecoration(
                           color: AppColors.background,
                           borderRadius: BorderRadius.circular(6),
@@ -199,13 +206,14 @@ class RestaurantCard extends ConsumerWidget {
                             Text(
                               restaurant.rating.toStringAsFixed(1),
                               style: const TextStyle(
-                                 fontSize: 12,
-                                 fontWeight: FontWeight.bold,
-                                 color: AppColors.textPrimary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
                               ),
                             ),
                             const SizedBox(width: 2),
-                            const Icon(Icons.star, size: 12, color: AppColors.rating),
+                            const Icon(Icons.star,
+                                size: 12, color: AppColors.rating),
                           ],
                         ),
                       ),
@@ -229,7 +237,8 @@ class RestaurantCard extends ConsumerWidget {
                     children: [
                       // Delivery Fee Pill
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
                           color: restaurant.deliveryFee == 0
                               ? AppColors.primarySurface
@@ -250,13 +259,15 @@ class RestaurantCard extends ConsumerWidget {
                         ),
                       ),
                       // Neighbors liked
-                      if (restaurant.neighborsLiked != null && restaurant.neighborsLiked! > 0) ...[
+                      if (restaurant.neighborsLiked != null &&
+                          restaurant.neighborsLiked! > 0) ...[
                         const SizedBox(width: 8),
-                        Icon(Icons.people_outline, size: 14, color: AppColors.textSecondary),
+                        const Icon(Icons.people_outline,
+                            size: 14, color: AppColors.textSecondary),
                         const SizedBox(width: 3),
                         Text(
                           '${restaurant.neighborsLiked} neighbors liked',
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 12,
                             color: AppColors.textSecondary,
                           ),

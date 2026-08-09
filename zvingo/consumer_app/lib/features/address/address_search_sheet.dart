@@ -72,7 +72,8 @@ class _AddressSearchSheetState extends ConsumerState<AddressSearchSheet> {
       _loading = true;
       _error = null;
     });
-    _debounce = Timer(const Duration(milliseconds: 350), () => _search(value.trim()));
+    _debounce =
+        Timer(const Duration(milliseconds: 350), () => _search(value.trim()));
   }
 
   Future<void> _search(String query) async {
@@ -93,7 +94,9 @@ class _AddressSearchSheetState extends ConsumerState<AddressSearchSheet> {
                 ))
             .toList();
         _loading = false;
-        _error = _results.isEmpty ? 'No addresses found. Try a different search.' : null;
+        _error = _results.isEmpty
+            ? 'No addresses found. Try a different search.'
+            : null;
       });
     } catch (_) {
       if (!mounted) return;
@@ -133,8 +136,8 @@ class _AddressSearchSheetState extends ConsumerState<AddressSearchSheet> {
           ),
 
           // Header
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 16, 20, 12),
             child: Text('Search Address', style: AppTextStyles.titleLarge),
           ),
 
@@ -147,11 +150,14 @@ class _AddressSearchSheetState extends ConsumerState<AddressSearchSheet> {
               onChanged: _onChanged,
               decoration: InputDecoration(
                 hintText: 'e.g. 123 Samora Machel Ave, Harare',
-                hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
-                prefixIcon: const Icon(Icons.search, color: AppColors.textHint, size: 22),
+                hintStyle: AppTextStyles.bodyMedium
+                    .copyWith(color: AppColors.textHint),
+                prefixIcon: const Icon(Icons.search,
+                    color: AppColors.textHint, size: 22),
                 suffixIcon: _controller.text.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear, size: 20, color: AppColors.textHint),
+                        icon: const Icon(Icons.clear,
+                            size: 20, color: AppColors.textHint),
                         onPressed: () {
                           _controller.clear();
                           setState(() {
@@ -166,17 +172,19 @@ class _AddressSearchSheetState extends ConsumerState<AddressSearchSheet> {
                 fillColor: AppColors.background,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: AppColors.border),
+                  borderSide: const BorderSide(color: AppColors.border),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: AppColors.border),
+                  borderSide: const BorderSide(color: AppColors.border),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                  borderSide:
+                      const BorderSide(color: AppColors.primary, width: 1.5),
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
             ),
           ),
@@ -208,7 +216,8 @@ class _AddressSearchSheetState extends ConsumerState<AddressSearchSheet> {
         child: Center(
           child: Text(
             _error!,
-            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+            style: AppTextStyles.bodyMedium
+                .copyWith(color: AppColors.textSecondary),
             textAlign: TextAlign.center,
           ),
         ),
@@ -235,7 +244,8 @@ class _AddressSearchSheetState extends ConsumerState<AddressSearchSheet> {
       itemBuilder: (context, index) {
         final r = _results[index];
         return ListTile(
-          leading: const Icon(Icons.location_on_outlined, color: AppColors.primary, size: 22),
+          leading: const Icon(Icons.location_on_outlined,
+              color: AppColors.primary, size: 22),
           title: Text(
             r.displayName,
             style: AppTextStyles.bodyMedium,

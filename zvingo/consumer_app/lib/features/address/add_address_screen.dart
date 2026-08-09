@@ -94,7 +94,8 @@ class _AddAddressScreenState extends ConsumerState<AddAddressScreen> {
     if (_lat == null || _lng == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please search and select an address, or use current location.'),
+          content: Text(
+              'Please search and select an address, or use current location.'),
         ),
       );
       return;
@@ -107,7 +108,8 @@ class _AddAddressScreenState extends ConsumerState<AddAddressScreen> {
         : _selectedLabel;
 
     final address = SavedAddress(
-      id: widget.existing?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      id: widget.existing?.id ??
+          DateTime.now().millisecondsSinceEpoch.toString(),
       label: label,
       address: _addressController.text.trim(),
       lat: _lat!,
@@ -163,7 +165,9 @@ class _AddAddressScreenState extends ConsumerState<AddAddressScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.my_location, size: 20),
-                label: Text(_isLocating ? 'Getting location...' : 'Use Current Location'),
+                label: Text(_isLocating
+                    ? 'Getting location...'
+                    : 'Use Current Location'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.info,
                   side: const BorderSide(color: AppColors.info),
@@ -177,7 +181,7 @@ class _AddAddressScreenState extends ConsumerState<AddAddressScreen> {
               const SizedBox(height: 24),
 
               // Label selection
-              Text('Label', style: AppTextStyles.titleSmall),
+              const Text('Label', style: AppTextStyles.titleSmall),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -188,7 +192,9 @@ class _AddAddressScreenState extends ConsumerState<AddAddressScreen> {
                     selected: selected,
                     selectedColor: AppColors.primarySurface,
                     labelStyle: AppTextStyles.bodyMedium.copyWith(
-                      color: selected ? AppColors.primary : AppColors.textSecondary,
+                      color: selected
+                          ? AppColors.primary
+                          : AppColors.textSecondary,
                       fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                     ),
                     side: BorderSide(
@@ -204,9 +210,11 @@ class _AddAddressScreenState extends ConsumerState<AddAddressScreen> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _labelController,
-                  decoration: _inputDecoration('Custom label (e.g. Gym, School)'),
+                  decoration:
+                      _inputDecoration('Custom label (e.g. Gym, School)'),
                   validator: (v) {
-                    if (_selectedLabel == 'Other' && (v == null || v.trim().isEmpty)) {
+                    if (_selectedLabel == 'Other' &&
+                        (v == null || v.trim().isEmpty)) {
                       return 'Enter a label';
                     }
                     return null;
@@ -217,19 +225,23 @@ class _AddAddressScreenState extends ConsumerState<AddAddressScreen> {
               const SizedBox(height: 20),
 
               // Address field — tappable, opens the search sheet
-              Text('Address', style: AppTextStyles.titleSmall),
+              const Text('Address', style: AppTextStyles.titleSmall),
               const SizedBox(height: 8),
               GestureDetector(
                 onTap: _openAddressSearch,
                 child: AbsorbPointer(
                   child: TextFormField(
                     controller: _addressController,
-                    decoration: _inputDecoration('Tap to search for an address').copyWith(
-                      suffixIcon: const Icon(Icons.search, color: AppColors.primary, size: 22),
+                    decoration: _inputDecoration('Tap to search for an address')
+                        .copyWith(
+                      suffixIcon: const Icon(Icons.search,
+                          color: AppColors.primary, size: 22),
                     ),
                     maxLines: 2,
                     validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'Select an address';
+                      if (v == null || v.trim().isEmpty) {
+                        return 'Select an address';
+                      }
                       return null;
                     },
                   ),
@@ -242,23 +254,27 @@ class _AddAddressScreenState extends ConsumerState<AddAddressScreen> {
               if (_lat != null && _lng != null)
                 Row(
                   children: [
-                    const Icon(Icons.check_circle, color: AppColors.success, size: 16),
+                    const Icon(Icons.check_circle,
+                        color: AppColors.success, size: 16),
                     const SizedBox(width: 6),
                     Text(
                       'Location pinpointed',
-                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.success),
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.success),
                     ),
                   ],
                 )
               else
                 Row(
                   children: [
-                    const Icon(Icons.info_outline, color: AppColors.textHint, size: 16),
+                    const Icon(Icons.info_outline,
+                        color: AppColors.textHint, size: 16),
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
                         'Search for an address or use current location',
-                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: AppColors.textHint),
                       ),
                     ),
                   ],
@@ -269,8 +285,9 @@ class _AddAddressScreenState extends ConsumerState<AddAddressScreen> {
               // Default toggle
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: Text('Set as default address', style: AppTextStyles.bodyMedium),
-                subtitle: Text(
+                title: const Text('Set as default address',
+                    style: AppTextStyles.bodyMedium),
+                subtitle: const Text(
                   'This address will be selected automatically',
                   style: AppTextStyles.bodySmall,
                 ),
@@ -324,11 +341,11 @@ class _AddAddressScreenState extends ConsumerState<AddAddressScreen> {
       fillColor: AppColors.background,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: AppColors.border),
+        borderSide: const BorderSide(color: AppColors.border),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: AppColors.border),
+        borderSide: const BorderSide(color: AppColors.border),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),

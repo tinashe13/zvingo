@@ -1,6 +1,7 @@
 import msgpack
 import time
 from datetime import datetime
+from app.time_utils import utc_from_timestamp
 from typing import List
 import redis.asyncio as aioredis
 from app.sync.schemas import SyncRequest, SyncResponse
@@ -25,7 +26,7 @@ class SyncService:
         now_ts = int(time.time())
 
         # If last_version is 0, this is a full sync - use epoch
-        since = datetime.utcfromtimestamp(last_version) if last_version > 0 else datetime.min
+        since = utc_from_timestamp(last_version) if last_version > 0 else datetime.min
 
         # 1. Assigned orders modified since last sync
         assigned_orders = await Order.find(

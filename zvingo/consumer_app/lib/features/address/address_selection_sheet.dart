@@ -54,7 +54,7 @@ class AddressSelectionSheet extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
             child: Row(
               children: [
-                Text('Delivery Address', style: AppTextStyles.titleLarge),
+                const Text('Delivery Address', style: AppTextStyles.titleLarge),
                 const Spacer(),
                 TextButton(
                   onPressed: () {
@@ -86,7 +86,9 @@ class AddressSelectionSheet extends ConsumerWidget {
                 address: currentAddr.address,
                 isSelected: deliveryLoc?.displayName == currentAddr.address,
                 onTap: () {
-                  ref.read(savedAddressesProvider.notifier).selectAddress(currentAddr);
+                  ref
+                      .read(savedAddressesProvider.notifier)
+                      .selectAddress(currentAddr);
                   Navigator.pop(context);
                 },
               ),
@@ -143,7 +145,9 @@ class AddressSelectionSheet extends ConsumerWidget {
                   isSelected: isSelected,
                   isDefault: addr.isDefault,
                   onTap: () {
-                    ref.read(savedAddressesProvider.notifier).selectAddress(addr);
+                    ref
+                        .read(savedAddressesProvider.notifier)
+                        .selectAddress(addr);
                     Navigator.pop(context);
                   },
                 );
@@ -214,9 +218,7 @@ class _AddressTile extends StatelessWidget {
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.primarySurface
-              : AppColors.background,
+          color: isSelected ? AppColors.primarySurface : AppColors.background,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(icon, color: iconColor, size: 20),

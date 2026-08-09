@@ -12,13 +12,13 @@ class CategoryRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedCategories = ref.watch(filtersProvider).categories;
     final categories = [
-      _Cat(Icons.restaurant, 'Restaurants'),
-      _Cat(Icons.local_grocery_store, 'Grocery'),
-      _Cat(Icons.local_convenience_store, 'Convenience'),
-      _Cat(Icons.local_bar, 'Alcohol'),
-      _Cat(Icons.local_pharmacy, 'Pharmacy'),
-      _Cat(Icons.pets, 'Pets'),
-      _Cat(Icons.card_giftcard, 'Gifts'),
+      const _Cat(Icons.restaurant, 'Restaurants'),
+      const _Cat(Icons.local_grocery_store, 'Grocery'),
+      const _Cat(Icons.local_convenience_store, 'Convenience'),
+      const _Cat(Icons.local_bar, 'Alcohol'),
+      const _Cat(Icons.local_pharmacy, 'Pharmacy'),
+      const _Cat(Icons.pets, 'Pets'),
+      const _Cat(Icons.card_giftcard, 'Gifts'),
     ];
 
     return SizedBox(
@@ -65,9 +65,8 @@ class CategoryRow extends ConsumerWidget {
                       color: isSelected
                           ? AppColors.primary
                           : AppColors.textPrimary,
-                      fontWeight: isSelected
-                          ? FontWeight.w700
-                          : FontWeight.w500,
+                      fontWeight:
+                          isSelected ? FontWeight.w700 : FontWeight.w500,
                     ),
                     textAlign: TextAlign.center,
                     maxLines: 1,

@@ -137,7 +137,7 @@ class HomeScreen extends ConsumerWidget {
                         onTap: () => AddressSelectionSheet.show(context),
                         child: Row(
                           children: [
-                            Icon(Icons.delivery_dining_outlined,
+                            const Icon(Icons.delivery_dining_outlined,
                                 size: 18, color: AppColors.textSecondary),
                             const SizedBox(width: 6),
                             Text(
@@ -173,12 +173,14 @@ class HomeScreen extends ConsumerWidget {
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(20),
                           border: filterState.hasActiveFilters
-                              ? Border.all(color: AppColors.primary.withOpacity(0.3))
+                              ? Border.all(
+                                  color: AppColors.primary.withOpacity(0.3))
                               : null,
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.tune, size: 16,
+                            Icon(Icons.tune,
+                                size: 16,
                                 color: filterState.hasActiveFilters
                                     ? AppColors.primary
                                     : AppColors.textSecondary),
@@ -206,7 +208,7 @@ class HomeScreen extends ConsumerWidget {
             ),
 
             // ── Category Row ────────────────────────────
-            SliverToBoxAdapter(
+            const SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.only(top: 4),
                 child: CategoryRow(),
@@ -227,7 +229,7 @@ class HomeScreen extends ConsumerWidget {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: Row(
                   children: [
-                    Text('Fastest Near You', style: AppTextStyles.titleLarge),
+                    const Text('Fastest Near You', style: AppTextStyles.titleLarge),
                     const Spacer(),
                     GestureDetector(
                       onTap: () => context.push('/search'),
@@ -322,8 +324,7 @@ class HomeScreen extends ConsumerWidget {
                       );
                     },
                   ),
-                  loading: () =>
-                      const ShimmerHorizontalRow(),
+                  loading: () => const ShimmerHorizontalRow(),
                   error: (_, __) => const Center(
                     child: Text('Could not load restaurants'),
                   ),
@@ -332,11 +333,11 @@ class HomeScreen extends ConsumerWidget {
             ),
 
             // ── Section: Try something new ────────────
-            SliverToBoxAdapter(
+            const SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text('Try something new',
-                    style: AppTextStyles.titleLarge),
+                padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child:
+                    Text('Try something new', style: AppTextStyles.titleLarge),
               ),
             ),
 
@@ -349,12 +350,15 @@ class HomeScreen extends ConsumerWidget {
                   filtered = filtered.where((r) => r.deliveryFee == 0).toList();
                 }
                 if (filterState.minRating != null) {
-                  filtered = filtered.where((r) => r.rating >= filterState.minRating!).toList();
+                  filtered = filtered
+                      .where((r) => r.rating >= filterState.minRating!)
+                      .toList();
                 }
                 if (filterState.categories.isNotEmpty) {
-                  filtered = filtered.where((r) =>
-                      filterState.categories.any((c) =>
-                          r.category.toLowerCase().contains(c.toLowerCase()))).toList();
+                  filtered = filtered
+                      .where((r) => filterState.categories.any((c) =>
+                          r.category.toLowerCase().contains(c.toLowerCase())))
+                      .toList();
                 }
                 // Sort
                 switch (filterState.sortBy) {
@@ -362,13 +366,16 @@ class HomeScreen extends ConsumerWidget {
                     filtered.sort((a, b) => b.rating.compareTo(a.rating));
                     break;
                   case SortOption.deliveryTime:
-                    filtered.sort((a, b) => a.deliveryTimeMin.compareTo(b.deliveryTimeMin));
+                    filtered.sort((a, b) =>
+                        a.deliveryTimeMin.compareTo(b.deliveryTimeMin));
                     break;
                   case SortOption.priceLowToHigh:
-                    filtered.sort((a, b) => a.deliveryFee.compareTo(b.deliveryFee));
+                    filtered
+                        .sort((a, b) => a.deliveryFee.compareTo(b.deliveryFee));
                     break;
                   case SortOption.priceHighToLow:
-                    filtered.sort((a, b) => b.deliveryFee.compareTo(a.deliveryFee));
+                    filtered
+                        .sort((a, b) => b.deliveryFee.compareTo(a.deliveryFee));
                     break;
                   default:
                     break;
@@ -381,14 +388,15 @@ class HomeScreen extends ConsumerWidget {
                       child: Center(
                         child: Column(
                           children: [
-                            Icon(Icons.filter_list_off, size: 48,
-                                color: AppColors.textHint),
+                            const Icon(Icons.filter_list_off,
+                                size: 48, color: AppColors.textHint),
                             const SizedBox(height: 12),
-                            Text('No restaurants match your filters',
+                            const Text('No restaurants match your filters',
                                 style: AppTextStyles.bodyMedium),
                             const SizedBox(height: 8),
                             TextButton(
-                              onPressed: () => ref.read(filtersProvider.notifier).reset(),
+                              onPressed: () =>
+                                  ref.read(filtersProvider.notifier).reset(),
                               child: Text('Clear Filters',
                                   style: AppTextStyles.bodySmall.copyWith(
                                       color: AppColors.primary,
@@ -414,7 +422,7 @@ class HomeScreen extends ConsumerWidget {
                   ),
                 );
               },
-              loading: () => SliverToBoxAdapter(
+              loading: () => const SliverToBoxAdapter(
                 child: ShimmerRestaurantList(),
               ),
               error: (err, __) => SliverFillRemaining(
@@ -425,7 +433,7 @@ class HomeScreen extends ConsumerWidget {
                       const Icon(Icons.wifi_off,
                           size: 48, color: AppColors.textHint),
                       const SizedBox(height: 12),
-                      Text('Could not load restaurants',
+                      const Text('Could not load restaurants',
                           style: AppTextStyles.bodyMedium),
                       const SizedBox(height: 4),
                       Text('$err',
@@ -447,7 +455,7 @@ class HomeScreen extends ConsumerWidget {
   Widget _horizontalPlaceholder(String name) {
     return Container(
       color: AppColors.primarySurface,
-      child: Center(
+      child: const Center(
         child: Icon(Icons.restaurant, size: 32, color: AppColors.primary),
       ),
     );

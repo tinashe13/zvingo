@@ -2,6 +2,7 @@ import structlog
 import json
 import math
 from datetime import datetime
+from app.time_utils import utc_now
 from typing import Optional
 import redis.asyncio as aioredis
 
@@ -183,7 +184,7 @@ class NotificationService:
             "items_summary": items_summary,
             "item_count": item_count,
             "timeout_seconds": 45,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now().isoformat(),
         }
 
     @staticmethod
@@ -195,21 +196,26 @@ class NotificationService:
             await r.publish(f"merchant_{merchant_id}", json.dumps({
                 "event": "new_order",
                 "order_id": order_id,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_now().isoformat(),
             }))
         finally:
             await r.close()
 
     @staticmethod
     async def notify_consumer(consumer_id: str, order_id: str, event: str, data: dict = None):
-        logger.info("Notifying Consumer", consumer_id=consumer_id, order_id=order_id, event=event)
+        logger.info(
+            "Notifying Consumer",
+            consumer_id=consumer_id,
+            order_id=order_id,
+            notification_event=event,
+        )
 
         r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
         try:
             payload = {
                 "event": event,
                 "order_id": order_id,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_now().isoformat(),
             }
             if data:
                 payload.update(data)

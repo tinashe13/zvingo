@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+from app.time_utils import utc_now
 from app.auth.router import get_current_user
 from app.auth.models import User, Location
 from app.dispatch.service import dispatch_service
@@ -30,7 +31,7 @@ async def update_dash_session(req: DashSessionRequest, current_user: User = Depe
             lat=req.lat,
             lng=req.lng,
             status="ONLINE",
-            timestamp=datetime.utcnow()
+            timestamp=utc_now()
         ))
     elif not req.active:
         # Mark driver OFFLINE in Redis so they are excluded from dispatch

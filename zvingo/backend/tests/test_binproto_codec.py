@@ -43,3 +43,33 @@ def test_encode_decode_location():
     assert loc.heading == hdg
     assert loc.accuracy == acc
     assert loc.battery == bat
+
+
+def test_header_padding_ack_and_validation():
+    header = BinProtoCodec.encode_header(1, b"abc", 7, 0, version=2)
+    decoded = BinProtoCodec.decode_header(header)
+    assert decoded == {
+        "version": 2,
+        "type": 1,
+        "session_id": b"abc\x00\x00\x00\x00\x00",
+        "seq": 7,
+        "payload_len": 0,
+    }
+    assert BinProtoCodec.encode_ack(7) == struct.pack("!2sBI", b"ZV", 2, 7)
+    with pytest.raises(ValueError, match="too short"):
+        BinProtoCodec.decode_header(b"short")
+    invalid = bytearray(header)
+    invalid[0:2] = b"NO"
+    with pytest.raises(ValueError, match="magic"):
+        BinProtoCodec.decode_header(bytes(invalid))
+
+
+def test_location_encoding_clamps_and_validates():
+    data = BinProtoCodec.encode_location(100, -100, 1, 2, 3, 4)
+    location = BinProtoCodec.decode_location(data)
+    assert location.lat_delta == 32767
+    assert location.lng_delta == -32768
+    assert location.lat == pytest.approx(-14.5525)
+    assert location.lng == pytest.approx(27.7754)
+    with pytest.raises(ValueError, match="payload size"):
+        BinProtoCodec.decode_location(b"bad")

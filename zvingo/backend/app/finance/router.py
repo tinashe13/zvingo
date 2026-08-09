@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from typing import Dict, Optional, List
 from datetime import datetime, timedelta, date
+from app.time_utils import utc_now
 import redis.asyncio as aioredis
 import json
 import math
@@ -53,7 +54,7 @@ async def get_merchant_analytics(merchant_id: str, current_user: User = Depends(
     # Ownership check: merchants may only view their own analytics
     if merchant_id != str(current_user.id):
         raise HTTPException(status_code=403, detail="Not authorized to view these analytics")
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = utc_now().replace(hour=0, minute=0, second=0, microsecond=0)
 
     # Delivered orders today
     today_delivered = await Order.find(
@@ -123,7 +124,7 @@ async def get_driver_earnings(driver_id: str, current_user: User = Depends(get_c
         raise HTTPException(status_code=403, detail="Not authorized to view these earnings")
     from app.finance.models import DriverEarning
 
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = utc_now().replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = today_start - timedelta(days=today_start.weekday())
 
     today_records = await DriverEarning.find(
@@ -257,7 +258,7 @@ async def record_earning(order_id: str, driver_id: str, token: str = Depends(oau
         total_earning_cents=total_cents,
         payment_method=payment_method,
         distance_km=round(dist_km, 2),
-        completed_at=datetime.utcnow(),
+        completed_at=utc_now(),
         created_date=date.today().isoformat(),
     )
     await earning.insert()
@@ -283,7 +284,7 @@ async def get_daily_breakdown(
         raise HTTPException(status_code=403, detail="Not authorized to view these earnings")
     from app.finance.models import DriverEarning
 
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = utc_now() - timedelta(days=days)
     records = await DriverEarning.find(
         DriverEarning.driver_id == driver_id,
         DriverEarning.completed_at >= cutoff,

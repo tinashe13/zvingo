@@ -2,50 +2,40 @@
 
 ## API endpoint configuration
 
-The API base URL is centralized in `lib/core/app_config.dart` and set at build
-time via `--dart-define=API_BASE_URL=...`. **Note:** the value includes the
-`/api` path prefix (the backend is served behind Nginx under `/api`).
+The API URL is supplied at build time with `--dart-define=API_BASE_URL=...` and
+must include the `/api` prefix.
 
-| Environment              | Value                              |
-| ------------------------ | ---------------------------------- |
-| Android emulator (dev)   | `http://10.0.2.2/api` *(default)*  |
-| Real device / staging    | `http://<server-ip>/api`           |
-| Production               | `https://api.zvingo.com/api`       |
+| Environment | Value |
+| --- | --- |
+| Android emulator | `http://10.0.2.2/api` (debug default) |
+| Staging device | `http://<server-ip>/api` |
+| Production | `https://api.zvingo.com/api` |
 
-No flag is needed for everyday development — the default targets the Android
-emulator's host loopback.
-
-## Debug / dev
+Debug development:
 
 ```sh
 flutter run
-# or against a staging server:
 flutter run --dart-define=API_BASE_URL=http://192.168.1.50/api
 ```
 
-## Release build
+Release builds validate the endpoint at startup and reject non-HTTPS URLs:
 
 ```sh
-flutter build apk --release --dart-define=API_BASE_URL=https://api.zvingo.com/api
-# or an app bundle for Play Store:
 flutter build appbundle --release --dart-define=API_BASE_URL=https://api.zvingo.com/api
 ```
 
-Release builds must use `https://` — cleartext HTTP is blocked except for local
-dev hosts (see `android/app/src/main/res/xml/network_security_config.xml`).
+## Android release signing
 
-## Release signing setup (one-time)
+Release tasks fail when signing is not configured. This prevents a debug-signed
+artifact from being mistaken for a deployable build.
 
-Without this, release builds fall back to **debug signing** (fine for local
-testing, not distributable).
-
-1. Create a keystore (keep it out of version control — it is gitignored):
+1. Create a keystore and keep it outside version control:
 
    ```sh
    keytool -genkey -v -keystore %USERPROFILE%\zvingo-consumer.jks -keyalg RSA -keysize 2048 -validity 10000 -alias consumer
    ```
 
-2. Create `android/key.properties` (also gitignored):
+2. Create `android/key.properties` (gitignored):
 
    ```properties
    storePassword=<store password>
@@ -54,5 +44,22 @@ testing, not distributable).
    storeFile=C:/Users/<you>/zvingo-consumer.jks
    ```
 
-3. Build as above — `android/app/build.gradle` picks up `key.properties`
-   automatically when present.
+3. Run the app bundle command above. Gradle loads the keystore automatically.
+
+For a local, explicitly non-deployable release-mode smoke build, set either the
+Gradle project property `allowDebugReleaseSigning=true` or the environment
+variable `ZVINGO_ALLOW_DEBUG_RELEASE_SIGNING=true`. Never upload that artifact
+to a store.
+
+## Preflight checklist
+
+```sh
+flutter pub get
+dart format --output=none --set-exit-if-changed lib test
+flutter analyze
+flutter test
+flutter build appbundle --release --dart-define=API_BASE_URL=https://api.zvingo.com/api
+```
+
+Before upload, confirm the production API hostname, Android keystore, iOS signing
+team, store listing, privacy policy, and final version/build number.

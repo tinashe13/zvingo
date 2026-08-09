@@ -1,12 +1,13 @@
 import 'package:consumer_app/core/app_config.dart';
 import 'package:dio/dio.dart';
 import 'package:hive/hive.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'api_client.g.dart';
 
 @riverpod
-Dio apiClient(ApiClientRef ref) {
+Dio apiClient(Ref ref) {
   final dio = Dio(
     BaseOptions(
       baseUrl: AppConfig.apiBaseUrl,

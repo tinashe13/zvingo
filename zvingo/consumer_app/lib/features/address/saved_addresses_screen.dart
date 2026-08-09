@@ -22,7 +22,7 @@ class SavedAddressesScreen extends ConsumerWidget {
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () => context.pop(),
         ),
-        title: Text('Saved Addresses', style: AppTextStyles.titleLarge),
+        title: const Text('Saved Addresses', style: AppTextStyles.titleLarge),
         centerTitle: true,
       ),
       body: addresses.isEmpty
@@ -38,7 +38,9 @@ class SavedAddressesScreen extends ConsumerWidget {
 
                 return Container(
                   decoration: BoxDecoration(
-                    color: isSelected ? AppColors.primarySurface : AppColors.background,
+                    color: isSelected
+                        ? AppColors.primarySurface
+                        : AppColors.background,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
                       color: isSelected ? AppColors.primary : AppColors.border,
@@ -46,7 +48,8 @@ class SavedAddressesScreen extends ConsumerWidget {
                     ),
                   ),
                   child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     leading: Container(
                       width: 44,
                       height: 44,
@@ -56,7 +59,9 @@ class SavedAddressesScreen extends ConsumerWidget {
                       ),
                       child: Icon(
                         _iconForLabel(addr.label),
-                        color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                        color: isSelected
+                            ? AppColors.primary
+                            : AppColors.textSecondary,
                         size: 22,
                       ),
                     ),
@@ -66,7 +71,8 @@ class SavedAddressesScreen extends ConsumerWidget {
                         if (addr.isDefault) ...[
                           const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
                               color: AppColors.primary.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(4),
@@ -93,14 +99,19 @@ class SavedAddressesScreen extends ConsumerWidget {
                       ),
                     ),
                     trailing: PopupMenuButton<String>(
-                      icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textHint),
+                      icon: const Icon(Icons.more_vert,
+                          size: 20, color: AppColors.textHint),
                       onSelected: (value) async {
                         switch (value) {
                           case 'select':
-                            ref.read(savedAddressesProvider.notifier).selectAddress(addr);
+                            ref
+                                .read(savedAddressesProvider.notifier)
+                                .selectAddress(addr);
                             break;
                           case 'default':
-                            await ref.read(savedAddressesProvider.notifier).setDefault(addr.id);
+                            await ref
+                                .read(savedAddressesProvider.notifier)
+                                .setDefault(addr.id);
                             break;
                           case 'edit':
                             context.push('/addresses/edit', extra: addr);
@@ -110,7 +121,8 @@ class SavedAddressesScreen extends ConsumerWidget {
                               context: context,
                               builder: (ctx) => AlertDialog(
                                 title: const Text('Delete Address'),
-                                content: Text('Remove "${addr.label}" from saved addresses?'),
+                                content: Text(
+                                    'Remove "${addr.label}" from saved addresses?'),
                                 actions: [
                                   TextButton(
                                     onPressed: () => Navigator.pop(ctx, false),
@@ -118,30 +130,40 @@ class SavedAddressesScreen extends ConsumerWidget {
                                   ),
                                   TextButton(
                                     onPressed: () => Navigator.pop(ctx, true),
-                                    child: const Text('Delete', style: TextStyle(color: AppColors.error)),
+                                    child: const Text('Delete',
+                                        style:
+                                            TextStyle(color: AppColors.error)),
                                   ),
                                 ],
                               ),
                             );
                             if (confirm == true) {
-                              await ref.read(savedAddressesProvider.notifier).deleteAddress(addr.id);
+                              await ref
+                                  .read(savedAddressesProvider.notifier)
+                                  .deleteAddress(addr.id);
                             }
                             break;
                         }
                       },
                       itemBuilder: (_) => [
-                        const PopupMenuItem(value: 'select', child: Text('Use this address')),
+                        const PopupMenuItem(
+                            value: 'select', child: Text('Use this address')),
                         if (!addr.isDefault)
-                          const PopupMenuItem(value: 'default', child: Text('Set as default')),
+                          const PopupMenuItem(
+                              value: 'default', child: Text('Set as default')),
                         const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                        const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                        const PopupMenuItem(
+                            value: 'delete', child: Text('Delete')),
                       ],
                     ),
                     onTap: () {
-                      ref.read(savedAddressesProvider.notifier).selectAddress(addr);
+                      ref
+                          .read(savedAddressesProvider.notifier)
+                          .selectAddress(addr);
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Delivering to ${addr.label}')),
+                          SnackBar(
+                              content: Text('Delivering to ${addr.label}')),
                         );
                       }
                     },
@@ -164,11 +186,13 @@ class SavedAddressesScreen extends ConsumerWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.location_off_outlined, size: 64, color: AppColors.primary.withOpacity(0.3)),
+          Icon(Icons.location_off_outlined,
+              size: 64, color: AppColors.primary.withOpacity(0.3)),
           const SizedBox(height: 16),
-          Text('No saved addresses', style: AppTextStyles.titleMedium),
+          const Text('No saved addresses', style: AppTextStyles.titleMedium),
           const SizedBox(height: 6),
-          Text('Add a delivery address to get started', style: AppTextStyles.bodySmall),
+          const Text('Add a delivery address to get started',
+              style: AppTextStyles.bodySmall),
           const SizedBox(height: 24),
           ElevatedButton.icon(
             onPressed: () => context.push('/addresses/add'),
@@ -178,7 +202,8 @@ class SavedAddressesScreen extends ConsumerWidget {
               backgroundColor: AppColors.primary,
               foregroundColor: AppColors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
           ),
         ],

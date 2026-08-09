@@ -47,7 +47,7 @@ class FilterScreen extends ConsumerWidget {
           icon: const Icon(Icons.close, color: AppColors.textPrimary),
           onPressed: () => context.pop(),
         ),
-        title: Text('Filters', style: AppTextStyles.titleLarge),
+        title: const Text('Filters', style: AppTextStyles.titleLarge),
         centerTitle: true,
         actions: [
           TextButton(
@@ -68,7 +68,7 @@ class FilterScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(16),
         children: [
           // ── Sort By ────────────────────────────────────
-          Text('Sort By', style: AppTextStyles.titleMedium),
+          const Text('Sort By', style: AppTextStyles.titleMedium),
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
@@ -88,7 +88,7 @@ class FilterScreen extends ConsumerWidget {
           const SizedBox(height: 16),
 
           // ── Dietary Needs ──────────────────────────────
-          Text('Dietary Needs', style: AppTextStyles.titleMedium),
+          const Text('Dietary Needs', style: AppTextStyles.titleMedium),
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
@@ -108,7 +108,7 @@ class FilterScreen extends ConsumerWidget {
           const SizedBox(height: 16),
 
           // ── Categories ─────────────────────────────────
-          Text('Categories', style: AppTextStyles.titleMedium),
+          const Text('Categories', style: AppTextStyles.titleMedium),
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
@@ -128,11 +128,10 @@ class FilterScreen extends ConsumerWidget {
           const SizedBox(height: 16),
 
           // ── Delivery Options ───────────────────────────
-          Text('Delivery', style: AppTextStyles.titleMedium),
+          const Text('Delivery', style: AppTextStyles.titleMedium),
           const SizedBox(height: 12),
           SwitchListTile(
-            title: Text('Free Delivery Only',
-                style: AppTextStyles.bodyMedium),
+            title: const Text('Free Delivery Only', style: AppTextStyles.bodyMedium),
             value: filters.freeDeliveryOnly,
             onChanged: (val) => notifier.setFreeDeliveryOnly(val),
             activeColor: AppColors.primary,
@@ -144,7 +143,7 @@ class FilterScreen extends ConsumerWidget {
           const SizedBox(height: 16),
 
           // ── Minimum Rating ─────────────────────────────
-          Text('Minimum Rating', style: AppTextStyles.titleMedium),
+          const Text('Minimum Rating', style: AppTextStyles.titleMedium),
           const SizedBox(height: 12),
           Row(
             children: [4.5, 4.0, 3.5, 3.0].map((rating) {
@@ -152,7 +151,7 @@ class FilterScreen extends ConsumerWidget {
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: _FilterChip(
-                  label: '${rating}+  ★',
+                  label: '$rating+  ★',
                   isSelected: isSelected,
                   onTap: () => notifier.setMinRating(
                     isSelected ? null : rating,

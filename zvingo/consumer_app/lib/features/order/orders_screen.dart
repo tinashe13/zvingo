@@ -10,19 +10,21 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 part 'orders_screen.g.dart';
 
 @riverpod
-Future<List<Map<String, dynamic>>> consumerOrders(ConsumerOrdersRef ref) async {
+Future<List<Map<String, dynamic>>> consumerOrders(Ref ref) async {
   final dio = ref.watch(apiClientProvider);
   // Get consumer ID from the settings box (stored during login)
   final box = Hive.box('settings');
   final token = box.get('access_token');
   if (token == null) return [];
-  
+
   try {
     // Get user profile to get ID
     final meResponse = await dio.get('/auth/me');
     final userId = meResponse.data['id'];
     final response = await dio.get('/orders/consumer/$userId');
-    return (response.data as List).map((e) => Map<String, dynamic>.from(e)).toList();
+    return (response.data as List)
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
   } catch (e) {
     return [];
   }
@@ -49,8 +51,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 16),
               child: Text('Orders', style: AppTextStyles.headlineMedium),
             ),
             // Tabs
@@ -75,14 +77,24 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
             Expanded(
               child: ordersAsync.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Center(child: Text('Error loading orders')),
+                error: (e, _) =>
+                    const Center(child: Text('Error loading orders')),
                 data: (orders) {
-                  final activeStates = ['CREATED', 'OFFERED', 'ACCEPTED', 'ARRIVED_AT_MERCHANT', 'PICKED_UP', 'ARRIVED_AT_CUSTOMER'];
+                  final activeStates = [
+                    'CREATED',
+                    'OFFERED',
+                    'ACCEPTED',
+                    'ARRIVED_AT_MERCHANT',
+                    'PICKED_UP',
+                    'ARRIVED_AT_CUSTOMER'
+                  ];
                   final pastStates = ['DELIVERED', 'CANCELLED'];
-                  
+
                   final filtered = orders.where((o) {
                     final state = o['state'] ?? '';
-                    return _showActive ? activeStates.contains(state) : pastStates.contains(state);
+                    return _showActive
+                        ? activeStates.contains(state)
+                        : pastStates.contains(state);
                   }).toList();
 
                   if (filtered.isEmpty) {
@@ -90,7 +102,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.receipt_long, size: 64, color: AppColors.primary.withOpacity(0.3)),
+                          Icon(Icons.receipt_long,
+                              size: 64,
+                              color: AppColors.primary.withOpacity(0.3)),
                           const SizedBox(height: 12),
                           Text(
                             _showActive ? 'No active orders' : 'No past orders',
@@ -136,15 +150,26 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     final items = (order['items'] as List?) ?? [];
     final itemNames = items.map((i) => i['name'] ?? '').join(', ');
     final orderId = order['id'] ?? '';
-    
+
     Color stateColor;
     switch (state) {
-      case 'CREATED': stateColor = Colors.orange; break;
-      case 'ACCEPTED': stateColor = AppColors.primary; break;
-      case 'PICKED_UP': stateColor = Colors.blue; break;
-      case 'DELIVERED': stateColor = AppColors.primary; break;
-      case 'CANCELLED': stateColor = AppColors.error; break;
-      default: stateColor = AppColors.textSecondary;
+      case 'CREATED':
+        stateColor = Colors.orange;
+        break;
+      case 'ACCEPTED':
+        stateColor = AppColors.primary;
+        break;
+      case 'PICKED_UP':
+        stateColor = Colors.blue;
+        break;
+      case 'DELIVERED':
+        stateColor = AppColors.primary;
+        break;
+      case 'CANCELLED':
+        stateColor = AppColors.error;
+        break;
+      default:
+        stateColor = AppColors.textSecondary;
     }
 
     return Card(
@@ -157,7 +182,14 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () {
-          if (['CREATED', 'OFFERED', 'ACCEPTED', 'ARRIVED_AT_MERCHANT', 'PICKED_UP', 'ARRIVED_AT_CUSTOMER'].contains(state)) {
+          if ([
+            'CREATED',
+            'OFFERED',
+            'ACCEPTED',
+            'ARRIVED_AT_MERCHANT',
+            'PICKED_UP',
+            'ARRIVED_AT_CUSTOMER'
+          ].contains(state)) {
             context.push('/order/$orderId');
           }
         },
@@ -169,25 +201,30 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('#${orderId.substring(orderId.length > 6 ? orderId.length - 6 : 0)}',
+                  Text(
+                      '#${orderId.substring(orderId.length > 6 ? orderId.length - 6 : 0)}',
                       style: AppTextStyles.titleSmall),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: stateColor.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(state.replaceAll('_', ' '),
-                        style: AppTextStyles.labelSmall.copyWith(color: stateColor, fontWeight: FontWeight.w600)),
+                        style: AppTextStyles.labelSmall.copyWith(
+                            color: stateColor, fontWeight: FontWeight.w600)),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
               Text(itemNames.isNotEmpty ? itemNames : 'Order items',
-                  style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+                  style: AppTextStyles.bodyMedium
+                      .copyWith(color: AppColors.textSecondary)),
               const SizedBox(height: 8),
               Text('\$${total.toStringAsFixed(2)}',
-                  style: AppTextStyles.titleSmall.copyWith(color: AppColors.primary)),
+                  style: AppTextStyles.titleSmall
+                      .copyWith(color: AppColors.primary)),
             ],
           ),
         ),

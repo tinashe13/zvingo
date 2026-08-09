@@ -2,6 +2,7 @@ import 'package:consumer_app/core/api_client.dart';
 import 'package:consumer_app/core/delivery_location_provider.dart';
 import 'package:consumer_app/features/address/address_provider.dart';
 import 'package:hive/hive.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:dio/dio.dart';
 
@@ -106,7 +107,7 @@ class Auth extends _$Auth {
 
 /// Provider for user profile data
 @riverpod
-Future<Map<String, dynamic>> userProfile(UserProfileRef ref) async {
+Future<Map<String, dynamic>> userProfile(Ref ref) async {
   final dio = ref.watch(apiClientProvider);
   try {
     final response = await dio.get('/auth/me');

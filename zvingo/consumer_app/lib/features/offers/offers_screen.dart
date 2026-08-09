@@ -20,11 +20,11 @@ class OffersScreen extends ConsumerWidget {
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
-            SliverToBoxAdapter(
+            const SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text('Offers & Deals',
-                    style: AppTextStyles.headlineMedium),
+                padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child:
+                    Text('Offers & Deals', style: AppTextStyles.headlineMedium),
               ),
             ),
             SliverToBoxAdapter(
@@ -42,8 +42,7 @@ class OffersScreen extends ConsumerWidget {
             restaurantsAsync.when(
               data: (restaurants) {
                 final withDeals = restaurants
-                    .where((r) =>
-                        r.promotions.isNotEmpty || r.deliveryFee == 0)
+                    .where((r) => r.promotions.isNotEmpty || r.deliveryFee == 0)
                     .toList();
 
                 if (withDeals.isEmpty) {
@@ -58,10 +57,10 @@ class OffersScreen extends ConsumerWidget {
                             height: 150,
                           ),
                           const SizedBox(height: 16),
-                          Text('No deals right now',
+                          const Text('No deals right now',
                               style: AppTextStyles.titleMedium),
                           const SizedBox(height: 6),
-                          Text('Check back soon for offers!',
+                          const Text('Check back soon for offers!',
                               style: AppTextStyles.bodySmall),
                         ],
                       ),
@@ -81,9 +80,9 @@ class OffersScreen extends ConsumerWidget {
                               margin: const EdgeInsets.fromLTRB(16, 0, 16, 0),
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
+                              decoration: const BoxDecoration(
                                 color: AppColors.primarySurface,
-                                borderRadius: const BorderRadius.vertical(
+                                borderRadius: BorderRadius.vertical(
                                     top: Radius.circular(12)),
                               ),
                               child: Row(
@@ -107,8 +106,7 @@ class OffersScreen extends ConsumerWidget {
                             ),
                           RestaurantCard(
                             restaurant: r,
-                            onTap: () =>
-                                context.push('/restaurant/${r.id}'),
+                            onTap: () => context.push('/restaurant/${r.id}'),
                           ),
                         ],
                       );

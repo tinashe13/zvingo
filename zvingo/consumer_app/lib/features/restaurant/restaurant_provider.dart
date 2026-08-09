@@ -1,6 +1,6 @@
 import 'package:consumer_app/core/api_client.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:dio/dio.dart';
 
 part 'restaurant_provider.g.dart';
 
@@ -34,10 +34,11 @@ class MenuItem {
   factory MenuItem.fromJson(Map<String, dynamic> json) {
     var imgUrl = json['image_url'] ?? '';
     imgUrl = _fixUrl(imgUrl);
-    
+
     List<String> imgs = [];
     if (json['images'] != null) {
-      imgs = (json['images'] as List).map((e) => _fixUrl(e.toString())).toList();
+      imgs =
+          (json['images'] as List).map((e) => _fixUrl(e.toString())).toList();
     }
     // Ensure primary image is in list if not empty
     if (imgs.isEmpty && imgUrl.isNotEmpty) {
@@ -62,7 +63,7 @@ class MenuItem {
 String _fixUrl(String? url) {
   if (url == null || url.isEmpty) return '';
   // If running on Android emulator, localhost needs to be 10.0.2.2
-  // We can blindly replace localhost with 10.0.2.2 for this MVP 
+  // We can blindly replace localhost with 10.0.2.2 for this MVP
   // since real devices won't have localhost URLs anyway (they'd be literal IP or domain).
   return url.replaceFirst('localhost', '10.0.2.2');
 }
@@ -89,76 +90,84 @@ class Restaurant {
   final bool isZvingoPlus;
 
   Restaurant({
-      required this.id,
-      required this.name,
-      required this.description,
-      required this.rating,
-      required this.deliveryTimeMin,
-      required this.deliveryTimeMax,
-      required this.deliveryFee,
-      required this.imageUrl,
-      required this.bannerUrl,
-      required this.category,
-      required this.menu,
-      required this.address,
-      required this.promotions,
-      this.distanceMi,
-      this.reviewCount,
-      this.neighborsLiked,
-      this.customerPhotosCount,
-      this.freeDeliveryThreshold,
-      this.isZvingoPlus = false,
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.rating,
+    required this.deliveryTimeMin,
+    required this.deliveryTimeMax,
+    required this.deliveryFee,
+    required this.imageUrl,
+    required this.bannerUrl,
+    required this.category,
+    required this.menu,
+    required this.address,
+    required this.promotions,
+    this.distanceMi,
+    this.reviewCount,
+    this.neighborsLiked,
+    this.customerPhotosCount,
+    this.freeDeliveryThreshold,
+    this.isZvingoPlus = false,
   });
 
   String get deliveryTime => '$deliveryTimeMin-$deliveryTimeMax min';
 
   factory Restaurant.fromJson(Map<String, dynamic> json) {
-      return Restaurant(
-          id: json['_id'] ?? json['id'] ?? '',
-          name: json['name'] ?? '',
-          description: json['description'] ?? '',
-          rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
-          deliveryTimeMin: json['delivery_time_min'] ?? 0,
-          deliveryTimeMax: json['delivery_time_max'] ?? 0,
-          deliveryFee: (json['delivery_fee_usd'] as num?)?.toDouble() ?? 0.0,
-          imageUrl: _fixUrl(json['image_url']),
-          bannerUrl: _fixUrl(json['banner_url']),
-          category: json['categories'] != null && (json['categories'] as List).isNotEmpty
+    return Restaurant(
+      id: json['_id'] ?? json['id'] ?? '',
+      name: json['name'] ?? '',
+      description: json['description'] ?? '',
+      rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
+      deliveryTimeMin: json['delivery_time_min'] ?? 0,
+      deliveryTimeMax: json['delivery_time_max'] ?? 0,
+      deliveryFee: (json['delivery_fee_usd'] as num?)?.toDouble() ?? 0.0,
+      imageUrl: _fixUrl(json['image_url']),
+      bannerUrl: _fixUrl(json['banner_url']),
+      category:
+          json['categories'] != null && (json['categories'] as List).isNotEmpty
               ? (json['categories'] as List).join(', ')
               : json['category'] ?? 'Restaurant',
-          menu: (json['menu'] as List?)?.map((e) => MenuItem.fromJson(e)).toList() ?? [],
-          address: json['address'] ?? '',
-          promotions: (json['promotions'] as List?)?.map((e) => e.toString()).toList() ?? [],
-          distanceMi: (json['distance_mi'] as num?)?.toDouble(),
-          reviewCount: json['review_count'] as int?,
-          neighborsLiked: json['neighbors_liked'] as int?,
-          customerPhotosCount: json['customer_photos_count'] as int?,
-          freeDeliveryThreshold: (json['free_delivery_threshold'] as num?)?.toDouble(),
-          isZvingoPlus: json['is_zvingo_plus'] ?? false,
-      );
+      menu:
+          (json['menu'] as List?)?.map((e) => MenuItem.fromJson(e)).toList() ??
+              [],
+      address: json['address'] ?? '',
+      promotions:
+          (json['promotions'] as List?)?.map((e) => e.toString()).toList() ??
+              [],
+      distanceMi: (json['distance_mi'] as num?)?.toDouble(),
+      reviewCount: json['review_count'] as int?,
+      neighborsLiked: json['neighbors_liked'] as int?,
+      customerPhotosCount: json['customer_photos_count'] as int?,
+      freeDeliveryThreshold:
+          (json['free_delivery_threshold'] as num?)?.toDouble(),
+      isZvingoPlus: json['is_zvingo_plus'] ?? false,
+    );
   }
 }
 
 @riverpod
-Future<List<Restaurant>> restaurantList(RestaurantListRef ref) async {
+Future<List<Restaurant>> restaurantList(Ref ref) async {
   final dio = ref.watch(apiClientProvider);
   final response = await dio.get('/catalog/restaurants');
-  
+
   return (response.data as List).map((e) => Restaurant.fromJson(e)).toList();
 }
 
 @riverpod
-Future<Restaurant> restaurantDetail(RestaurantDetailRef ref, String id) async {
-   final dio = ref.watch(apiClientProvider);
-   final response = await dio.get('/catalog/restaurants/$id');
-   return Restaurant.fromJson(response.data);
+Future<Restaurant> restaurantDetail(Ref ref, String id) async {
+  final dio = ref.watch(apiClientProvider);
+  final response = await dio.get('/catalog/restaurants/$id');
+  return Restaurant.fromJson(response.data);
 }
 
 @riverpod
-Future<List<MenuItem>> searchRestaurantItems(SearchRestaurantItemsRef ref, String restaurantId, String query) async {
+Future<List<MenuItem>> searchRestaurantItems(
+    Ref ref, String restaurantId, String query) async {
   if (query.isEmpty) return [];
   final dio = ref.watch(apiClientProvider);
-  final response = await dio.get('/catalog/restaurants/$restaurantId/search', queryParameters: {'q': query});
+  final response = await dio.get('/catalog/restaurants/$restaurantId/search',
+      queryParameters: {'q': query});
   return (response.data as List).map((e) => MenuItem.fromJson(e)).toList();
 }
 
@@ -215,8 +224,10 @@ class Promotion {
 }
 
 @riverpod
-Future<List<Promotion>> restaurantPromotions(RestaurantPromotionsRef ref, String restaurantId) async {
+Future<List<Promotion>> restaurantPromotions(
+    Ref ref, String restaurantId) async {
   final dio = ref.watch(apiClientProvider);
-  final response = await dio.get('/catalog/promotions', queryParameters: {'restaurant_id': restaurantId});
+  final response = await dio.get('/catalog/promotions',
+      queryParameters: {'restaurant_id': restaurantId});
   return (response.data as List).map((e) => Promotion.fromJson(e)).toList();
 }

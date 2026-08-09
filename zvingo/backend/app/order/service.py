@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime
+from app.time_utils import utc_now
 from typing import Optional
 from app.order.models import Order, OrderEvent
 from app.order.schemas import OrderCreate
@@ -113,7 +114,7 @@ class OrderService:
             raise
 
         order.state = new_state
-        order.updated_at = datetime.utcnow()
+        order.updated_at = utc_now()
         if actor_id and new_state == OrderState.ACCEPTED:
             order.driver_id = actor_id
 

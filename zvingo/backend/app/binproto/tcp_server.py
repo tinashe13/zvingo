@@ -4,6 +4,7 @@ import redis.asyncio as aioredis
 from app.config import settings
 from app.binproto.codec import BinProtoCodec, PTYPE_LOCATION, PTYPE_ACK
 from app.rate_limiter import RateLimiter
+from app.time_utils import utc_now
 
 logger = structlog.get_logger()
 
@@ -35,7 +36,6 @@ async def handle_tcp_client(reader, writer):
                     if driver_id:
                         from app.dispatch.service import dispatch_service
                         from app.dispatch.schemas import DriverLocationUpdate
-                        from datetime import datetime
 
                         # Apply rate limiting
                         r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
@@ -49,7 +49,7 @@ async def handle_tcp_client(reader, writer):
                                     lng=loc.lng,
                                     status="ONLINE",
                                     battery=loc.battery,
-                                    timestamp=datetime.utcnow()
+                                    timestamp=utc_now()
                                 )
                                 await dispatch_service.update_location(update)
                             else:

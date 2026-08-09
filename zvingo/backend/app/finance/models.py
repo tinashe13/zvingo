@@ -8,6 +8,7 @@ breakdown, masked addresses, and metadata needed for the earnings screen.
 import re
 from typing import Optional
 from datetime import datetime, date
+from app.time_utils import utc_now
 from beanie import Document, Indexed
 from pydantic import Field
 
@@ -41,7 +42,7 @@ class DriverEarning(Document):
     # Metadata
     payment_method: str = "cash"       # cash / ecocash
     distance_km: float = 0.0
-    completed_at: Indexed(datetime) = Field(default_factory=datetime.utcnow)  # type: ignore
+    completed_at: Indexed(datetime) = Field(default_factory=utc_now)  # type: ignore
     created_date: str = Field(default_factory=lambda: date.today().isoformat())
 
     class Settings:

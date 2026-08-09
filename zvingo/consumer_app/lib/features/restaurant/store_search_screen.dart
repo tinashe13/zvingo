@@ -11,7 +11,8 @@ import 'package:go_router/go_router.dart';
 class StoreSearchScreen extends ConsumerStatefulWidget {
   final String restaurantId;
   final String restaurantName;
-  const StoreSearchScreen({super.key, required this.restaurantId, required this.restaurantName});
+  const StoreSearchScreen(
+      {super.key, required this.restaurantId, required this.restaurantName});
 
   @override
   ConsumerState<StoreSearchScreen> createState() => _StoreSearchScreenState();
@@ -22,7 +23,14 @@ class _StoreSearchScreenState extends ConsumerState<StoreSearchScreen> {
   Timer? _debounce;
   String _query = '';
   // Mock filters for UI match
-  final _filters = ['Deals', 'Brands', 'HSA/FSA', 'Under \$3', 'Organic', 'Gluten Free'];
+  final _filters = [
+    'Deals',
+    'Brands',
+    'HSA/FSA',
+    'Under \$3',
+    'Organic',
+    'Gluten Free'
+  ];
 
   @override
   void dispose() {
@@ -42,7 +50,8 @@ class _StoreSearchScreenState extends ConsumerState<StoreSearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final searchAsync = ref.watch(searchRestaurantItemsProvider(widget.restaurantId, _query));
+    final searchAsync =
+        ref.watch(searchRestaurantItemsProvider(widget.restaurantId, _query));
 
     return Scaffold(
       backgroundColor: AppColors.white,
@@ -64,12 +73,15 @@ class _StoreSearchScreenState extends ConsumerState<StoreSearchScreen> {
             autofocus: true,
             decoration: InputDecoration(
               hintText: 'Search in store',
-              hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
+              hintStyle:
+                  AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
               border: InputBorder.none,
-              prefixIcon: const Icon(Icons.search, color: AppColors.textPrimary, size: 20),
-              suffixIcon: _query.isNotEmpty 
+              prefixIcon: const Icon(Icons.search,
+                  color: AppColors.textPrimary, size: 20),
+              suffixIcon: _query.isNotEmpty
                   ? IconButton(
-                      icon: const Icon(Icons.close, size: 18, color: AppColors.textSecondary),
+                      icon: const Icon(Icons.close,
+                          size: 18, color: AppColors.textSecondary),
                       onPressed: () {
                         _searchController.clear();
                         _onSearchChanged('');
@@ -110,21 +122,25 @@ class _StoreSearchScreenState extends ConsumerState<StoreSearchScreen> {
                 }
                 final filter = _filters[index - 1];
                 return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey.shade300),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
                     children: [
-                       if (filter == 'Deals') ...[
-                         const Icon(Icons.local_offer, size: 14, color: AppColors.textPrimary),
-                         const SizedBox(width: 4),
-                       ],
-                       Text(filter, style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600)),
-                       const SizedBox(width: 4),
-                       if (filter == 'Brands')
-                         const Icon(Icons.keyboard_arrow_down, size: 16),
+                      if (filter == 'Deals') ...[
+                        const Icon(Icons.local_offer,
+                            size: 14, color: AppColors.textPrimary),
+                        const SizedBox(width: 4),
+                      ],
+                      Text(filter,
+                          style: AppTextStyles.bodySmall
+                              .copyWith(fontWeight: FontWeight.w600)),
+                      const SizedBox(width: 4),
+                      if (filter == 'Brands')
+                        const Icon(Icons.keyboard_arrow_down, size: 16),
                     ],
                   ),
                 );
@@ -144,45 +160,52 @@ class _StoreSearchScreenState extends ConsumerState<StoreSearchScreen> {
                   ),
                   const Spacer(),
                   Container(
-                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                     decoration: BoxDecoration(
-                       border: Border.all(color: Colors.grey.shade300),
-                       borderRadius: BorderRadius.circular(20),
-                     ),
-                     child: Row(
-                       children: [
-                         Text('Sort', style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600)),
-                         const SizedBox(width: 4),
-                         const Icon(Icons.keyboard_arrow_down, size: 16),
-                       ],
-                     ),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      children: [
+                        Text('Sort',
+                            style: AppTextStyles.bodySmall
+                                .copyWith(fontWeight: FontWeight.w600)),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.keyboard_arrow_down, size: 16),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
-            
+
           if (_query.isNotEmpty)
-             Container(
-               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-               decoration: BoxDecoration(
-                 color: const Color(0xFFE8F5E9), // Light Green
-                 borderRadius: BorderRadius.circular(8),
-               ),
-               child: Row(
-                 children: [
-                   const Icon(Icons.check_circle, size: 16, color: Color(0xFF2E7D32)),
-                   const SizedBox(width: 8),
-                   Expanded(
-                     child: Text(
-                       'Freshness guaranteed or your money back',
-                       style: AppTextStyles.bodySmall.copyWith(color: const Color(0xFF1B5E20), fontWeight: FontWeight.w500),
-                     ),
-                   ),
-                   const Icon(Icons.info_outline, size: 16, color: Color(0xFF1B5E20)),
-                 ],
-               ),
-             ),
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F5E9), // Light Green
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle,
+                      size: 16, color: Color(0xFF2E7D32)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Freshness guaranteed or your money back',
+                      style: AppTextStyles.bodySmall.copyWith(
+                          color: const Color(0xFF1B5E20),
+                          fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                  const Icon(Icons.info_outline,
+                      size: 16, color: Color(0xFF1B5E20)),
+                ],
+              ),
+            ),
 
           // ── Search Results Grid ───────────────────────
           Expanded(
@@ -191,11 +214,13 @@ class _StoreSearchScreenState extends ConsumerState<StoreSearchScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.search, size: 64, color: AppColors.textHint),
+                        const Icon(Icons.search,
+                            size: 64, color: AppColors.textHint),
                         const SizedBox(height: 16),
                         Text(
                           'Search for items',
-                          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
+                          style: AppTextStyles.bodyMedium
+                              .copyWith(color: AppColors.textHint),
                         ),
                       ],
                     ),
@@ -206,13 +231,15 @@ class _StoreSearchScreenState extends ConsumerState<StoreSearchScreen> {
                         return Center(
                           child: Text(
                             'No items found for "$_query"',
-                            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
+                            style: AppTextStyles.bodyMedium
+                                .copyWith(color: AppColors.textHint),
                           ),
                         );
                       }
                       return GridView.builder(
                         padding: const EdgeInsets.all(16),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 2,
                           childAspectRatio: 0.75, // Adjust for card height
                           crossAxisSpacing: 16,
@@ -227,13 +254,13 @@ class _StoreSearchScreenState extends ConsumerState<StoreSearchScreen> {
                             restaurantName: widget.restaurantName,
                             onAdd: () {
                               ref.read(cartProvider.notifier).addItem(
-                                item.id, 
-                                item.name, 
-                                item.price,
-                                restaurantId: widget.restaurantId,
-                                restaurantName: widget.restaurantName,
-                                imageUrl: item.imageUrl,
-                              );
+                                    item.id,
+                                    item.name,
+                                    item.price,
+                                    restaurantId: widget.restaurantId,
+                                    restaurantName: widget.restaurantName,
+                                    imageUrl: item.imageUrl,
+                                  );
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text('${item.name} added to cart'),
@@ -248,7 +275,8 @@ class _StoreSearchScreenState extends ConsumerState<StoreSearchScreen> {
                         },
                       );
                     },
-                    loading: () => const Center(child: CircularProgressIndicator()),
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
                     error: (err, stack) => Center(child: Text('Error: $err')),
                   ),
           ),
@@ -264,7 +292,11 @@ class _SearchGridItemCard extends StatelessWidget {
   final String restaurantName;
   final VoidCallback onAdd;
 
-  const _SearchGridItemCard({required this.item, required this.restaurantId, required this.restaurantName, required this.onAdd});
+  const _SearchGridItemCard(
+      {required this.item,
+      required this.restaurantId,
+      required this.restaurantName,
+      required this.onAdd});
 
   @override
   Widget build(BuildContext context) {
@@ -287,10 +319,16 @@ class _SearchGridItemCard extends StatelessWidget {
                       ? CachedNetworkImage(
                           imageUrl: item.imageUrl,
                           fit: BoxFit.cover,
-                          placeholder: (_, __) => Container(color: AppColors.primarySurface),
-                          errorWidget: (_, __, ___) => const Icon(Icons.fastfood, color: AppColors.primary, size: 40),
+                          placeholder: (_, __) =>
+                              Container(color: AppColors.primarySurface),
+                          errorWidget: (_, __, ___) => const Icon(
+                              Icons.fastfood,
+                              color: AppColors.primary,
+                              size: 40),
                         )
-                      : const Center(child: Icon(Icons.fastfood, color: AppColors.primary, size: 40)),
+                      : const Center(
+                          child: Icon(Icons.fastfood,
+                              color: AppColors.primary, size: 40)),
                 ),
               ),
               // Add Button Overlay (Bottom Right)
@@ -313,7 +351,8 @@ class _SearchGridItemCard extends StatelessWidget {
                         ),
                       ],
                     ),
-                    child: const Icon(Icons.add, color: AppColors.primary, size: 20),
+                    child: const Icon(Icons.add,
+                        color: AppColors.primary, size: 20),
                   ),
                 ),
               ),
@@ -321,13 +360,14 @@ class _SearchGridItemCard extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        
+
         // Price
         Text(
           '\$${item.price.toStringAsFixed(2)}',
-          style: AppTextStyles.titleMedium.copyWith(fontWeight: FontWeight.w700),
+          style:
+              AppTextStyles.titleMedium.copyWith(fontWeight: FontWeight.w700),
         ),
-        
+
         // Name
         const SizedBox(height: 4),
         Text(
@@ -336,7 +376,7 @@ class _SearchGridItemCard extends StatelessWidget {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
-        
+
         // Stock / Reviews (Mocked)
         const SizedBox(height: 4),
         Row(
@@ -352,14 +392,16 @@ class _SearchGridItemCard extends StatelessWidget {
             const SizedBox(width: 4),
             Text(
               'Many in stock', // Mock status
-              style: AppTextStyles.bodySmall.copyWith(color: const Color(0xFF2E7D32), fontSize: 11),
+              style: AppTextStyles.bodySmall
+                  .copyWith(color: const Color(0xFF2E7D32), fontSize: 11),
             ),
           ],
         ),
         const SizedBox(height: 2),
         Text(
-           '5k+ recently sold', // Mock status
-           style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint, fontSize: 11),
+          '5k+ recently sold', // Mock status
+          style: AppTextStyles.bodySmall
+              .copyWith(color: AppColors.textHint, fontSize: 11),
         ),
       ],
     );

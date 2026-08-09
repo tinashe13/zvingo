@@ -12,9 +12,9 @@ class PickupScreen extends StatelessWidget {
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
-            SliverToBoxAdapter(
+            const SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
                 child: Text('Pickup', style: AppTextStyles.headlineMedium),
               ),
             ),
@@ -30,7 +30,8 @@ class PickupScreen extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   child: Row(
                     children: [
-                      const Icon(Icons.search, color: AppColors.textHint, size: 22),
+                      const Icon(Icons.search,
+                          color: AppColors.textHint, size: 22),
                       const SizedBox(width: 10),
                       Text('Search pickup stores',
                           style: AppTextStyles.bodyMedium
@@ -67,11 +68,10 @@ class PickupScreen extends StatelessWidget {
                     Icon(Icons.directions_walk,
                         size: 64, color: AppColors.primary.withOpacity(0.3)),
                     const SizedBox(height: 12),
-                    Text('Pickup stores near you',
+                    const Text('Pickup stores near you',
                         style: AppTextStyles.titleMedium),
                     const SizedBox(height: 4),
-                    Text('Coming soon',
-                        style: AppTextStyles.bodySmall),
+                    const Text('Coming soon', style: AppTextStyles.bodySmall),
                   ],
                 ),
               ),

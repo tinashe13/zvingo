@@ -4,14 +4,13 @@ import 'package:consumer_app/core/app_text_styles.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:dio/dio.dart';
 
 part 'promo_banner.g.dart';
 
 /// Fetches active promotions from the backend.
 /// Returns an empty list if the endpoint is unavailable or returns no promos.
 @riverpod
-Future<List<PromoData>> activePromos(ActivePromosRef ref) async {
+Future<List<PromoData>> activePromos(Ref ref) async {
   try {
     final dio = ref.read(apiClientProvider);
     final response = await dio.get('/catalog/promotions');
@@ -103,7 +102,7 @@ class PromoBanner extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
-                  Text('Offers', style: AppTextStyles.titleLarge),
+                  const Text('Offers', style: AppTextStyles.titleLarge),
                   const Spacer(),
                   Text(
                     '${promos.length} available',
@@ -174,7 +173,8 @@ class PromoBanner extends ConsumerWidget {
                       if (promo.code != null) ...[
                         const SizedBox(height: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.25),
                             borderRadius: BorderRadius.circular(6),

@@ -11,4 +11,19 @@ class AppConfig {
     'API_BASE_URL',
     defaultValue: 'http://10.0.2.2/api',
   );
+
+  static const bool _isRelease = bool.fromEnvironment('dart.vm.product');
+
+  /// Fails early when a build points at an invalid or insecure API endpoint.
+  static void validate() {
+    final uri = Uri.tryParse(apiBaseUrl);
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+      throw StateError('API_BASE_URL must be an absolute URL: $apiBaseUrl');
+    }
+    if (_isRelease && uri.scheme != 'https') {
+      throw StateError(
+        'Release builds require an HTTPS API_BASE_URL. Received: $apiBaseUrl',
+      );
+    }
+  }
 }

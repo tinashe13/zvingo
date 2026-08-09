@@ -10,6 +10,10 @@ class CustomTextField extends StatelessWidget {
   final String? Function(String?)? validator;
   final Widget? prefixIcon;
   final Widget? suffixIcon;
+  final TextInputAction? textInputAction;
+  final Iterable<String>? autofillHints;
+  final ValueChanged<String>? onFieldSubmitted;
+  final TextCapitalization textCapitalization;
 
   const CustomTextField({
     super.key,
@@ -21,6 +25,10 @@ class CustomTextField extends StatelessWidget {
     this.validator,
     this.prefixIcon,
     this.suffixIcon,
+    this.textInputAction,
+    this.autofillHints,
+    this.onFieldSubmitted,
+    this.textCapitalization = TextCapitalization.none,
   });
 
   @override
@@ -34,7 +42,6 @@ class CustomTextField extends StatelessWidget {
             fontSize: 14,
             fontWeight: FontWeight.w600,
             color: AppColors.textTertiary,
-            fontFamily: 'Inter',
           ),
         ),
         const SizedBox(height: 8),
@@ -43,18 +50,21 @@ class CustomTextField extends StatelessWidget {
           obscureText: obscureText,
           keyboardType: keyboardType,
           validator: validator,
+          textInputAction: textInputAction,
+          autofillHints: autofillHints,
+          onFieldSubmitted: onFieldSubmitted,
+          textCapitalization: textCapitalization,
           style: const TextStyle(
             fontSize: 16,
             color: AppColors.textPrimary,
-            fontFamily: 'Inter',
             fontWeight: FontWeight.w500,
           ),
           decoration: InputDecoration(
             hintText: hint,
             prefixIcon: prefixIcon,
             suffixIcon: suffixIcon,
-            // Theme Data should handle most of this, but we can override if needed
-            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           ),
         ),
       ],

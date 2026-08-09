@@ -51,7 +51,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () => context.pop(),
         ),
-        title: Text('Payment', style: AppTextStyles.titleLarge),
+        title: const Text('Payment', style: AppTextStyles.titleLarge),
         centerTitle: true,
       ),
       body: Padding(
@@ -69,17 +69,18 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Order Total', style: AppTextStyles.titleMedium),
+                  const Text('Order Total', style: AppTextStyles.titleMedium),
                   Text(
                     '\$${widget.amount.toStringAsFixed(2)}',
-                    style: AppTextStyles.titleLarge.copyWith(color: AppColors.primary),
+                    style: AppTextStyles.titleLarge
+                        .copyWith(color: AppColors.primary),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 28),
 
-            Text('Payment Method', style: AppTextStyles.titleMedium),
+            const Text('Payment Method', style: AppTextStyles.titleMedium),
             const SizedBox(height: 14),
 
             // EcoCash
@@ -89,7 +90,8 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
               subtitle: 'Pay with EcoCash mobile money',
               color: const Color(0xFF00A651),
               isSelected: _selectedMethod == PaymentMethodType.ecocash,
-              onTap: () => setState(() => _selectedMethod = PaymentMethodType.ecocash),
+              onTap: () =>
+                  setState(() => _selectedMethod = PaymentMethodType.ecocash),
             ),
             const SizedBox(height: 10),
 
@@ -100,7 +102,8 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
               subtitle: 'Pay with OneMoney mobile wallet',
               color: const Color(0xFF1E3A5F),
               isSelected: _selectedMethod == PaymentMethodType.onemoney,
-              onTap: () => setState(() => _selectedMethod = PaymentMethodType.onemoney),
+              onTap: () =>
+                  setState(() => _selectedMethod = PaymentMethodType.onemoney),
             ),
             const SizedBox(height: 10),
 
@@ -111,20 +114,22 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
               subtitle: 'Pay with InnBucks wallet',
               color: const Color(0xFFE5383B),
               isSelected: _selectedMethod == PaymentMethodType.innbucks,
-              onTap: () => setState(() => _selectedMethod = PaymentMethodType.innbucks),
+              onTap: () =>
+                  setState(() => _selectedMethod = PaymentMethodType.innbucks),
             ),
 
             const SizedBox(height: 24),
 
             // Phone number input
-            Text('Phone Number', style: AppTextStyles.titleSmall),
+            const Text('Phone Number', style: AppTextStyles.titleSmall),
             const SizedBox(height: 8),
             TextField(
               controller: _phoneController,
               keyboardType: TextInputType.phone,
               decoration: InputDecoration(
                 hintText: '+263 7X XXX XXXX',
-                hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
+                hintStyle: AppTextStyles.bodyMedium
+                    .copyWith(color: AppColors.textHint),
                 prefixIcon: const Icon(Icons.phone, color: AppColors.textHint),
                 filled: true,
                 fillColor: AppColors.background,
@@ -148,13 +153,14 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: Colors.amber.shade200),
                 ),
-                child: Row(
+                child: const Row(
                   children: [
-                    const SizedBox(
-                      width: 20, height: 20,
+                    SizedBox(
+                      width: 20,
+                      height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
-                    const SizedBox(width: 12),
+                    SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         'Waiting for payment confirmation...\nCheck your phone for the USSD prompt',
@@ -176,7 +182,8 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                 ),
                 child: Text(
                   paymentState.error ?? 'Payment failed. Please try again.',
-                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.error),
+                  style:
+                      AppTextStyles.bodySmall.copyWith(color: AppColors.error),
                 ),
               ),
 
@@ -185,7 +192,8 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
               width: double.infinity,
               height: 56,
               child: ElevatedButton(
-                onPressed: (_isProcessing || paymentState.status == 'AWAITING_DELIVERY')
+                onPressed: (_isProcessing ||
+                        paymentState.status == 'AWAITING_DELIVERY')
                     ? null
                     : _handlePayment,
                 style: ElevatedButton.styleFrom(
@@ -197,9 +205,11 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                 ),
                 child: _isProcessing
                     ? const SizedBox(
-                        width: 24, height: 24,
+                        width: 24,
+                        height: 24,
                         child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2,
+                          color: Colors.white,
+                          strokeWidth: 2,
                         ),
                       )
                     : Text(
@@ -226,10 +236,10 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     setState(() => _isProcessing = true);
 
     await ref.read(paymentProvider.notifier).initiatePayment(
-      orderId: widget.orderId,
-      method: _selectedMethod,
-      phone: phone,
-    );
+          orderId: widget.orderId,
+          method: _selectedMethod,
+          phone: phone,
+        );
 
     if (mounted) {
       setState(() => _isProcessing = false);
@@ -289,8 +299,7 @@ class _PaymentMethodTile extends StatelessWidget {
                 ],
               ),
             ),
-            if (isSelected)
-              Icon(Icons.check_circle, color: color, size: 22),
+            if (isSelected) Icon(Icons.check_circle, color: color, size: 22),
           ],
         ),
       ),

@@ -31,7 +31,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   Future<void> _handleRegister() async {
     setState(() => _errorMessage = null);
-    
+
     if (_nameController.text.trim().isEmpty) {
       setState(() => _errorMessage = 'Please enter your full name');
       return;
@@ -40,8 +40,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       setState(() => _errorMessage = 'Please enter your phone number');
       return;
     }
-    if (_passwordController.text.length < 4) {
-      setState(() => _errorMessage = 'Password must be at least 4 characters');
+    if (_passwordController.text.length < 8) {
+      setState(() => _errorMessage = 'Password must be at least 8 characters');
       return;
     }
 
@@ -56,7 +56,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     } else if (mounted) {
       final authState = ref.read(authProvider);
       if (authState.hasError) {
-        setState(() => _errorMessage = 'Registration failed. Phone or email may already be in use.');
+        setState(() => _errorMessage =
+            'Registration failed. Phone or email may already be in use.');
       }
     }
   }
@@ -77,32 +78,44 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 fit: StackFit.expand,
                 children: [
                   Container(
-                    decoration: BoxDecoration(
+                    decoration: const BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          AppColors.primary.withOpacity(0.15),
-                          AppColors.primaryLight.withOpacity(0.10),
-                          Colors.orange.shade50,
+                          AppColors.primaryDark,
+                          AppColors.primary,
+                          Color(0xFF19A974),
                         ],
                       ),
                     ),
                     child: Stack(
                       children: [
-                        Positioned(top: 50, left: 30, child: _foodCircle(Icons.fastfood, 55)),
-                        Positioned(top: 40, right: 50, child: _foodCircle(Icons.local_pizza, 45)),
+                        Positioned(
+                            top: 50,
+                            left: 30,
+                            child: _foodCircle(Icons.fastfood, 55)),
+                        Positioned(
+                            top: 40,
+                            right: 50,
+                            child: _foodCircle(Icons.local_pizza, 45)),
                         Positioned(
                           bottom: 40,
                           left: MediaQuery.of(context).size.width * 0.4,
                           child: _foodCircle(Icons.restaurant_menu, 60),
                         ),
-                        Positioned(bottom: 30, right: 30, child: _foodCircle(Icons.cake, 40)),
+                        Positioned(
+                            bottom: 30,
+                            right: 30,
+                            child: _foodCircle(Icons.cake, 40)),
                       ],
                     ),
                   ),
                   Positioned(
-                    bottom: 0, left: 0, right: 0, height: 40,
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: 40,
                     child: Container(
                       decoration: const BoxDecoration(
                         gradient: LinearGradient(
@@ -118,7 +131,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     left: 8,
                     child: IconButton(
                       onPressed: () => context.pop(),
-                      icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                      icon: const Icon(Icons.arrow_back,
+                          color: AppColors.textPrimary),
                     ),
                   ),
                 ],
@@ -131,11 +145,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Create Account', style: AppTextStyles.headlineLarge),
+                  const Text('Create Account', style: AppTextStyles.headlineLarge),
                   const SizedBox(height: 8),
                   Text(
                     'Sign up to get started with Zvingo',
-                    style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+                    style: AppTextStyles.bodyMedium
+                        .copyWith(color: AppColors.textSecondary),
                   ),
                   const SizedBox(height: 20),
 
@@ -148,11 +163,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.error_outline, color: AppColors.error, size: 18),
+                          const Icon(Icons.error_outline,
+                              color: AppColors.error, size: 18),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(_errorMessage!,
-                                style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
+                                style: AppTextStyles.bodySmall
+                                    .copyWith(color: AppColors.error)),
                           ),
                         ],
                       ),
@@ -167,7 +184,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     style: AppTextStyles.bodyLarge,
                     decoration: const InputDecoration(
                       hintText: 'John Doe',
-                      prefixIcon: Icon(Icons.person_outline, color: AppColors.textHint, size: 20),
+                      prefixIcon: Icon(Icons.person_outline,
+                          color: AppColors.textHint, size: 20),
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -180,7 +198,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     style: AppTextStyles.bodyLarge,
                     decoration: const InputDecoration(
                       hintText: 'your@email.com (optional)',
-                      prefixIcon: Icon(Icons.email_outlined, color: AppColors.textHint, size: 20),
+                      prefixIcon: Icon(Icons.email_outlined,
+                          color: AppColors.textHint, size: 20),
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -193,7 +212,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     style: AppTextStyles.bodyLarge,
                     decoration: const InputDecoration(
                       hintText: '+263 77 000 0000',
-                      prefixIcon: Icon(Icons.phone_outlined, color: AppColors.textHint, size: 20),
+                      prefixIcon: Icon(Icons.phone_outlined,
+                          color: AppColors.textHint, size: 20),
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -206,13 +226,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     style: AppTextStyles.bodyLarge,
                     decoration: InputDecoration(
                       hintText: '••••••',
-                      prefixIcon: const Icon(Icons.lock_outline, color: AppColors.textHint, size: 20),
+                      prefixIcon: const Icon(Icons.lock_outline,
+                          color: AppColors.textHint, size: 20),
                       suffixIcon: IconButton(
                         icon: Icon(
-                          _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                          color: AppColors.textSecondary, size: 20,
+                          _obscurePassword
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          color: AppColors.textSecondary,
+                          size: 20,
                         ),
-                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                        onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword),
                       ),
                     ),
                     onSubmitted: (_) => _handleRegister(),
@@ -221,15 +246,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
                   // Register Button
                   SizedBox(
+                    width: double.infinity,
                     height: 56,
                     child: ElevatedButton(
                       onPressed: authState.isLoading ? null : _handleRegister,
                       child: authState.isLoading
                           ? const SizedBox(
-                              width: 24, height: 24,
-                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2.5),
                             )
-                          : Text('Create Account', style: AppTextStyles.button),
+                          : const Text('Create Account', style: AppTextStyles.button),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -239,12 +267,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text('Already have an account? ',
-                          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+                          style: AppTextStyles.bodyMedium
+                              .copyWith(color: AppColors.textSecondary)),
                       GestureDetector(
                         onTap: () => context.pop(),
                         child: Text('Sign in',
                             style: AppTextStyles.bodyMedium.copyWith(
-                              color: AppColors.primary, fontWeight: FontWeight.w600,
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
                             )),
                       ),
                     ],
@@ -263,18 +293,23 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Text(text,
-          style: AppTextStyles.labelSmall.copyWith(letterSpacing: 1.5, color: AppColors.textSecondary)),
+          style: AppTextStyles.labelSmall
+              .copyWith(letterSpacing: 1.5, color: AppColors.textSecondary)),
     );
   }
 
   Widget _foodCircle(IconData icon, double size) {
     return Container(
-      width: size, height: size,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
         color: AppColors.white.withOpacity(0.85),
         shape: BoxShape.circle,
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, 4)),
+          BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 4)),
         ],
       ),
       child: Icon(icon, size: size * 0.45, color: AppColors.primary),

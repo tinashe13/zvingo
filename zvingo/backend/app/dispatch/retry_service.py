@@ -5,6 +5,7 @@ Re-offers them to drivers every 2 minutes to find available drivers.
 
 import asyncio
 from datetime import datetime, timedelta
+from app.time_utils import utc_now
 from app.config import settings
 from app.order.models import Order
 from app.order.state_machine import OrderState
@@ -62,7 +63,7 @@ class OrderRetryService:
             # Find orders stuck in OFFERED state (driver never accepted)
             # OR orders stuck in CREATED state (no drivers found on initial dispatch)
             # CREATED orders older than RETRY_INTERVAL_SECONDS are eligible for retry
-            cutoff = datetime.utcnow() - timedelta(seconds=RETRY_INTERVAL_SECONDS)
+            cutoff = utc_now() - timedelta(seconds=RETRY_INTERVAL_SECONDS)
             stuck_orders = await Order.find(
                 {"$or": [
                     {"state": OrderState.OFFERED},
@@ -91,7 +92,7 @@ class OrderRetryService:
                     # Check if enough time has passed since last retry
                     last_retry = order.last_retry_at if hasattr(order, 'last_retry_at') else None
                     if last_retry:
-                        time_since_last_retry = datetime.utcnow() - last_retry
+                        time_since_last_retry = utc_now() - last_retry
                         if time_since_last_retry.total_seconds() < RETRY_INTERVAL_SECONDS:
                             # Not enough time has passed
                             continue
@@ -138,7 +139,7 @@ class OrderRetryService:
 
                     # Update retry metadata
                     order.retry_count = retry_count + 1
-                    order.last_retry_at = datetime.utcnow()
+                    order.last_retry_at = utc_now()
                     await order.save()
 
                 except Exception as e:

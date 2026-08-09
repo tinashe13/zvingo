@@ -93,7 +93,9 @@ class Payment extends _$Payment {
 
         state = state.copyWith(status: newStatus);
 
-        if (newStatus == 'PAID' || newStatus == 'FAILED' || newStatus == 'REFUNDED') {
+        if (newStatus == 'PAID' ||
+            newStatus == 'FAILED' ||
+            newStatus == 'REFUNDED') {
           timer.cancel();
         }
       } catch (_) {

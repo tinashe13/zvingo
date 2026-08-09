@@ -13,6 +13,7 @@ import 'package:consumer_app/features/favourites/favourites_screen.dart';
 import 'package:consumer_app/features/order/orders_screen.dart';
 import 'package:consumer_app/features/account/account_screen.dart';
 import 'package:consumer_app/features/cart/cart_screen.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:consumer_app/features/restaurant/menu_screen.dart';
 import 'package:consumer_app/features/order/order_tracking_screen.dart';
 import 'package:consumer_app/features/payment/payment_screen.dart';
@@ -33,7 +34,7 @@ bool _isLoggedIn() {
 }
 
 @riverpod
-GoRouter router(RouterRef ref) {
+GoRouter router(Ref ref) {
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/home',
@@ -179,8 +180,9 @@ GoRouter router(RouterRef ref) {
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) {
           final amount = double.tryParse(
-            state.uri.queryParameters['amount'] ?? '0',
-          ) ?? 0.0;
+                state.uri.queryParameters['amount'] ?? '0',
+              ) ??
+              0.0;
           return PaymentScreen(
             orderId: state.pathParameters['orderId']!,
             amount: amount,

@@ -4,6 +4,7 @@ import redis.asyncio as aioredis
 from app.config import settings
 from app.binproto.codec import BinProtoCodec, PTYPE_LOCATION
 from app.rate_limiter import RateLimiter
+from app.time_utils import utc_now
 
 logger = structlog.get_logger()
 
@@ -31,7 +32,6 @@ class BinProtoUDPProtocol(asyncio.DatagramProtocol):
 
                 from app.dispatch.service import dispatch_service
                 from app.dispatch.schemas import DriverLocationUpdate
-                from datetime import datetime
 
                 loop = asyncio.get_running_loop()
 
@@ -58,7 +58,7 @@ class BinProtoUDPProtocol(asyncio.DatagramProtocol):
                         lng=loc.lng,
                         status="ONLINE",
                         battery=loc.battery,
-                        timestamp=datetime.utcnow()
+                        timestamp=utc_now()
                     )
                     await dispatch_service.update_location(update)
 

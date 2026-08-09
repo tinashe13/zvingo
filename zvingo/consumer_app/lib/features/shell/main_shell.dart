@@ -1,11 +1,10 @@
-import 'package:consumer_app/core/app_colors.dart';
 import 'package:consumer_app/features/address/address_provider.dart';
 import 'package:consumer_app/features/order/active_order_provider.dart';
 import 'package:consumer_app/features/order/order_status_bottom_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// DoorDash-style 5-tab bottom navigation shell
+/// Primary five-destination navigation shell.
 class MainShell extends ConsumerStatefulWidget {
   final int currentIndex;
   final Widget child;
@@ -59,61 +58,37 @@ class _MainShellState extends ConsumerState<MainShell> {
           ),
         ],
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: AppColors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 12,
-              offset: const Offset(0, -2),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: BottomNavigationBar(
-              currentIndex: widget.currentIndex,
-              onTap: widget.onTabChanged,
-              elevation: 0,
-              backgroundColor: Colors.transparent,
-              type: BottomNavigationBarType.fixed,
-              selectedItemColor: AppColors.navSelected,
-              unselectedItemColor: AppColors.navUnselected,
-              selectedFontSize: 11,
-              unselectedFontSize: 11,
-              selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
-              items: const [
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.home_outlined),
-                  activeIcon: Icon(Icons.home),
-                  label: 'Home',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.directions_walk_outlined),
-                  activeIcon: Icon(Icons.directions_walk),
-                  label: 'Pickup',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.local_offer_outlined),
-                  activeIcon: Icon(Icons.local_offer),
-                  label: 'Offers',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.receipt_long_outlined),
-                  activeIcon: Icon(Icons.receipt_long),
-                  label: 'Orders',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.person_outline),
-                  activeIcon: Icon(Icons.person),
-                  label: 'Account',
-                ),
-              ],
-            ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: widget.currentIndex,
+        onDestinationSelected: widget.onTabChanged,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home_rounded),
+            label: 'Home',
           ),
-        ),
+          NavigationDestination(
+            icon: Icon(Icons.shopping_bag_outlined),
+            selectedIcon: Icon(Icons.shopping_bag_rounded),
+            label: 'Pickup',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.local_offer_outlined),
+            selectedIcon: Icon(Icons.local_offer_rounded),
+            label: 'Offers',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
+            selectedIcon: Icon(Icons.receipt_long_rounded),
+            label: 'Orders',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline_rounded),
+            selectedIcon: Icon(Icons.person_rounded),
+            label: 'Account',
+          ),
+        ],
       ),
     );
   }

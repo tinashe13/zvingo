@@ -1,5 +1,6 @@
 from typing import List, Optional
 from datetime import datetime
+from app.time_utils import utc_now
 from beanie import Document, Indexed
 from pydantic import BaseModel, Field
 from app.order.state_machine import OrderState
@@ -12,7 +13,7 @@ class OrderItem(BaseModel):
 
 class OrderEvent(BaseModel):
     state: OrderState
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=utc_now)
     actor_id: Optional[str] = None
     metadata: dict = {}
 
@@ -34,8 +35,8 @@ class Order(Document):
     service_fee: float = 0.0
     tax_amount: float = 0.0
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
     events: List[OrderEvent] = []
 

@@ -29,30 +29,35 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
   bool _confirmingDelivery = false;
   bool _cancellingOrder = false;
   Timer? _statusPollTimer; // Timer for polling order status
-  
+
   // Map State
   final MapController _mapController = MapController();
   LatLng _driverLocation = const LatLng(-17.8216, 31.0492); // Default to Harare
   LatLng? _deliveryLocation;
   LatLng? _pickupLocation;
   bool _hasDriverLocation = false;
-  
+
   String driverId = '';
   String driverName = '';
   bool _loading = true;
   String _lottieAsset = 'assets/animations/cooking.json';
 
   /// Check if consumer can confirm delivery (driver picked up or arrived)
-  bool get _canConfirmDelivery => 
+  bool get _canConfirmDelivery =>
       _orderState == 'PICKED_UP' || _orderState == 'ARRIVED_AT_CUSTOMER';
 
   /// Check if consumer can cancel order (before pickup)
-  bool get _canCancel => !['PICKED_UP', 'ARRIVED_AT_CUSTOMER', 'DELIVERED', 'CANCELLED'].contains(_orderState);
+  bool get _canCancel => ![
+        'PICKED_UP',
+        'ARRIVED_AT_CUSTOMER',
+        'DELIVERED',
+        'CANCELLED'
+      ].contains(_orderState);
 
   /// Cancel order via backend API
   Future<void> _cancelOrder() async {
     if (_cancellingOrder) return;
-    
+
     // Confirm cancellation
     final confirm = await showDialog<bool>(
       context: context,
@@ -72,15 +77,15 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
         ],
       ),
     );
-    
+
     if (confirm != true) return;
-    
+
     setState(() => _cancellingOrder = true);
-    
+
     try {
       final dio = ref.read(apiClientProvider);
       await dio.post('/orders/${widget.orderId}/cancel');
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -106,13 +111,13 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
   /// Confirm delivery via backend API
   Future<void> _confirmDelivery() async {
     if (_confirmingDelivery) return;
-    
+
     setState(() => _confirmingDelivery = true);
-    
+
     try {
       final dio = ref.read(apiClientProvider);
       await dio.post('/orders/${widget.orderId}/confirm-delivery');
-      
+
       if (mounted) {
         setState(() {
           _orderState = 'DELIVERED';
@@ -121,7 +126,7 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
           _lottieAsset = 'assets/animations/delivered.json';
           _confirmingDelivery = false;
         });
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Delivery confirmed! Enjoy your meal!'),
@@ -144,18 +149,21 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
 
   void _fitMapToTrip() {
     final points = <LatLng>[];
-    
+
     // Only add valid coordinates (not 0,0 which is null island)
-    if (_pickupLocation != null && 
-        (_pickupLocation!.latitude.abs() > 0.01 || _pickupLocation!.longitude.abs() > 0.01)) {
+    if (_pickupLocation != null &&
+        (_pickupLocation!.latitude.abs() > 0.01 ||
+            _pickupLocation!.longitude.abs() > 0.01)) {
       points.add(_pickupLocation!);
     }
-    if (_deliveryLocation != null && 
-        (_deliveryLocation!.latitude.abs() > 0.01 || _deliveryLocation!.longitude.abs() > 0.01)) {
+    if (_deliveryLocation != null &&
+        (_deliveryLocation!.latitude.abs() > 0.01 ||
+            _deliveryLocation!.longitude.abs() > 0.01)) {
       points.add(_deliveryLocation!);
     }
-    if (_hasDriverLocation && 
-        (_driverLocation.latitude.abs() > 0.01 || _driverLocation.longitude.abs() > 0.01)) {
+    if (_hasDriverLocation &&
+        (_driverLocation.latitude.abs() > 0.01 ||
+            _driverLocation.longitude.abs() > 0.01)) {
       points.add(_driverLocation);
     }
     if (points.isEmpty) return;
@@ -205,21 +213,17 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
           _loading = false;
           driverId = data['driver_id'] ?? '';
           driverName = (data['driver_name'] as String?)?.split(' ').first ?? '';
-          
+
           // Try to get delivery location if available
           if (data['delivery_lat'] != null && data['delivery_lng'] != null) {
-             _deliveryLocation = LatLng(
-                 (data['delivery_lat'] as num).toDouble(), 
-                 (data['delivery_lng'] as num).toDouble()
-             );
+            _deliveryLocation = LatLng((data['delivery_lat'] as num).toDouble(),
+                (data['delivery_lng'] as num).toDouble());
           }
 
           // Try to get pickup location (Store)
           if (data['pickup_lat'] != null && data['pickup_lng'] != null) {
-             _pickupLocation = LatLng(
-                 (data['pickup_lat'] as num).toDouble(), 
-                 (data['pickup_lng'] as num).toDouble()
-             );
+            _pickupLocation = LatLng((data['pickup_lat'] as num).toDouble(),
+                (data['pickup_lng'] as num).toDouble());
           }
 
           // Get driver's current location from polling (fallback for SSE)
@@ -237,7 +241,8 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
           if (state.startsWith('OrderState.')) {
             state = state.replaceFirst('OrderState.', '');
           }
-          _orderState = state; // Store raw state for confirm/cancel button logic
+          _orderState =
+              state; // Store raw state for confirm/cancel button logic
           switch (state) {
             case 'CREATED':
               _currentStep = 0;
@@ -302,14 +307,15 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
         if (state.startsWith('OrderState.')) {
           state = state.replaceFirst('OrderState.', '');
         }
-        
+
         // Only update if state changed
         if (state != _orderState) {
           setState(() {
             _orderState = state;
             driverId = data['driver_id'] ?? driverId;
-            driverName = (data['driver_name'] as String?)?.split(' ').first ?? driverName;
-            
+            driverName = (data['driver_name'] as String?)?.split(' ').first ??
+                driverName;
+
             // Update driver location from polling (fallback for SSE)
             if (data['driver_lat'] != null && data['driver_lng'] != null) {
               _driverLocation = LatLng(
@@ -318,7 +324,7 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
               );
               _hasDriverLocation = true;
             }
-            
+
             switch (state) {
               case 'CREATED':
                 _currentStep = 0;
@@ -359,7 +365,7 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                 status = state;
             }
           });
-          
+
           // Start driver tracking if driver just got assigned
           if (driverId.isNotEmpty && !_hasDriverLocation) {
             _subscribeToDriver();
@@ -384,10 +390,10 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
 
   void _subscribeToDriver() {
     if (driverId.isEmpty) return;
-    
+
     // We'll use the tracked driver ID
     final url = '${AppConfig.apiBaseUrl}/location/driver/$driverId/track';
-    
+
     SSEClient.subscribeToSSE(
       method: SSERequestType.GET,
       url: url,
@@ -401,7 +407,7 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
           final parsed = jsonDecode(event.data!);
           final lat = (parsed['lat'] as num?)?.toDouble();
           final lng = (parsed['lng'] as num?)?.toDouble();
-          
+
           if (lat != null && lng != null && mounted) {
             final isFirst = !_hasDriverLocation;
             setState(() {
@@ -418,7 +424,6 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
         }
       }
     });
-
   }
 
   @override
@@ -444,19 +449,23 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                 FlutterMap(
                   mapController: _mapController,
                   options: MapOptions(
-                    initialCenter: _hasDriverLocation ? _driverLocation : (_deliveryLocation ?? _driverLocation),
+                    initialCenter: _hasDriverLocation
+                        ? _driverLocation
+                        : (_deliveryLocation ?? _driverLocation),
                     initialZoom: 14.5,
                   ),
                   children: [
                     TileLayer(
                       // Use CartoDB Voyager for a cleaner, Google-like look
-                      urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+                      urlTemplate:
+                          'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
                       subdomains: const ['a', 'b', 'c', 'd'],
                       userAgentPackageName: 'com.zvingo.consumer',
                     ),
                     PolylineLayer(
                       polylines: [
-                        if (_pickupLocation != null && _deliveryLocation != null)
+                        if (_pickupLocation != null &&
+                            _deliveryLocation != null)
                           Polyline(
                             points: [_pickupLocation!, _deliveryLocation!],
                             strokeWidth: 5,
@@ -480,17 +489,17 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                             height: 48,
                             child: Container(
                               decoration: BoxDecoration(
-                                color: AppColors.white,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: AppColors.primary, width: 2.5),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.25),
-                                    blurRadius: 8,
-                                    spreadRadius: 1,
-                                  )
-                                ]
-                              ),
+                                  color: AppColors.white,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                      color: AppColors.primary, width: 2.5),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.25),
+                                      blurRadius: 8,
+                                      spreadRadius: 1,
+                                    )
+                                  ]),
                               padding: const EdgeInsets.all(6),
                               child: const Icon(
                                 Icons.delivery_dining,
@@ -499,10 +508,10 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                               ),
                             ),
                           ),
-                          
+
                         // Delivery Location Marker (Customer)
                         if (_deliveryLocation != null)
-                           Marker(
+                          Marker(
                             point: _deliveryLocation!,
                             width: 30,
                             height: 30,
@@ -515,21 +524,20 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
 
                         // Pickup Location Marker (Store)
                         if (_pickupLocation != null)
-                           Marker(
+                          Marker(
                             point: _pickupLocation!,
                             width: 30,
                             height: 30,
                             child: Container(
                               decoration: BoxDecoration(
-                                color: AppColors.white,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.2),
-                                    blurRadius: 4,
-                                  )
-                                ]
-                              ),
+                                  color: AppColors.white,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.2),
+                                      blurRadius: 4,
+                                    )
+                                  ]),
                               padding: const EdgeInsets.all(4),
                               child: const Icon(
                                 Icons.store,
@@ -572,12 +580,13 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                   right: 0,
                   child: Center(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 4),
                       decoration: BoxDecoration(
-                        color: AppColors.white.withOpacity(0.8),
-                        borderRadius: BorderRadius.circular(12)
-                      ),
-                      child: Text('Order Status', style: AppTextStyles.titleLarge),
+                          color: AppColors.white.withOpacity(0.8),
+                          borderRadius: BorderRadius.circular(12)),
+                      child:
+                          const Text('Order Status', style: AppTextStyles.titleLarge),
                     ),
                   ),
                 ),
@@ -605,6 +614,20 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                   : ListView(
                       padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
                       children: [
+                        Semantics(
+                          label: 'Order status: $status',
+                          child: Lottie.asset(
+                            _lottieAsset,
+                            height: 88,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => const Icon(
+                              Icons.delivery_dining_rounded,
+                              size: 56,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
                         // ── Driver Info Card ──────────────────
                         Container(
                           padding: const EdgeInsets.all(14),
@@ -617,15 +640,18 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                               Container(
                                 width: 48,
                                 height: 48,
-                                decoration: BoxDecoration(
+                                decoration: const BoxDecoration(
                                   color: AppColors.primarySurface,
                                   shape: BoxShape.circle,
                                 ),
                                 child: Center(
                                   child: driverName.isNotEmpty
                                       ? Text(
-                                          driverName.substring(0, 1).toUpperCase(),
-                                          style: AppTextStyles.titleMedium.copyWith(
+                                          driverName
+                                              .substring(0, 1)
+                                              .toUpperCase(),
+                                          style: AppTextStyles.titleMedium
+                                              .copyWith(
                                             color: AppColors.primary,
                                             fontWeight: FontWeight.w700,
                                           ),
@@ -640,10 +666,12 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      driverName.isNotEmpty ? driverName : 'Assigning driver...',
+                                      driverName.isNotEmpty
+                                          ? driverName
+                                          : 'Assigning driver...',
                                       style: AppTextStyles.titleSmall,
                                     ),
-                                    Text('Delivery Driver',
+                                    const Text('Delivery Driver',
                                         style: AppTextStyles.bodySmall),
                                   ],
                                 ),
@@ -667,9 +695,9 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                         // ── ETA ───────────────────────────────
                         Row(
                           children: [
-                            Text('Time Line', style: AppTextStyles.titleMedium),
+                            const Text('Time Line', style: AppTextStyles.titleMedium),
                             const Spacer(),
-                            Icon(Icons.access_time,
+                            const Icon(Icons.access_time,
                                 size: 16, color: AppColors.primary),
                             const SizedBox(width: 4),
                             Text(
@@ -705,8 +733,9 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                           isCompleted: _currentStep >= 2,
                           isLast: true,
                         ),
-                        if (_currentStep == 3) // Show delivered step explicitly if delivered
-                           _timelineStep(
+                        if (_currentStep ==
+                            3) // Show delivered step explicitly if delivered
+                          _timelineStep(
                             icon: Icons.home,
                             title: 'Delivered',
                             subtitle: 'Enjoy your food!',
@@ -721,20 +750,21 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                             width: double.infinity,
                             height: 56,
                             child: ElevatedButton.icon(
-                              onPressed: _confirmingDelivery ? null : _confirmDelivery,
-                              icon: _confirmingDelivery 
+                              onPressed:
+                                  _confirmingDelivery ? null : _confirmDelivery,
+                              icon: _confirmingDelivery
                                   ? const SizedBox(
-                                      width: 20, 
-                                      height: 20, 
+                                      width: 20,
+                                      height: 20,
                                       child: CircularProgressIndicator(
-                                        strokeWidth: 2, 
+                                        strokeWidth: 2,
                                         color: Colors.white,
                                       ),
                                     )
                                   : const Icon(Icons.check_circle_outline),
                               label: Text(
-                                _confirmingDelivery 
-                                    ? 'Confirming...' 
+                                _confirmingDelivery
+                                    ? 'Confirming...'
                                     : 'Confirm Delivery',
                                 style: const TextStyle(
                                   fontSize: 16,
@@ -768,19 +798,19 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                             height: 48,
                             child: OutlinedButton.icon(
                               onPressed: _cancellingOrder ? null : _cancelOrder,
-                              icon: _cancellingOrder 
+                              icon: _cancellingOrder
                                   ? const SizedBox(
-                                      width: 18, 
-                                      height: 18, 
+                                      width: 18,
+                                      height: 18,
                                       child: CircularProgressIndicator(
-                                        strokeWidth: 2, 
+                                        strokeWidth: 2,
                                         color: Colors.red,
                                       ),
                                     )
                                   : const Icon(Icons.cancel_outlined, size: 20),
                               label: Text(
-                                _cancellingOrder 
-                                    ? 'Cancelling...' 
+                                _cancellingOrder
+                                    ? 'Cancelling...'
                                     : 'Cancel Order',
                                 style: const TextStyle(
                                   fontSize: 14,
@@ -853,7 +883,8 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
               children: [
                 Row(
                   children: [
-                    Icon(icon, size: 16,
+                    Icon(icon,
+                        size: 16,
                         color: isCompleted
                             ? AppColors.primary
                             : AppColors.textSecondary),

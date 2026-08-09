@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime
+from app.time_utils import utc_now
 from typing import Optional
 import structlog
 import redis.asyncio as aioredis
@@ -92,7 +93,7 @@ class PaymentService:
         payment = await Payment.get(payment_id)
         if payment and payment.status == PaymentStatus.AWAITING_DELIVERY:
             payment.status = PaymentStatus.PAID
-            payment.updated_at = datetime.utcnow()
+            payment.updated_at = utc_now()
             await payment.save()
             logger.info("Mock payment auto-completed", payment_id=payment_id)
 
@@ -112,12 +113,12 @@ class PaymentService:
         status = await paynow_client.check_status(payment.poll_url)
         if status.paid:
             payment.status = PaymentStatus.PAID
-            payment.updated_at = datetime.utcnow()
+            payment.updated_at = utc_now()
             await payment.save()
             await PaymentService._on_payment_success(payment)
         elif status.status.lower() in ("cancelled", "failed", "disputed"):
             payment.status = PaymentStatus.FAILED
-            payment.updated_at = datetime.utcnow()
+            payment.updated_at = utc_now()
             await payment.save()
 
         return payment
@@ -145,12 +146,12 @@ class PaymentService:
         status_lower = status.lower()
         if status_lower in ("paid", "delivered"):
             payment.status = PaymentStatus.PAID
-            payment.updated_at = datetime.utcnow()
+            payment.updated_at = utc_now()
             await payment.save()
             await PaymentService._on_payment_success(payment)
         elif status_lower in ("cancelled", "failed", "disputed"):
             payment.status = PaymentStatus.FAILED
-            payment.updated_at = datetime.utcnow()
+            payment.updated_at = utc_now()
             await payment.save()
 
         return payment
@@ -168,7 +169,7 @@ class PaymentService:
             return payment
 
         payment.status = PaymentStatus.REFUNDED
-        payment.updated_at = datetime.utcnow()
+        payment.updated_at = utc_now()
         await payment.save()
         logger.info("Payment refunded", payment_id=payment_id, order_id=payment.order_id)
         return payment

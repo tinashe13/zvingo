@@ -22,13 +22,14 @@ class CartScreen extends ConsumerWidget {
     // So we need ref.watch(cartProvider.notifier).groupedItems -- BUT watching notifier doesn't trigger rebuilds on state change alone usually.
     // Better approach: ref.watch(cartProvider) gives us the list. We can compute groups here or in a provider.
     // I added `groupedItems` on the Notifier class `Cart`. To access it reactively, keeping state as source of truth.
-    
+
     final cartItems = ref.watch(cartProvider);
     final cartNotifier = ref.read(cartProvider.notifier);
-    final groupedItems = cartNotifier.groupedItems; // This getter uses `state`, but accessing it via read(notifier) might not be reactive if we don't watch state.
-    // However, `cartItems` (state) is watched, so this build method re-runs when items change. 
+    final groupedItems = cartNotifier
+        .groupedItems; // This getter uses `state`, but accessing it via read(notifier) might not be reactive if we don't watch state.
+    // However, `cartItems` (state) is watched, so this build method re-runs when items change.
     // So `cartNotifier.groupedItems` will be re-evaluated with the new state.
-    
+
     final total = ref.watch(cartTotalProvider);
     final deliveryLoc = ref.watch(deliveryLocationNotifierProvider);
 
@@ -40,7 +41,7 @@ class CartScreen extends ConsumerWidget {
           icon: const Icon(Icons.close, color: AppColors.textPrimary),
           onPressed: () => context.pop(),
         ),
-        title: Text('Your Carts', style: AppTextStyles.titleLarge),
+        title: const Text('Your Carts', style: AppTextStyles.titleLarge),
         centerTitle: true,
       ),
       body: cartItems.isEmpty
@@ -58,9 +59,13 @@ class CartScreen extends ConsumerWidget {
                   final restaurantId = entry.key;
                   final items = entry.value;
                   // Try to find restaurant name from first item
-                  final restaurantName = items.isNotEmpty ? items.first.restaurantName : 'Unknown Store';
-                  final restaurantImage = items.isNotEmpty ? items.first.restaurantImage : null;
-                  final storeTotal = items.fold(0.0, (sum, item) => sum + item.total);
+                  final restaurantName = items.isNotEmpty
+                      ? items.first.restaurantName
+                      : 'Unknown Store';
+                  final restaurantImage =
+                      items.isNotEmpty ? items.first.restaurantImage : null;
+                  final storeTotal =
+                      items.fold(0.0, (sum, item) => sum + item.total);
 
                   return _StoreCartSection(
                     restaurantName: restaurantName ?? 'Unknown Store',
@@ -73,7 +78,7 @@ class CartScreen extends ConsumerWidget {
                     ref: ref,
                   );
                 }),
-                
+
                 const SizedBox(height: 100), // Space for bottom bar
               ],
             ),
@@ -100,7 +105,8 @@ class CartScreen extends ConsumerWidget {
                       context.push('/checkout');
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.textPrimary, // Dark button for "Checkout All"
+                      backgroundColor: AppColors
+                          .textPrimary, // Dark button for "Checkout All"
                     ),
                     child: Text(
                       'Checkout All — \$${(total * 1.05).toStringAsFixed(2)}',
@@ -111,10 +117,10 @@ class CartScreen extends ConsumerWidget {
               ),
             )
           : null, // If 1 store, the section button handles it (or we can keep bottom bar)
-          // Actually, standard pattern is bottom bar for the "Current" context.
-          // But with multi-cart, user might want to checkout just one.
-          // Strategy: Detailed per-store section with button.
-          // "Checkout All" is an aggregation.
+      // Actually, standard pattern is bottom bar for the "Current" context.
+      // But with multi-cart, user might want to checkout just one.
+      // Strategy: Detailed per-store section with button.
+      // "Checkout All" is an aggregation.
     );
   }
 
@@ -130,9 +136,9 @@ class CartScreen extends ConsumerWidget {
             repeat: true,
           ),
           const SizedBox(height: 16),
-          Text('Your cart is empty', style: AppTextStyles.titleMedium),
+          const Text('Your cart is empty', style: AppTextStyles.titleMedium),
           const SizedBox(height: 6),
-          Text('Add items from a restaurant to get started',
+          const Text('Add items from a restaurant to get started',
               style: AppTextStyles.bodySmall),
         ],
       ),
@@ -175,26 +181,29 @@ class _StoreCartSection extends StatelessWidget {
             child: Row(
               children: [
                 restaurantImage != null && restaurantImage!.isNotEmpty
-                  ? Container(
-                      width: 24, height: 24,
-                      decoration: const BoxDecoration(shape: BoxShape.circle),
-                      child: ClipOval(
-                        child: CachedNetworkImage(
-                          imageUrl: restaurantImage!,
-                          fit: BoxFit.cover,
-                          placeholder: (_,__) => const Icon(Icons.store, color: AppColors.primary, size: 16),
-                          errorWidget: (_,__,___) => const Icon(Icons.store, color: AppColors.primary, size: 16),
+                    ? Container(
+                        width: 24,
+                        height: 24,
+                        decoration: const BoxDecoration(shape: BoxShape.circle),
+                        child: ClipOval(
+                          child: CachedNetworkImage(
+                            imageUrl: restaurantImage!,
+                            fit: BoxFit.cover,
+                            placeholder: (_, __) => const Icon(Icons.store,
+                                color: AppColors.primary, size: 16),
+                            errorWidget: (_, __, ___) => const Icon(Icons.store,
+                                color: AppColors.primary, size: 16),
+                          ),
                         ),
-                      ),
-                    )
-                  : const Icon(Icons.store, color: AppColors.primary),
+                      )
+                    : const Icon(Icons.store, color: AppColors.primary),
                 const SizedBox(width: 8),
                 Text(restaurantName, style: AppTextStyles.titleMedium),
               ],
             ),
           ),
           const Divider(height: 1),
-          
+
           // Items
           ListView.builder(
             shrinkWrap: true,
@@ -204,39 +213,44 @@ class _StoreCartSection extends StatelessWidget {
               final item = items[index];
               return _CartItemTile(
                 item: item,
-                onRemove: () => ref.read(cartProvider.notifier).removeItem(item.id),
-                onIncrement: () => ref.read(cartProvider.notifier).addItem(item.id, item.name, item.price),
-                onDecrement: () => ref.read(cartProvider.notifier).decrementItem(item.id),
+                onRemove: () =>
+                    ref.read(cartProvider.notifier).removeItem(item.id),
+                onIncrement: () => ref
+                    .read(cartProvider.notifier)
+                    .addItem(item.id, item.name, item.price),
+                onDecrement: () =>
+                    ref.read(cartProvider.notifier).decrementItem(item.id),
               );
             },
           ),
-          
+
           const Divider(height: 1),
-          
+
           // Footer
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                 Row(
-                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                   children: [
-                     Text('Subtotal', style: AppTextStyles.bodyMedium),
-                     Text('\$${subtotal.toStringAsFixed(2)}', style: AppTextStyles.titleSmall),
-                   ],
-                 ),
-                 const SizedBox(height: 16),
-                 SizedBox(
-                   width: double.infinity,
-                   child: ElevatedButton(
-                     onPressed: onCheckout,
-                     style: ElevatedButton.styleFrom(
-                       backgroundColor: AppColors.primary,
-                       foregroundColor: Colors.white,
-                     ),
-                     child: Text('Checkout Store'),
-                   ),
-                 ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Subtotal', style: AppTextStyles.bodyMedium),
+                    Text('\$${subtotal.toStringAsFixed(2)}',
+                        style: AppTextStyles.titleSmall),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: onCheckout,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Checkout Store'),
+                  ),
+                ),
               ],
             ),
           ),
@@ -260,10 +274,14 @@ class _DeliveryAddressBar extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: hasAddress ? AppColors.primarySurface : AppColors.error.withOpacity(0.08),
+          color: hasAddress
+              ? AppColors.primarySurface
+              : AppColors.error.withOpacity(0.08),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: hasAddress ? AppColors.primary.withOpacity(0.3) : AppColors.error.withOpacity(0.3),
+            color: hasAddress
+                ? AppColors.primary.withOpacity(0.3)
+                : AppColors.error.withOpacity(0.3),
           ),
         ),
         child: Row(
@@ -281,7 +299,9 @@ class _DeliveryAddressBar extends StatelessWidget {
                   Text(
                     hasAddress ? 'Delivering to' : 'No delivery address set',
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: hasAddress ? AppColors.textSecondary : AppColors.error,
+                      color: hasAddress
+                          ? AppColors.textSecondary
+                          : AppColors.error,
                       fontSize: 11,
                     ),
                   ),
@@ -347,13 +367,20 @@ class _CartItemTile extends StatelessWidget {
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: CachedNetworkImage(
-                       imageUrl: item.imageUrl!,
-                       fit: BoxFit.cover,
-                       placeholder: (_, __) => const Padding(padding: EdgeInsets.all(12), child: Icon(Icons.fastfood, color: AppColors.primary, size: 20)),
-                       errorWidget: (_, __, ___) => const Padding(padding: EdgeInsets.all(12), child: Icon(Icons.fastfood, color: AppColors.primary, size: 20)),
+                      imageUrl: item.imageUrl!,
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Icon(Icons.fastfood,
+                              color: AppColors.primary, size: 20)),
+                      errorWidget: (_, __, ___) => const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Icon(Icons.fastfood,
+                              color: AppColors.primary, size: 20)),
                     ),
                   )
-                : const Icon(Icons.fastfood, color: AppColors.primary, size: 20),
+                : const Icon(Icons.fastfood,
+                    color: AppColors.primary, size: 20),
           ),
           const SizedBox(width: 12),
 
@@ -362,10 +389,13 @@ class _CartItemTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.name, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
+                Text(item.name,
+                    style: AppTextStyles.bodyMedium
+                        .copyWith(fontWeight: FontWeight.w600)),
                 Text(
                   '\$${item.total.toStringAsFixed(2)}',
-                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary),
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: AppColors.primary),
                 ),
               ],
             ),
@@ -375,17 +405,20 @@ class _CartItemTile extends StatelessWidget {
           Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.remove_circle_outline, size: 20, color: Colors.grey),
+                icon: const Icon(Icons.remove_circle_outline,
+                    size: 20, color: Colors.grey),
                 onPressed: onDecrement,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Text('${item.quantity}', style: AppTextStyles.bodyMedium),
+                child:
+                    Text('${item.quantity}', style: AppTextStyles.bodyMedium),
               ),
               IconButton(
-                icon: const Icon(Icons.add_circle_outline, size: 20, color: AppColors.primary),
+                icon: const Icon(Icons.add_circle_outline,
+                    size: 20, color: AppColors.primary),
                 onPressed: onIncrement,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -400,7 +433,8 @@ class _CartItemTile extends StatelessWidget {
                     color: AppColors.error.withOpacity(0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.close, size: 14, color: AppColors.error),
+                  child:
+                      const Icon(Icons.close, size: 14, color: AppColors.error),
                 ),
               ),
             ],

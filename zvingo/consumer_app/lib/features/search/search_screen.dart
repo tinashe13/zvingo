@@ -13,10 +13,11 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 part 'search_screen.g.dart';
 
 @riverpod
-Future<List<Restaurant>> searchRestaurants(SearchRestaurantsRef ref, String query) async {
+Future<List<Restaurant>> searchRestaurants(Ref ref, String query) async {
   if (query.length < 2) return [];
   final dio = ref.watch(apiClientProvider);
-  final response = await dio.get('/catalog/search', queryParameters: {'q': query});
+  final response =
+      await dio.get('/catalog/search', queryParameters: {'q': query});
   return (response.data as List).map((e) => Restaurant.fromJson(e)).toList();
 }
 
@@ -89,7 +90,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   // Close button
                   GestureDetector(
                     onTap: () => context.pop(),
-                    child: const Icon(Icons.close, size: 24, color: AppColors.textPrimary),
+                    child: const Icon(Icons.close,
+                        size: 24, color: AppColors.textPrimary),
                   ),
                   const SizedBox(width: 12),
                   // Search field
@@ -113,11 +115,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         },
                         decoration: InputDecoration(
                           hintText: 'Search Zvingo',
-                          hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
-                          prefixIcon: const Icon(Icons.search, color: AppColors.textHint, size: 20),
+                          hintStyle: AppTextStyles.bodyMedium
+                              .copyWith(color: AppColors.textHint),
+                          prefixIcon: const Icon(Icons.search,
+                              color: AppColors.textHint, size: 20),
                           suffixIcon: _query.isNotEmpty
                               ? IconButton(
-                                  icon: const Icon(Icons.clear, size: 18, color: AppColors.textSecondary),
+                                  icon: const Icon(Icons.clear,
+                                      size: 18, color: AppColors.textSecondary),
                                   onPressed: () {
                                     _searchController.clear();
                                     setState(() => _query = '');
@@ -127,7 +132,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                           border: InputBorder.none,
                           enabledBorder: InputBorder.none,
                           focusedBorder: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 12),
                         ),
                       ),
                     ),
@@ -206,9 +212,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     height: 150,
                   ),
                   const SizedBox(height: 12),
-                  Text('No results for "$_query"', style: AppTextStyles.titleMedium),
+                  Text('No results for "$_query"',
+                      style: AppTextStyles.titleMedium),
                   const SizedBox(height: 6),
-                  Text('Try a different search term',
+                  const Text('Try a different search term',
                       style: AppTextStyles.bodySmall),
                 ],
               ),
@@ -229,8 +236,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 return _searchSuggestionItem('$_query deals');
               }
               if (index == 2) {
-                return Padding(
-                  padding: const EdgeInsets.only(top: 8),
+                return const Padding(
+                  padding: EdgeInsets.only(top: 8),
                   child: Divider(height: 1, color: AppColors.divider),
                 );
               }
@@ -263,7 +270,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
-                  Text('Recent Searches', style: AppTextStyles.titleMedium),
+                  const Text('Recent Searches', style: AppTextStyles.titleMedium),
                   const Spacer(),
                   GestureDetector(
                     onTap: _clearRecentSearches,
@@ -284,8 +291,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           ],
 
           // Top Searches
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
             child: Text('Top Searches', style: AppTextStyles.titleMedium),
           ),
           const SizedBox(height: 12),
@@ -388,15 +395,18 @@ class _SearchResultItem extends StatelessWidget {
                     ? CachedNetworkImage(
                         imageUrl: restaurant.imageUrl,
                         fit: BoxFit.cover,
-                        placeholder: (_, __) => Container(color: AppColors.primarySurface),
+                        placeholder: (_, __) =>
+                            Container(color: AppColors.primarySurface),
                         errorWidget: (_, __, ___) => Container(
                           color: AppColors.primarySurface,
-                          child: const Icon(Icons.restaurant, size: 20, color: AppColors.textHint),
+                          child: const Icon(Icons.restaurant,
+                              size: 20, color: AppColors.textHint),
                         ),
                       )
                     : Container(
                         color: AppColors.primarySurface,
-                        child: const Icon(Icons.restaurant, size: 20, color: AppColors.textHint),
+                        child: const Icon(Icons.restaurant,
+                            size: 20, color: AppColors.textHint),
                       ),
               ),
             ),
@@ -419,13 +429,15 @@ class _SearchResultItem extends StatelessWidget {
                       if (isSponsored) ...[
                         const SizedBox(width: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             color: AppColors.background,
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text('Sponsored',
-                            style: AppTextStyles.caption.copyWith(fontSize: 10)),
+                              style:
+                                  AppTextStyles.caption.copyWith(fontSize: 10)),
                         ),
                       ],
                     ],
@@ -441,7 +453,7 @@ class _SearchResultItem extends StatelessWidget {
                         ),
                       ),
                       if (restaurant.distanceMi != null) ...[
-                        Text(' \u00B7 ', style: AppTextStyles.bodySmall),
+                        const Text(' \u00B7 ', style: AppTextStyles.bodySmall),
                         Text(
                           '${restaurant.distanceMi!.toStringAsFixed(1)} mi',
                           style: AppTextStyles.bodySmall,
@@ -452,7 +464,8 @@ class _SearchResultItem extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     restaurant.category,
-                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
+                    style: AppTextStyles.bodySmall
+                        .copyWith(color: AppColors.textHint),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),

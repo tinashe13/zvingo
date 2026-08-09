@@ -19,9 +19,11 @@ class RestaurantListView extends ConsumerWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.store, size: 48, color: AppColors.primary.withOpacity(0.3)),
+                  Icon(Icons.store,
+                      size: 48, color: AppColors.primary.withOpacity(0.3)),
                   const SizedBox(height: 12),
-                  Text('No restaurants found', style: AppTextStyles.titleMedium),
+                  const Text('No restaurants found',
+                      style: AppTextStyles.titleMedium),
                 ],
               ),
             )
@@ -45,9 +47,10 @@ class RestaurantListView extends ConsumerWidget {
           children: [
             const Icon(Icons.error_outline, size: 48, color: AppColors.error),
             const SizedBox(height: 12),
-            Text('Error loading restaurants', style: AppTextStyles.titleMedium),
+            const Text('Error loading restaurants', style: AppTextStyles.titleMedium),
             const SizedBox(height: 4),
-            Text('$err', style: AppTextStyles.bodySmall, textAlign: TextAlign.center),
+            Text('$err',
+                style: AppTextStyles.bodySmall, textAlign: TextAlign.center),
           ],
         ),
       ),

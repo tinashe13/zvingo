@@ -1,6 +1,7 @@
 import 'package:consumer_app/core/delivery_location_provider.dart';
 import 'package:consumer_app/features/address/saved_address.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive/hive.dart';
@@ -80,11 +81,11 @@ class SavedAddresses extends _$SavedAddresses {
 /// Sets the delivery location from the saved default address, or falls back
 /// to the device's current GPS position — all in the background.
 @Riverpod(keepAlive: true)
-Future<void> locationStartup(LocationStartupRef ref) async {
+Future<void> locationStartup(Ref ref) async {
   // 1. Use a saved default address (or the first saved address).
   final addresses = ref.read(savedAddressesProvider);
-  final defaultAddr = addresses.where((a) => a.isDefault).firstOrNull
-      ?? (addresses.isNotEmpty ? addresses.first : null);
+  final defaultAddr = addresses.where((a) => a.isDefault).firstOrNull ??
+      (addresses.isNotEmpty ? addresses.first : null);
 
   if (defaultAddr != null) {
     ref.read(deliveryLocationNotifierProvider.notifier).setLocation(
@@ -112,7 +113,7 @@ Future<void> locationStartup(LocationStartupRef ref) async {
 
 /// Gets the user's current location and reverse geocodes it
 @riverpod
-Future<SavedAddress> currentLocationAddress(CurrentLocationAddressRef ref) async {
+Future<SavedAddress> currentLocationAddress(Ref ref) async {
   bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
   if (!serviceEnabled) {
     throw Exception('Location services are disabled');
@@ -136,16 +137,19 @@ Future<SavedAddress> currentLocationAddress(CurrentLocationAddressRef ref) async
     ),
   );
 
-  String displayAddress = '${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}';
+  String displayAddress =
+      '${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}';
   try {
-    final placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+    final placemarks =
+        await placemarkFromCoordinates(position.latitude, position.longitude);
     if (placemarks.isNotEmpty) {
       final p = placemarks.first;
       final parts = <String>[
         if (p.street != null && p.street!.isNotEmpty) p.street!,
         if (p.subLocality != null && p.subLocality!.isNotEmpty) p.subLocality!,
         if (p.locality != null && p.locality!.isNotEmpty) p.locality!,
-        if (p.administrativeArea != null && p.administrativeArea!.isNotEmpty) p.administrativeArea!,
+        if (p.administrativeArea != null && p.administrativeArea!.isNotEmpty)
+          p.administrativeArea!,
       ];
       if (parts.isNotEmpty) {
         displayAddress = parts.join(', ');

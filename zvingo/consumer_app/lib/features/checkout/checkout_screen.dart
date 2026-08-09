@@ -58,18 +58,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final cartItems = ref.watch(cartProvider);
     final cartNotifier = ref.read(cartProvider.notifier);
     final deliveryLoc = ref.watch(deliveryLocationNotifierProvider);
-    final paymentState = ref.watch(paymentProvider);
-
     // Filter items for this checkout
     final items = widget.restaurantId != null
         ? cartItems.where((i) => i.restaurantId == widget.restaurantId).toList()
         : cartItems;
 
-    final restaurantName = items.isNotEmpty ? items.first.restaurantName ?? 'Store' : 'Store';
+    final restaurantName =
+        items.isNotEmpty ? items.first.restaurantName ?? 'Store' : 'Store';
     final subtotal = items.fold(0.0, (sum, item) => sum + item.total);
 
     // Resolve delivery fee from the restaurant's configured value
-    final resolvedRestaurantId = widget.restaurantId ?? items.firstOrNull?.restaurantId;
+    final resolvedRestaurantId =
+        widget.restaurantId ?? items.firstOrNull?.restaurantId;
     final restaurantAsync = resolvedRestaurantId != null
         ? ref.watch(restaurantDetailProvider(resolvedRestaurantId))
         : null;
@@ -83,7 +83,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     ref.listen(paymentProvider, (prev, next) {
       if (next.status == 'PAID' && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Payment confirmed!'), backgroundColor: AppColors.primary),
+          const SnackBar(
+              content: Text('Payment confirmed!'),
+              backgroundColor: AppColors.primary),
         );
         // Navigate to order tracking — find the order ID
         // We stored it during checkout
@@ -101,7 +103,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         ),
         title: Column(
           children: [
-            Text('Checkout', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+            Text('Checkout',
+                style: AppTextStyles.bodySmall
+                    .copyWith(color: AppColors.textSecondary)),
             Text(restaurantName, style: AppTextStyles.titleMedium),
           ],
         ),
@@ -122,25 +126,29 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   _buildAddressCard(deliveryLoc),
                   _buildDeliveryInstructions(),
 
-                  const Divider(height: 32, thickness: 8, color: AppColors.background),
+                  const Divider(
+                      height: 32, thickness: 8, color: AppColors.background),
 
                   // ── Delivery Time ──────────────────────
                   _buildSectionHeader('Delivery time'),
                   _buildDeliveryTimeOptions(),
 
-                  const Divider(height: 32, thickness: 8, color: AppColors.background),
+                  const Divider(
+                      height: 32, thickness: 8, color: AppColors.background),
 
                   // ── Cart Summary ───────────────────────
                   _buildSectionHeader('Cart summary'),
                   _buildCartSummary(items, restaurantName),
 
-                  const Divider(height: 32, thickness: 8, color: AppColors.background),
+                  const Divider(
+                      height: 32, thickness: 8, color: AppColors.background),
 
                   // ── Save More ─────────────────────────
                   _buildSectionHeader('Save more'),
                   _buildSaveMoreSection(),
 
-                  const Divider(height: 32, thickness: 8, color: AppColors.background),
+                  const Divider(
+                      height: 32, thickness: 8, color: AppColors.background),
 
                   // ── Price Summary ──────────────────────
                   _buildSectionHeader('Price summary'),
@@ -152,13 +160,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     totalBeforeTip: totalBeforeTip,
                   ),
 
-                  const Divider(height: 32, thickness: 8, color: AppColors.background),
+                  const Divider(
+                      height: 32, thickness: 8, color: AppColors.background),
 
                   // ── Tip ────────────────────────────────
                   _buildSectionHeader('Shopper Tip \u24D8'),
                   _buildTipSection(),
 
-                  const Divider(height: 32, thickness: 8, color: AppColors.background),
+                  const Divider(
+                      height: 32, thickness: 8, color: AppColors.background),
 
                   // ── Payment Method ─────────────────────
                   _buildSectionHeader('Payment'),
@@ -208,16 +218,21 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ),
                     child: _isPlacingOrder
                         ? const SizedBox(
-                            width: 22, height: 22,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2.5),
                           )
                         : Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('Place order', style: AppTextStyles.button.copyWith(fontSize: 16)),
+                              Text('Place order',
+                                  style: AppTextStyles.button
+                                      .copyWith(fontSize: 16)),
                               Text(
                                 '\$${total.toStringAsFixed(2)}',
-                                style: AppTextStyles.button.copyWith(fontSize: 16),
+                                style:
+                                    AppTextStyles.button.copyWith(fontSize: 16),
                               ),
                             ],
                           ),
@@ -233,7 +248,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Widget _buildSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-      child: Text(title, style: AppTextStyles.titleMedium.copyWith(fontWeight: FontWeight.w700)),
+      child: Text(title,
+          style:
+              AppTextStyles.titleMedium.copyWith(fontWeight: FontWeight.w700)),
     );
   }
 
@@ -252,22 +269,30 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             InkWell(
               onTap: () {},
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 child: Row(
                   children: [
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Deals and benefits', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w500)),
+                          Text('Deals and benefits',
+                              style: AppTextStyles.bodyMedium
+                                  .copyWith(fontWeight: FontWeight.w500)),
                           const SizedBox(height: 2),
-                          Text('None selected', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint)),
+                          Text('None selected',
+                              style: AppTextStyles.bodySmall
+                                  .copyWith(color: AppColors.textHint)),
                         ],
                       ),
                     ),
-                    Text('Add code/gift card', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                    Text('Add code/gift card',
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: AppColors.textSecondary)),
                     const SizedBox(width: 4),
-                    const Icon(Icons.chevron_right, size: 18, color: AppColors.textHint),
+                    const Icon(Icons.chevron_right,
+                        size: 18, color: AppColors.textHint),
                   ],
                 ),
               ),
@@ -296,7 +321,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               width: double.infinity,
               decoration: BoxDecoration(
                 color: AppColors.primarySurface.withOpacity(0.5),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(14)),
               ),
               child: Stack(
                 alignment: Alignment.center,
@@ -313,20 +339,24 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       color: AppColors.textPrimary,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.location_on, color: Colors.white, size: 20),
+                    child: const Icon(Icons.location_on,
+                        color: Colors.white, size: 20),
                   ),
                 ],
               ),
             ),
             // Address row
             ListTile(
-              leading: const Icon(Icons.location_on_outlined, color: AppColors.textSecondary, size: 22),
+              leading: const Icon(Icons.location_on_outlined,
+                  color: AppColors.textSecondary, size: 22),
               title: Text(
                 loc?.displayName ?? 'Set delivery address',
-                style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w500),
+                style: AppTextStyles.bodyMedium
+                    .copyWith(fontWeight: FontWeight.w500),
                 maxLines: 2,
               ),
-              trailing: const Icon(Icons.chevron_right, size: 20, color: AppColors.textHint),
+              trailing: const Icon(Icons.chevron_right,
+                  size: 20, color: AppColors.textHint),
               onTap: () => AddressSelectionSheet.show(context),
             ),
           ],
@@ -346,10 +376,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           border: Border.all(color: AppColors.border),
         ),
         child: ListTile(
-          leading: const Icon(Icons.inventory_2_outlined, size: 22, color: AppColors.textSecondary),
+          leading: const Icon(Icons.inventory_2_outlined,
+              size: 22, color: AppColors.textSecondary),
           title: Text(_deliveryInstructions, style: AppTextStyles.bodyMedium),
-          subtitle: Text('Delivery instructions', style: AppTextStyles.bodySmall),
-          trailing: const Icon(Icons.chevron_right, size: 20, color: AppColors.textHint),
+          subtitle:
+              const Text('Delivery instructions', style: AppTextStyles.bodySmall),
+          trailing: const Icon(Icons.chevron_right,
+              size: 20, color: AppColors.textHint),
           onTap: () => _showDeliveryInstructionsPicker(),
         ),
       ),
@@ -369,13 +402,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Delivery instructions', style: AppTextStyles.titleLarge),
+            const Text('Delivery instructions', style: AppTextStyles.titleLarge),
             const SizedBox(height: 16),
             ..._deliveryOptions.map((option) {
               final selected = _deliveryInstructions == option;
               return ListTile(
                 leading: Icon(
-                  selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                  selected
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked,
                   color: selected ? AppColors.primary : AppColors.textHint,
                 ),
                 title: Text(option, style: AppTextStyles.bodyMedium),
@@ -459,7 +494,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       ),
                     ),
                     Icon(
-                      _cartExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                      _cartExpanded
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
                       color: AppColors.textHint,
                     ),
                   ],
@@ -470,15 +507,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             if (_cartExpanded) ...[
               const Divider(height: 1),
               ...items.map((item) => Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('${item.quantity}x',
-                            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+                            style: AppTextStyles.bodyMedium
+                                .copyWith(color: AppColors.textSecondary)),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: Text(item.name, style: AppTextStyles.bodyMedium),
+                          child:
+                              Text(item.name, style: AppTextStyles.bodyMedium),
                         ),
                         Text(
                           '\$${item.total.toStringAsFixed(2)}',
@@ -526,8 +566,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Total before tip', style: AppTextStyles.titleSmall),
-                Text('\$${totalBeforeTip.toStringAsFixed(2)}', style: AppTextStyles.titleSmall),
+                const Text('Total before tip', style: AppTextStyles.titleSmall),
+                Text('\$${totalBeforeTip.toStringAsFixed(2)}',
+                    style: AppTextStyles.titleSmall),
               ],
             ),
           ],
@@ -542,10 +583,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       children: [
         Row(
           children: [
-            Text(label, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+            Text(label,
+                style: AppTextStyles.bodyMedium
+                    .copyWith(color: AppColors.textSecondary)),
             if (hasInfo) ...[
               const SizedBox(width: 4),
-              Icon(Icons.info_outline, size: 14, color: AppColors.textHint),
+              const Icon(Icons.info_outline,
+                  size: 14, color: AppColors.textHint),
             ],
           ],
         ),
@@ -563,7 +607,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         children: [
           Text(
             '100% of the tip goes to your shopper.',
-            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+            style: AppTextStyles.bodySmall
+                .copyWith(color: AppColors.textSecondary),
           ),
           const SizedBox(height: 12),
           Row(
@@ -574,7 +619,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 final selected = !_isCustomTip && _selectedTipIndex == index;
                 return Expanded(
                   child: Padding(
-                    padding: EdgeInsets.only(right: index < _tipAmounts.length - 1 ? 8 : 0),
+                    padding: EdgeInsets.only(
+                        right: index < _tipAmounts.length - 1 ? 8 : 0),
                     child: _TipChip(
                       label: '\$${amount.toStringAsFixed(2)}',
                       isSelected: selected,
@@ -602,7 +648,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   void _showCustomTipDialog() {
-    final controller = TextEditingController(text: _customTip > 0 ? _customTip.toStringAsFixed(2) : '');
+    final controller = TextEditingController(
+        text: _customTip > 0 ? _customTip.toStringAsFixed(2) : '');
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -658,7 +705,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   label: 'EcoCash',
                   color: const Color(0xFF00A651),
                   isSelected: _selectedPayment == PaymentMethodType.ecocash,
-                  onTap: () => setState(() => _selectedPayment = PaymentMethodType.ecocash),
+                  onTap: () => setState(
+                      () => _selectedPayment = PaymentMethodType.ecocash),
                 ),
                 const SizedBox(width: 10),
                 _PaymentPill(
@@ -666,7 +714,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   label: 'OneMoney',
                   color: const Color(0xFFF97316),
                   isSelected: _selectedPayment == PaymentMethodType.onemoney,
-                  onTap: () => setState(() => _selectedPayment = PaymentMethodType.onemoney),
+                  onTap: () => setState(
+                      () => _selectedPayment = PaymentMethodType.onemoney),
                 ),
                 const SizedBox(width: 10),
                 _PaymentPill(
@@ -674,7 +723,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   label: 'InnBucks',
                   color: const Color(0xFF1B3A6B),
                   isSelected: _selectedPayment == PaymentMethodType.innbucks,
-                  onTap: () => setState(() => _selectedPayment = PaymentMethodType.innbucks),
+                  onTap: () => setState(
+                      () => _selectedPayment = PaymentMethodType.innbucks),
                 ),
                 const SizedBox(width: 10),
                 _PaymentPill(
@@ -682,7 +732,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   label: 'Cash',
                   color: const Color(0xFF4CAF50),
                   isSelected: isCash,
-                  onTap: () => setState(() => _selectedPayment = PaymentMethodType.cash),
+                  onTap: () =>
+                      setState(() => _selectedPayment = PaymentMethodType.cash),
                 ),
                 const SizedBox(width: 10),
                 _PaymentPill(
@@ -690,7 +741,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   label: 'Visa / MC',
                   color: const Color(0xFF1A1F71),
                   isSelected: _selectedPayment == PaymentMethodType.card,
-                  onTap: () => setState(() => _selectedPayment = PaymentMethodType.card),
+                  onTap: () =>
+                      setState(() => _selectedPayment = PaymentMethodType.card),
                 ),
                 const SizedBox(width: 10),
                 // "Add payment" pill
@@ -698,7 +750,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   onTap: () {},
                   child: Container(
                     width: 90,
-                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
                     decoration: BoxDecoration(
                       color: AppColors.background,
                       borderRadius: BorderRadius.circular(14),
@@ -707,11 +760,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.add, size: 24, color: AppColors.textSecondary),
+                        const Icon(Icons.add,
+                            size: 24, color: AppColors.textSecondary),
                         const SizedBox(height: 4),
-                        Text('Add payment',
+                        Text(
+                          'Add payment',
                           textAlign: TextAlign.center,
-                          style: AppTextStyles.bodySmall.copyWith(fontSize: 10, color: AppColors.textSecondary),
+                          style: AppTextStyles.bodySmall.copyWith(
+                              fontSize: 10, color: AppColors.textSecondary),
                         ),
                       ],
                     ),
@@ -733,14 +789,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline, size: 18, color: AppColors.textSecondary),
+                  const Icon(Icons.info_outline,
+                      size: 18, color: AppColors.textSecondary),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       isCash
                           ? 'Pay your driver in cash when your order arrives.'
                           : 'Card payments coming soon.',
-                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.textSecondary),
                     ),
                   ),
                 ],
@@ -755,8 +813,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               keyboardType: TextInputType.phone,
               decoration: InputDecoration(
                 hintText: '+263 7X XXX XXXX',
-                hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
-                prefixIcon: const Icon(Icons.phone, color: AppColors.textHint, size: 20),
+                hintStyle: AppTextStyles.bodyMedium
+                    .copyWith(color: AppColors.textHint),
+                prefixIcon: const Icon(Icons.phone,
+                    color: AppColors.textHint, size: 20),
                 filled: true,
                 fillColor: AppColors.background,
                 border: OutlineInputBorder(
@@ -769,9 +829,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                  borderSide:
+                      const BorderSide(color: AppColors.primary, width: 1.5),
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
             ),
           ],
@@ -802,7 +864,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     if (!isCash && phone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your phone number for payment')),
+        const SnackBar(
+            content: Text('Please enter your phone number for payment')),
       );
       return;
     }
@@ -841,13 +904,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       );
       if (!alreadySaved) {
         await ref.read(savedAddressesProvider.notifier).addAddress(SavedAddress(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          label: 'Recent',
-          address: deliveryLoc.displayName,
-          lat: deliveryLoc.lat,
-          lng: deliveryLoc.lng,
-          isDefault: false,
-        ));
+              id: DateTime.now().millisecondsSinceEpoch.toString(),
+              label: 'Recent',
+              address: deliveryLoc.displayName,
+              lat: deliveryLoc.lat,
+              lng: deliveryLoc.lng,
+              isDefault: false,
+            ));
       }
 
       final orderId = orderIds.first;
@@ -859,7 +922,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           ref.read(activeOrderProvider.notifier).state = orderId;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Order placed! Pay your driver in cash on delivery.'),
+              content:
+                  Text('Order placed! Pay your driver in cash on delivery.'),
               backgroundColor: AppColors.primary,
             ),
           );
@@ -867,11 +931,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         }
       } else {
         // 2b. Mobile money — initiate payment and poll for confirmation.
-        final success = await ref.read(paymentProvider.notifier).initiatePayment(
-          orderId: orderId,
-          method: _selectedPayment,
-          phone: phone,
-        );
+        final success =
+            await ref.read(paymentProvider.notifier).initiatePayment(
+                  orderId: orderId,
+                  method: _selectedPayment,
+                  phone: phone,
+                );
 
         if (mounted) {
           if (success) {
@@ -879,7 +944,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             context.go('/home');
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Payment initiation failed. Please try again.')),
+              const SnackBar(
+                  content:
+                      Text('Payment initiation failed. Please try again.')),
             );
           }
         }
@@ -953,7 +1020,8 @@ class _TipChip extends StatelessWidget {
   final bool isSelected;
   final VoidCallback onTap;
 
-  const _TipChip({required this.label, required this.isSelected, required this.onTap});
+  const _TipChip(
+      {required this.label, required this.isSelected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -998,7 +1066,8 @@ class _PaymentPill extends StatelessWidget {
     required this.color,
     required this.isSelected,
     required this.onTap,
-  })  : assert(imagePath != null || iconData != null, 'Either imagePath or iconData must be provided');
+  }) : assert(imagePath != null || iconData != null,
+            'Either imagePath or iconData must be provided');
 
   @override
   Widget build(BuildContext context) {

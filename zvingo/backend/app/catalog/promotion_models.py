@@ -2,6 +2,7 @@ from typing import Optional, List
 from beanie import Document, Indexed
 from pydantic import BaseModel, Field
 from datetime import datetime
+from app.time_utils import utc_now
 import uuid
 
 
@@ -24,7 +25,7 @@ class Promotion(Document):
     max_discount_usd: Optional[float] = None  # Cap on discount amount
 
     # Scheduling
-    starts_at: datetime = Field(default_factory=datetime.utcnow)
+    starts_at: datetime = Field(default_factory=utc_now)
     ends_at: Optional[datetime] = None  # None = no expiry
     is_active: bool = True
 
@@ -36,8 +37,8 @@ class Promotion(Document):
     # Promo code (optional — for code-based promos)
     code: Optional[str] = None
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
     class Settings:
         name = "promotions"

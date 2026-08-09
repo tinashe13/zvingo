@@ -20,16 +20,15 @@ class FavouritesScreen extends ConsumerWidget {
       backgroundColor: AppColors.white,
       appBar: AppBar(
         backgroundColor: AppColors.white,
-        title: Text('Favourites', style: AppTextStyles.titleLarge),
+        title: const Text('Favourites', style: AppTextStyles.titleLarge),
         centerTitle: true,
       ),
       body: allRestaurants.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (restaurants) {
-          final favRestaurants = restaurants
-              .where((r) => favouriteIds.contains(r.id))
-              .toList();
+          final favRestaurants =
+              restaurants.where((r) => favouriteIds.contains(r.id)).toList();
 
           if (favRestaurants.isEmpty) {
             return Center(
@@ -43,10 +42,9 @@ class FavouritesScreen extends ConsumerWidget {
                     repeat: true,
                   ),
                   const SizedBox(height: 16),
-                  Text('No favourites yet',
-                      style: AppTextStyles.titleMedium),
+                  const Text('No favourites yet', style: AppTextStyles.titleMedium),
                   const SizedBox(height: 6),
-                  Text(
+                  const Text(
                     'Tap the heart on restaurants\nyou love to save them here',
                     style: AppTextStyles.bodySmall,
                     textAlign: TextAlign.center,

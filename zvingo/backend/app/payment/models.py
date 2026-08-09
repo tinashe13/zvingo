@@ -1,5 +1,6 @@
 from typing import Optional
 from datetime import datetime
+from app.time_utils import utc_now
 from enum import Enum
 from beanie import Document, Indexed
 from pydantic import Field
@@ -32,8 +33,8 @@ class Payment(Document):
     paynow_reference: Optional[str] = None
     poll_url: Optional[str] = None
     phone: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
     class Settings:
         name = "payments"

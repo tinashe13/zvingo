@@ -8,6 +8,7 @@ from app.auth.router import get_current_user, User
 from pydantic import BaseModel
 import re
 from datetime import datetime
+from app.time_utils import utc_now
 
 router = APIRouter()
 
@@ -364,7 +365,7 @@ class PromotionUpdate(BaseModel):
 @router.get("/promotions", response_model=List[Promotion])
 async def list_active_promotions(restaurant_id: Optional[str] = None):
     """Return all currently active promotions visible to consumers."""
-    now = datetime.utcnow()
+    now = utc_now()
     query: dict = {"is_active": True}
 
     # Only include promos that haven't expired
@@ -416,7 +417,7 @@ async def create_promotion(promo_in: PromotionCreate, current_user: User = Depen
         discount_value=promo_in.discount_value,
         min_order_usd=promo_in.min_order_usd,
         max_discount_usd=promo_in.max_discount_usd,
-        starts_at=promo_in.starts_at or datetime.utcnow(),
+        starts_at=promo_in.starts_at or utc_now(),
         ends_at=promo_in.ends_at,
         max_uses=promo_in.max_uses,
         max_uses_per_user=promo_in.max_uses_per_user,
@@ -448,7 +449,7 @@ async def update_promotion(promo_id: str, promo_in: PromotionUpdate, current_use
     update_data = promo_in.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(promo, field, value)
-    promo.updated_at = datetime.utcnow()
+    promo.updated_at = utc_now()
     await promo.save()
     return promo
 
@@ -476,7 +477,7 @@ async def toggle_promotion(promo_id: str, current_user: User = Depends(get_curre
         raise HTTPException(status_code=403, detail="Not authorized")
 
     promo.is_active = not promo.is_active
-    promo.updated_at = datetime.utcnow()
+    promo.updated_at = utc_now()
     await promo.save()
     return promo
 

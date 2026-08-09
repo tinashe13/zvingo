@@ -22,15 +22,16 @@ class PrimaryButton extends StatelessWidget {
     final bgColor = backgroundColor ?? AppColors.primary;
     return SizedBox(
       width: isFullWidth ? double.infinity : null,
-      height: 56,
+      height: 54,
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: bgColor,
           foregroundColor: AppColors.textOnPrimary,
-          shape: const StadiumBorder(),
-          elevation: 4,
-          shadowColor: bgColor.withOpacity(0.3),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          elevation: 0,
         ),
         child: isLoading
             ? const SizedBox(
@@ -46,8 +47,7 @@ class PrimaryButton extends StatelessWidget {
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
-                  fontFamily: 'Inter',
-                  letterSpacing: 0.5,
+                  letterSpacing: 0.1,
                 ),
               ),
       ),
