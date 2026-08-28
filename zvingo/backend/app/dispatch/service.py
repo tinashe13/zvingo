@@ -123,7 +123,9 @@ class DispatchService:
         from app.dispatch.models import Dispatch
         from app.notification.service import notification_service
         
-        order = await OrderService.transition_state(order_id, OrderState.ACCEPTED, actor_id=driver_id)
+        order = await OrderService.transition_state(
+            order_id, OrderState.ACCEPTED, actor_id=driver_id, driver_id=driver_id
+        )
         if not order:
             return None
         

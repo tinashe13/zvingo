@@ -10,6 +10,7 @@ from app.config import settings
 from app.order.models import Order
 from app.order.state_machine import OrderState
 from app.dispatch.service import dispatch_service
+from app.location.models import Location
 import structlog
 
 logger = structlog.get_logger()
@@ -98,8 +99,8 @@ class OrderRetryService:
                             continue
 
                     # Get pickup location — re-resolve from restaurant if stored as (0,0)
-                    pickup_lat = order.pickup_location['coordinates'][1]
-                    pickup_lng = order.pickup_location['coordinates'][0]
+                    pickup_lat = order.pickup_location.lat if order.pickup_location else 0
+                    pickup_lng = order.pickup_location.lng if order.pickup_location else 0
 
                     if abs(pickup_lat) < 0.01 and abs(pickup_lng) < 0.01:
                         # Pickup wasn't resolved at order creation — fix it now
@@ -107,13 +108,9 @@ class OrderRetryService:
                             from app.catalog.models import Restaurant
                             restaurant = await Restaurant.get(order.merchant_id)
                             if restaurant and restaurant.location:
-                                coords = restaurant.location.coordinates
-                                pickup_lng, pickup_lat = coords[0], coords[1]
+                                pickup_lng, pickup_lat = restaurant.location.lng, restaurant.location.lat
                                 # Patch the order so future retries use correct location
-                                order.pickup_location = {
-                                    "type": "Point",
-                                    "coordinates": [pickup_lng, pickup_lat]
-                                }
+                                order.pickup_location = Location.from_lat_lng(pickup_lat, pickup_lng)
                                 logger.info(
                                     "Fixed order pickup location from restaurant",
                                     order_id=str(order.id),

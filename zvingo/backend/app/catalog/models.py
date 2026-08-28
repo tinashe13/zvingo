@@ -3,10 +3,7 @@ from beanie import Document, Indexed
 from pydantic import BaseModel, Field
 import uuid
 
-
-class Location(BaseModel):
-    type: str = "Point"
-    coordinates: List[float]  # [longitude, latitude]
+from app.location.models import Location
 
 
 class MenuItem(BaseModel):

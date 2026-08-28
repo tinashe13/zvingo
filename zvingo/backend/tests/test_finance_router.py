@@ -6,6 +6,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.order.state_machine import OrderState
+from app.location.models import Location
 
 
 class Field:
@@ -249,8 +250,8 @@ async def test_record_earning_all_paths(monkeypatch):
     assert (await module.record_earning("missing", "driver-1", "token"))["status"] == "error"
 
     current_order = SimpleNamespace(
-        merchant_id="merchant-1", pickup_location={"coordinates": [31.0, -17.0]},
-        dropoff_location={"coordinates": [31.1, -17.1]}, delivery_fee=3.0,
+        merchant_id="merchant-1", pickup_location=Location.from_lat_lng(-17.0, 31.0),
+        dropoff_location=Location.from_lat_lng(-17.1, 31.1), delivery_fee=3.0,
         tip_amount=1.0, delivery_instructions="14 Main Road",
     )
     FakeOrder.get.return_value = current_order

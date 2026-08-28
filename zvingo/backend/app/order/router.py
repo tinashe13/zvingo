@@ -4,10 +4,30 @@ from app.order.schemas import OrderCreate, OrderResponse, OrderUpdateState, Orde
 from app.order.service import OrderService
 from app.order.models import Order
 from app.order.state_machine import InvalidStateTransition, OrderState
-from app.auth.router import oauth2_scheme, get_current_user
+from app.auth.router import get_current_user
 from app.auth.models import User
 
 router = APIRouter()
+
+
+def _lat(location) -> Optional[float]:
+    """Latitude from a Location or GeoJSON dict, or None when absent."""
+    if location is None:
+        return None
+    if hasattr(location, "lat"):
+        return location.lat
+    coords = location.get("coordinates") if isinstance(location, dict) else None
+    return coords[1] if coords else None
+
+
+def _lng(location) -> Optional[float]:
+    """Longitude from a Location or GeoJSON dict, or None when absent."""
+    if location is None:
+        return None
+    if hasattr(location, "lng"):
+        return location.lng
+    coords = location.get("coordinates") if isinstance(location, dict) else None
+    return coords[0] if coords else None
 
 
 async def _get_driver_name(driver_id: Optional[str]) -> Optional[str]:
@@ -83,10 +103,10 @@ async def get_order(order_id: str, current_user: User = Depends(get_current_user
                    "quantity": i.quantity if hasattr(i, 'quantity') else i.get("quantity", 1), 
                    "price": i.price if hasattr(i, 'price') else i.get("price", 0)} 
                   for i in (order.items or [])],
-        "pickup_lat": order.pickup_location['coordinates'][1] if order.pickup_location else None,
-        "pickup_lng": order.pickup_location['coordinates'][0] if order.pickup_location else None,
-        "delivery_lat": order.dropoff_location['coordinates'][1] if order.dropoff_location else None,
-        "delivery_lng": order.dropoff_location['coordinates'][0] if order.dropoff_location else None,
+        "pickup_lat": _lat(order.pickup_location),
+        "pickup_lng": _lng(order.pickup_location),
+        "delivery_lat": _lat(order.dropoff_location),
+        "delivery_lng": _lng(order.dropoff_location),
     }
 
 
@@ -142,16 +162,37 @@ async def create_order(order_in: OrderCreate):
                 "quantity": i.quantity if hasattr(i, 'quantity') else i.get("quantity", 1), 
                 "price": i.price if hasattr(i, 'price') else i.get("price", 0)} 
                for i in order.items],
-        pickup_lat=order.pickup_location['coordinates'][1] if order.pickup_location else None,
-        pickup_lng=order.pickup_location['coordinates'][0] if order.pickup_location else None,
-        delivery_lat=order.dropoff_location['coordinates'][1] if order.dropoff_location else None,
-        delivery_lng=order.dropoff_location['coordinates'][0] if order.dropoff_location else None,
+        pickup_lat=_lat(order.pickup_location),
+        pickup_lng=_lng(order.pickup_location),
+        delivery_lat=_lat(order.dropoff_location),
+        delivery_lng=_lng(order.dropoff_location),
     )
 
 @router.put("/{order_id}/state", response_model=OrderResponse)
-async def update_order_state(order_id: str, state_update: OrderUpdateState, token: str = Depends(oauth2_scheme)):
+async def update_order_state(
+    order_id: str,
+    state_update: OrderUpdateState,
+    current_user: User = Depends(get_current_user),
+):
+    """Transition an order's state.
+
+    The authenticated caller must own the order (as consumer, driver, or the
+    owning merchant). The actor is derived from the token — never from the
+    request body. A driver can only be assigned via the explicit driver-accept
+    flow (see DispatchService.accept_offer / the SMS ACCEPT command); this
+    endpoint never sets driver_id, so a merchant or consumer cannot impersonate
+    a driver.
+    """
+    order = await Order.get(order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    await _assert_order_access(order, current_user)
+
     try:
-        order = await OrderService.transition_state(order_id, state_update.state, state_update.driver_id)
+        order = await OrderService.transition_state(
+            order_id, state_update.state, actor_id=str(current_user.id)
+        )
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
 
@@ -176,10 +217,10 @@ async def update_order_state(order_id: str, state_update: OrderUpdateState, toke
             merchant_id=order.merchant_id,
             consumer_id=order.consumer_id,
             items=formatted_items,
-            pickup_lat=order.pickup_location['coordinates'][1] if order.pickup_location else None,
-            pickup_lng=order.pickup_location['coordinates'][0] if order.pickup_location else None,
-            delivery_lat=order.dropoff_location['coordinates'][1] if order.dropoff_location else None,
-            delivery_lng=order.dropoff_location['coordinates'][0] if order.dropoff_location else None,
+            pickup_lat=_lat(order.pickup_location),
+            pickup_lng=_lng(order.pickup_location),
+            delivery_lat=_lat(order.dropoff_location),
+            delivery_lng=_lng(order.dropoff_location),
         )
     except InvalidStateTransition as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -203,10 +244,10 @@ async def get_consumer_orders(consumer_id: str, current_user: User = Depends(get
                     "quantity": i.quantity if hasattr(i, 'quantity') else i.get("quantity", 1), 
                     "price": i.price if hasattr(i, 'price') else i.get("price", 0)} 
                    for i in o.items],
-            pickup_lat=o.pickup_location['coordinates'][1] if o.pickup_location else None,
-            pickup_lng=o.pickup_location['coordinates'][0] if o.pickup_location else None,
-            delivery_lat=o.dropoff_location['coordinates'][1] if o.dropoff_location else None,
-            delivery_lng=o.dropoff_location['coordinates'][0] if o.dropoff_location else None,
+            pickup_lat=_lat(o.pickup_location),
+            pickup_lng=_lng(o.pickup_location),
+            delivery_lat=_lat(o.dropoff_location),
+            delivery_lng=_lng(o.dropoff_location),
         )
         for o in orders
     ]
@@ -243,10 +284,10 @@ async def get_merchant_orders(merchant_id: str, current_user: User = Depends(get
                     "quantity": i.quantity if hasattr(i, 'quantity') else i.get("quantity", 1), 
                     "price": i.price if hasattr(i, 'price') else i.get("price", 0)} 
                    for i in o.items],
-            pickup_lat=o.pickup_location['coordinates'][1] if o.pickup_location else None,
-            pickup_lng=o.pickup_location['coordinates'][0] if o.pickup_location else None,
-            delivery_lat=o.dropoff_location['coordinates'][1] if o.dropoff_location else None,
-            delivery_lng=o.dropoff_location['coordinates'][0] if o.dropoff_location else None,
+            pickup_lat=_lat(o.pickup_location),
+            pickup_lng=_lng(o.pickup_location),
+            delivery_lat=_lat(o.dropoff_location),
+            delivery_lng=_lng(o.dropoff_location),
         )
         for o in orders
     ]
@@ -318,10 +359,10 @@ async def get_driver_active_orders(current_user: User = Depends(get_current_user
                     "quantity": i.quantity if hasattr(i, 'quantity') else i.get("quantity", 1), 
                     "price": i.price if hasattr(i, 'price') else i.get("price", 0)} 
                    for i in o.items],
-            pickup_lat=o.pickup_location['coordinates'][1] if o.pickup_location else None,
-            pickup_lng=o.pickup_location['coordinates'][0] if o.pickup_location else None,
-            delivery_lat=o.dropoff_location['coordinates'][1] if o.dropoff_location else None,
-            delivery_lng=o.dropoff_location['coordinates'][0] if o.dropoff_location else None,
+            pickup_lat=_lat(o.pickup_location),
+            pickup_lng=_lng(o.pickup_location),
+            delivery_lat=_lat(o.dropoff_location),
+            delivery_lng=_lng(o.dropoff_location),
         )
         for o in orders
     ]

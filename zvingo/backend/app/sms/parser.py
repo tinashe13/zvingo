@@ -38,7 +38,7 @@ class SMSParser:
                 from app.order.service import OrderService
                 from app.order.state_machine import OrderState
                 order = await OrderService.transition_state(
-                    order_id, OrderState.ACCEPTED, str(driver.id)
+                    order_id, OrderState.ACCEPTED, str(driver.id), driver_id=str(driver.id)
                 )
                 if order:
                     return f"Order {order_id} accepted. Head to merchant for pickup."

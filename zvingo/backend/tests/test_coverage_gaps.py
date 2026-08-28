@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from starlette.websockets import WebSocketDisconnect, WebSocketState
 
 from app.auth.service import AuthService
+from app.location.models import Location
 
 
 class Query:
@@ -27,12 +28,12 @@ async def test_retry_order_resolution_and_dispatch_errors(monkeypatch):
 
     invalid_location = SimpleNamespace(
         id="bad-location", merchant_id="restaurant-1", retry_count=0,
-        last_retry_at=None, pickup_location={"coordinates": [0, 0]},
+        last_retry_at=None, pickup_location=Location.from_lat_lng(0, 0),
         save=AsyncMock(),
     )
     dispatch_failure = SimpleNamespace(
         id="dispatch-failure", merchant_id="restaurant-2", retry_count=0,
-        last_retry_at=None, pickup_location={"coordinates": [31, -17]},
+        last_retry_at=None, pickup_location=Location.from_lat_lng(-17, 31),
         save=AsyncMock(),
     )
 
@@ -182,8 +183,8 @@ async def test_notification_lookup_failures_use_safe_defaults(monkeypatch):
 
     current_order = SimpleNamespace(
         merchant_id="restaurant-1", consumer_id="consumer-1",
-        pickup_location={"coordinates": [31.0, -17.0]},
-        dropoff_location={"coordinates": [31.1, -17.1]}, items=[],
+        pickup_location=Location.from_lat_lng(-17.0, 31.0),
+        dropoff_location=Location.from_lat_lng(-17.1, 31.1), items=[],
         delivery_fee=2, tip_amount=0, total_amount=10,
         delivery_instructions="Destination",
     )

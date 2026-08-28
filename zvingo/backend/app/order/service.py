@@ -20,9 +20,8 @@ class OrderService:
                 return existing
 
         # Resolve pickup location from restaurant record if not provided by client
-        pickup_lat = order_in.pickup_lat
-        pickup_lng = order_in.pickup_lng
-        if pickup_lat == 0.0 and pickup_lng == 0.0:
+        pickup = order_in.pickup
+        if pickup is None or pickup.is_null_island:
             try:
                 from app.catalog.models import Restaurant
                 # First try: merchant_id may actually be a restaurant document id.
@@ -33,15 +32,13 @@ class OrderService:
                         Restaurant.merchant_id == order_in.merchant_id
                     )
                 if restaurant and restaurant.location:
-                    # restaurant.location is a Pydantic Location model, not a dict
-                    coords = restaurant.location.coordinates
-                    pickup_lng, pickup_lat = coords[0], coords[1]
+                    pickup = restaurant.location
                     logger.info(
                         "Resolved pickup from restaurant",
                         restaurant_id=str(restaurant.id),
                         restaurant=restaurant.name,
-                        pickup_lat=pickup_lat,
-                        pickup_lng=pickup_lng,
+                        pickup_lat=pickup.lat,
+                        pickup_lng=pickup.lng,
                     )
             except Exception as e:
                 logger.error(
@@ -49,22 +46,30 @@ class OrderService:
                     merchant_id=order_in.merchant_id,
                     error=str(e),
                 )
-                # Fall through with 0,0 — dispatch will reject
+                # Fall through with None — dispatch will reject
 
         # Hard validation: prevent orders with unresolved pickup location
-        if pickup_lat == 0.0 and pickup_lng == 0.0:
+        if pickup is None or pickup.is_null_island:
             raise ValueError(
-                "Pickup location unresolved. Provide pickup_lat/pickup_lng or "
+                "Pickup location unresolved. Provide a pickup Location or "
                 "set a valid restaurant location."
             )
+
+        if order_in.dropoff is None or order_in.dropoff.is_null_island:
+            raise ValueError(
+                "Dropoff location unresolved. Provide a dropoff Location "
+                "with valid coordinates."
+            )
+
+        dropoff = order_in.dropoff
 
         order = Order(
             merchant_id=order_in.merchant_id,
             consumer_id=order_in.consumer_id,
             items=[i.model_dump() for i in order_in.items],
             total_amount=order_in.total_amount,
-            pickup_location={"type": "Point", "coordinates": [pickup_lng, pickup_lat]},
-            dropoff_location={"type": "Point", "coordinates": [order_in.dropoff_lng, order_in.dropoff_lat]},
+            pickup_location=pickup,
+            dropoff_location=dropoff,
             idempotency_key=order_in.idempotency_key,
             tip_amount=order_in.tip_amount or 0.0,
             events=[OrderEvent(state=OrderState.CREATED)]
@@ -74,7 +79,7 @@ class OrderService:
         if not order_in.delivery_fee or order_in.delivery_fee <= 0:
             from app.finance.fee_calculator import calculate_delivery_fee_from_coords
             gross_fee, _, _ = calculate_delivery_fee_from_coords(
-                pickup_lat, pickup_lng, order_in.dropoff_lat, order_in.dropoff_lng
+                pickup.lat, pickup.lng, dropoff.lat, dropoff.lng
             )
             order.delivery_fee = gross_fee
         else:
@@ -91,15 +96,20 @@ class OrderService:
 
         # Run dispatch in background to not block response
         asyncio.create_task(dispatch_service.dispatch_order(
-            str(order.id), 
-            order.pickup_location["coordinates"][1], 
-            order.pickup_location["coordinates"][0]
+            str(order.id),
+            pickup.lat,
+            pickup.lng
         ))
         
         return order
 
     @staticmethod
-    async def transition_state(order_id: str, new_state: OrderState, actor_id: Optional[str] = None) -> Optional[Order]:
+    async def transition_state(
+        order_id: str,
+        new_state: OrderState,
+        actor_id: Optional[str] = None,
+        driver_id: Optional[str] = None,
+    ) -> Optional[Order]:
         order = await Order.get(order_id)
         if not order:
             logger.warn("Order not found", order_id=order_id)
@@ -115,8 +125,12 @@ class OrderService:
 
         order.state = new_state
         order.updated_at = utc_now()
-        if actor_id and new_state == OrderState.ACCEPTED:
-            order.driver_id = actor_id
+        # Driver assignment is explicit: only when a driver accepts an offer
+        # (or otherwise takes the order) is `driver_id` set. The `actor_id`
+        # is purely an audit-trail identifier and must never be conflated with
+        # the driver.
+        if driver_id is not None and new_state == OrderState.ACCEPTED:
+            order.driver_id = driver_id
 
         order.events.append(OrderEvent(state=new_state, actor_id=actor_id))
         await order.save()

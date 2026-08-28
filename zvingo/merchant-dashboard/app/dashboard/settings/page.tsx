@@ -53,7 +53,17 @@ export default function SettingsPage() {
                 setDescription(r.description || '');
                 setImageUrl(r.image_url || '');
                 setBannerUrl(r.banner_url || '');
-                setIsOpen(r.is_active || false);
+                setIsOpen(r.is_active ?? false);
+
+                // Parse operating hours ("HH:MM-HH:MM") back into separate fields.
+                if (r.operating_hours && typeof r.operating_hours === 'string') {
+                    const parts = r.operating_hours.split('-');
+                    if (parts.length === 2) {
+                        setOpenTime(parts[0]);
+                        setCloseTime(parts[1]);
+                    }
+                }
+
                 const coords = r.location?.coordinates;
                 if (coords && coords.length === 2) {
                     setLng(String(coords[0]));
@@ -84,6 +94,8 @@ export default function SettingsPage() {
                     banner_url: bannerUrl,
                     lat: lat ? Number(lat) : undefined,
                     lng: lng ? Number(lng) : undefined,
+                    is_active: isOpen,
+                    operating_hours: `${openTime}-${closeTime}`,
                 })
             });
             setRestaurant(updated);
@@ -315,6 +327,9 @@ export default function SettingsPage() {
                             />
                         </div>
                     </div>
+                    <p className="mt-3 text-sm text-gray-500">
+                        Store status and business hours are saved with &quot;Save Changes&quot;.
+                    </p>
                 </div>
             </div>
 

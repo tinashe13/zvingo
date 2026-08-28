@@ -9,6 +9,7 @@ import pytest
 from app.dispatch.schemas import DriverLocationUpdate
 from app.order.schemas import OrderCreate, OrderItem
 from app.order.state_machine import InvalidStateTransition, OrderState
+from app.location.models import Location
 from app.payment.models import PaymentMethod, PaymentStatus
 
 
@@ -123,7 +124,7 @@ async def test_order_creation_idempotency_locations_fees_and_side_effects(monkey
     restaurant = SimpleNamespace(
         id="r1",
         name="Restaurant",
-        location=SimpleNamespace(coordinates=[31.2, -17.7]),
+        location=Location.from_lat_lng(-17.7, 31.2),
     )
     class FakeRestaurant:
         merchant_id = Field()
@@ -134,7 +135,13 @@ async def test_order_creation_idempotency_locations_fees_and_side_effects(monkey
     resolved = await module.OrderService.create_order(
         order_input(pickup_lat=0, pickup_lng=0)
     )
-    assert resolved.pickup_location["coordinates"] == [31.2, -17.7]
+    assert resolved.pickup_location.coordinates == [31.2, -17.7]
+
+    # Unresolved dropoff (null island) is rejected even with a valid pickup.
+    with pytest.raises(ValueError, match="Dropoff location unresolved"):
+        await module.OrderService.create_order(
+            order_input(pickup_lat=0, pickup_lng=0, dropoff_lat=0, dropoff_lng=0)
+        )
 
     FakeRestaurant.get.side_effect = RuntimeError("db")
     with pytest.raises(ValueError, match="Pickup location unresolved"):
@@ -177,12 +184,18 @@ async def test_order_transitions(monkeypatch):
         lambda coro: (tasks.append(coro), coro.close())[0],
     )
     result = await module.OrderService.transition_state(
-        "1", OrderState.ACCEPTED, actor_id="driver"
+        "1", OrderState.ACCEPTED, actor_id="driver", driver_id="driver"
     )
     assert result is order and order.driver_id == "driver"
     assert order.events[-1].actor_id == "driver"
     order.save.assert_awaited_once()
     assert len(tasks) == 1
+
+    # A transition without an explicit driver_id must NOT assign a driver.
+    order.driver_id = None
+    order.state = OrderState.OFFERED
+    await module.OrderService.transition_state("1", OrderState.ACCEPTED, actor_id="merchant")
+    assert order.driver_id is None
 
     order.consumer_id = None
     order.state = OrderState.ACCEPTED
@@ -441,8 +454,8 @@ async def test_notification_payloads_delivery_and_push(monkeypatch):
     order = SimpleNamespace(
         merchant_id="merchant",
         consumer_id="consumer",
-        pickup_location={"coordinates": [31.0, -17.8]},
-        dropoff_location={"coordinates": [31.1, -17.9]},
+        pickup_location=Location.from_lat_lng(-17.8, 31.0),
+        dropoff_location=Location.from_lat_lng(-17.9, 31.1),
         items=items,
         delivery_fee=0,
         tip_amount=1,
@@ -556,13 +569,13 @@ async def test_retry_service_lifecycle_loop_and_orders(monkeypatch):
     now = module.utc_now()
     maxed = SimpleNamespace(id="max", retry_count=module.MAX_RETRY_ATTEMPTS)
     recent = SimpleNamespace(
-        id="recent", retry_count=0, last_retry_at=now, pickup_location={"coordinates": [31, -17]}
+        id="recent", retry_count=0, last_retry_at=now, pickup_location=Location.from_lat_lng(-17, 31)
     )
     good = SimpleNamespace(
         id="good",
         retry_count=0,
         last_retry_at=None,
-        pickup_location={"coordinates": [31, -17]},
+        pickup_location=Location.from_lat_lng(-17, 31),
         save=AsyncMock(),
     )
     unresolved = SimpleNamespace(
@@ -570,7 +583,7 @@ async def test_retry_service_lifecycle_loop_and_orders(monkeypatch):
         retry_count=0,
         last_retry_at=None,
         merchant_id="m",
-        pickup_location={"coordinates": [0, 0]},
+        pickup_location=Location.from_lat_lng(0, 0),
         save=AsyncMock(),
     )
     monkeypatch.setattr(
@@ -578,16 +591,16 @@ async def test_retry_service_lifecycle_loop_and_orders(monkeypatch):
         "find",
         MagicMock(return_value=QueryResult([maxed, recent, good, unresolved])),
     )
-    restaurant = SimpleNamespace(name="Cafe", location=SimpleNamespace(coordinates=[31, -17]))
+    restaurant = SimpleNamespace(name="Cafe", location=Location.from_lat_lng(-17, 31))
     monkeypatch.setattr(catalog_models.Restaurant, "get", AsyncMock(return_value=restaurant))
     await module.OrderRetryService._process_stuck_orders()
     assert dispatch.await_count == 2
     assert good.retry_count == 1
-    assert unresolved.pickup_location["coordinates"] == [31, -17]
+    assert unresolved.pickup_location.coordinates == [31, -17]
 
     catalog_models.Restaurant.get.side_effect = RuntimeError("db")
     unresolved.retry_count = 0
-    unresolved.pickup_location = {"coordinates": [0, 0]}
+    unresolved.pickup_location = Location.from_lat_lng(0, 0)
     monkeypatch.setattr(
         module.Order, "find", MagicMock(return_value=QueryResult([unresolved]))
     )

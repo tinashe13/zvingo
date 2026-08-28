@@ -1,9 +1,12 @@
-"use client";
+'use client';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { setToken } from '@/lib/api';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/Card';
 
 export default function RegisterPage() {
     const [fullName, setFullName] = useState('');
@@ -67,105 +70,110 @@ export default function RegisterPage() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen flex items-center justify-center bg-neutral-50 py-12 px-4 sm:px-6 lg:px-8">
             <div className="max-w-md w-full space-y-8">
-                <div>
-                    <h1 className="text-center text-2xl font-bold text-green-600">Zvingo Partner</h1>
-                    <h2 className="mt-4 text-center text-3xl font-extrabold text-gray-900">
-                        Create Account
-                    </h2>
-                    <p className="mt-2 text-center text-sm text-gray-600">
-                        Register your restaurant to start receiving orders
-                    </p>
+                <div className="text-center">
+                    <h1 className="text-3xl font-bold text-primary mb-2">Zvingo Partner</h1>
                 </div>
 
-                {error && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md text-sm">
-                        {error}
-                    </div>
-                )}
+                <Card className="shadow-lg border-neutral-100">
+                    <CardHeader className="space-y-1 text-center">
+                        <CardTitle className="text-2xl">Create Account</CardTitle>
+                        <CardDescription>
+                            Register your restaurant to start receiving orders
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {error && (
+                            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm mb-6">
+                                {error}
+                            </div>
+                        )}
 
-                <form className="mt-8 space-y-5" onSubmit={handleRegister}>
-                    <div>
-                        <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">Restaurant / Business Name</label>
-                        <input
-                            id="fullName"
-                            type="text"
-                            required
-                            className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
-                            placeholder="Your Restaurant Name"
-                            value={fullName}
-                            onChange={(e) => setFullName(e.target.value)}
-                        />
-                    </div>
+                        <form className="space-y-6" onSubmit={handleRegister}>
+                            <div className="space-y-4">
+                                <div>
+                                    <label htmlFor="fullName" className="block text-sm font-medium text-neutral-700 mb-1">Restaurant / Business Name</label>
+                                    <Input
+                                        id="fullName"
+                                        name="fullName"
+                                        type="text"
+                                        required
+                                        placeholder="Your Restaurant Name"
+                                        value={fullName}
+                                        onChange={(e) => setFullName(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="regEmail" className="block text-sm font-medium text-neutral-700 mb-1">Email Address</label>
+                                    <Input
+                                        id="regEmail"
+                                        name="regEmail"
+                                        type="email"
+                                        placeholder="your@email.com (optional)"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="regPhone" className="block text-sm font-medium text-neutral-700 mb-1">Phone Number *</label>
+                                    <Input
+                                        id="regPhone"
+                                        name="regPhone"
+                                        type="tel"
+                                        required
+                                        placeholder="+263 77 000 0000"
+                                        value={phone}
+                                        onChange={(e) => setPhone(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="regPassword" className="block text-sm font-medium text-neutral-700 mb-1">Password *</label>
+                                    <Input
+                                        id="regPassword"
+                                        name="regPassword"
+                                        type="password"
+                                        required
+                                        placeholder="Create a password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="regConfirmPassword" className="block text-sm font-medium text-neutral-700 mb-1">Confirm Password *</label>
+                                    <Input
+                                        id="regConfirmPassword"
+                                        name="regConfirmPassword"
+                                        type="password"
+                                        required
+                                        placeholder="Confirm your password"
+                                        value={confirmPassword}
+                                        onChange={(e) => setConfirmPassword(e.target.value)}
+                                    />
+                                </div>
+                            </div>
 
-                    <div>
-                        <label htmlFor="regEmail" className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-                        <input
-                            id="regEmail"
-                            type="email"
-                            className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
-                            placeholder="your@email.com (optional)"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                        />
-                    </div>
-
-                    <div>
-                        <label htmlFor="regPhone" className="block text-sm font-medium text-gray-700 mb-1">Phone Number *</label>
-                        <input
-                            id="regPhone"
-                            type="tel"
-                            required
-                            className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
-                            placeholder="+263 77 000 0000"
-                            value={phone}
-                            onChange={(e) => setPhone(e.target.value)}
-                        />
-                    </div>
-
-                    <div>
-                        <label htmlFor="regPassword" className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
-                        <input
-                            id="regPassword"
-                            type="password"
-                            required
-                            className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
-                            placeholder="Create a password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                        />
-                    </div>
-
-                    <div>
-                        <label htmlFor="regConfirmPassword" className="block text-sm font-medium text-gray-700 mb-1">Confirm Password *</label>
-                        <input
-                            id="regConfirmPassword"
-                            type="password"
-                            required
-                            className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
-                            placeholder="Confirm your password"
-                            value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
-                        />
-                    </div>
-
-                    <div>
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
-                        >
-                            {loading ? 'Creating Account...' : 'Create Account'}
-                        </button>
-                    </div>
-
-                    <div className="text-center">
-                        <Link href="/login" className="text-sm text-green-600 hover:text-green-500 font-medium">
-                            Already have an account? Sign in
+                            <Button
+                                type="submit"
+                                className="w-full"
+                                isLoading={loading}
+                            >
+                                Create Account
+                            </Button>
+                        </form>
+                    </CardContent>
+                    <CardFooter className="flex flex-col space-y-4 border-t border-neutral-100 bg-neutral-50/50 p-6 rounded-b-2xl">
+                        <Link href="/forgot-password" className="text-sm text-neutral-500 hover:text-neutral-900 transition-colors">
+                            Forgot your password?
                         </Link>
-                    </div>
-                </form>
+                        <div className="text-sm text-neutral-600">
+                            Already have an account?{' '}
+                            <Link href="/login" className="font-semibold text-primary hover:text-primary-hover transition-colors">
+                                Sign in
+                            </Link>
+                        </div>
+                    </CardFooter>
+                </Card>
             </div>
         </div>
     );

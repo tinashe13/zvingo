@@ -50,38 +50,21 @@ class AccountScreen extends ConsumerWidget {
               const Divider(),
 
               _settingsTile(context, Icons.person_outline, 'Manage Account',
-                  onTap: () {
-                // Could navigate to profile edit screen
-              }),
+                  onTap: () => context.push('/account/edit')),
               _settingsTile(context, Icons.payment, 'Payment Methods',
-                  onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Payment methods coming soon')),
-                );
-              }),
+                  onTap: () => context.push('/payment-methods')),
               _settingsTile(
                   context, Icons.location_on_outlined, 'Saved Addresses',
                   onTap: () {
                 context.push('/addresses');
               }),
               _settingsTile(context, Icons.favorite_border, 'Saved Stores',
-                  onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Saved stores coming soon')),
-                );
-              }),
+                  onTap: () => context.push('/favourites')),
               _settingsTile(context, Icons.local_offer_outlined, 'Promotions',
-                  onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Promotions coming soon')),
-                );
-              }),
+                  onTap: () => context.push('/offers')),
               const Divider(),
-              _settingsTile(context, Icons.help_outline, 'Help', onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Help center coming soon')),
-                );
-              }),
+              _settingsTile(context, Icons.help_outline, 'Help',
+                  onTap: () => context.push('/help')),
               _settingsTile(context, Icons.info_outline, 'About', onTap: () {
                 showAboutDialog(
                   context: context,

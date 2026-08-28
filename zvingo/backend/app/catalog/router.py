@@ -153,6 +153,9 @@ class RestaurantUpdate(BaseModel):
     review_count: Optional[int] = None
     neighbors_liked: Optional[int] = None
     customer_photos_count: Optional[int] = None
+    is_active: Optional[bool] = None
+    operating_hours: Optional[str] = None
+    address: Optional[str] = None
 
 @router.put("/restaurants/{restaurant_id}", response_model=Restaurant)
 async def update_restaurant(restaurant_id: str, restaurant_in: RestaurantUpdate, current_user: User = Depends(get_current_user)):
@@ -187,6 +190,12 @@ async def update_restaurant(restaurant_id: str, restaurant_in: RestaurantUpdate,
         restaurant.neighbors_liked = restaurant_in.neighbors_liked
     if restaurant_in.customer_photos_count is not None:
         restaurant.customer_photos_count = restaurant_in.customer_photos_count
+    if restaurant_in.is_active is not None:
+        restaurant.is_active = restaurant_in.is_active
+    if restaurant_in.operating_hours is not None:
+        restaurant.operating_hours = restaurant_in.operating_hours
+    if restaurant_in.address is not None:
+        restaurant.address = restaurant_in.address
 
     if (restaurant_in.lat is None) ^ (restaurant_in.lng is None):
         raise HTTPException(status_code=400, detail="Both lat and lng are required to update location")

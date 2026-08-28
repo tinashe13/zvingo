@@ -13,7 +13,12 @@ class AccountScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authProvider);
     final initials = auth.driverName.isNotEmpty
-        ? auth.driverName.split(' ').map((w) => w.isNotEmpty ? w[0] : '').take(2).join().toUpperCase()
+        ? auth.driverName
+            .split(' ')
+            .map((w) => w.isNotEmpty ? w[0] : '')
+            .take(2)
+            .join()
+            .toUpperCase()
         : 'D';
 
     return Scaffold(
@@ -56,9 +61,7 @@ class AccountScreen extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        auth.driverName.isNotEmpty
-                            ? auth.driverName
-                            : 'Driver',
+                        auth.driverName.isNotEmpty ? auth.driverName : 'Driver',
                         style: Theme.of(context)
                             .textTheme
                             .titleMedium
@@ -67,10 +70,9 @@ class AccountScreen extends ConsumerWidget {
                       const SizedBox(height: 2),
                       Text(
                         auth.email,
-                        style:
-                            Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: AppColors.textSecondary,
-                                ),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
                       ),
                     ],
                   ),
@@ -86,17 +88,17 @@ class AccountScreen extends ConsumerWidget {
             _MenuItem(
               icon: Icons.directions_car_outlined,
               label: 'Vehicle Details',
-              onTap: () {},
+              onTap: () => context.push('/vehicle'),
             ),
             _MenuItem(
               icon: Icons.notifications_outlined,
               label: 'Notifications',
-              onTap: () {},
+              onTap: () => context.push('/account/notifications'),
             ),
             _MenuItem(
               icon: Icons.shield_outlined,
               label: 'Safety',
-              onTap: () {},
+              onTap: () => context.push('/account/safety'),
             ),
           ]),
           const SizedBox(height: 16),
@@ -105,12 +107,12 @@ class AccountScreen extends ConsumerWidget {
             _MenuItem(
               icon: Icons.info_outline,
               label: 'About',
-              onTap: () {},
+              onTap: () => context.push('/account/about'),
             ),
             _MenuItem(
               icon: Icons.help_outline,
               label: 'Help',
-              onTap: () {},
+              onTap: () => context.push('/account/help'),
             ),
           ]),
           const SizedBox(height: 16),
@@ -119,12 +121,12 @@ class AccountScreen extends ConsumerWidget {
             _MenuItem(
               icon: Icons.description_outlined,
               label: 'Terms of Service',
-              onTap: () {},
+              onTap: () => context.push('/account/terms'),
             ),
             _MenuItem(
               icon: Icons.privacy_tip_outlined,
               label: 'Privacy Policy',
-              onTap: () {},
+              onTap: () => context.push('/account/privacy'),
             ),
           ]),
           const SizedBox(height: 24),

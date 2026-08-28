@@ -105,7 +105,10 @@ async def test_order_commands(
     transition = AsyncMock(return_value=SimpleNamespace(id="1"))
     monkeypatch.setattr(service.OrderService, "transition_state", transition)
     assert await SMSParser.handle_command("+263", command) == success_text
-    transition.assert_awaited_with("1", state, "driver-1")
+    if state == OrderState.ACCEPTED:
+        transition.assert_awaited_with("1", state, "driver-1", driver_id="driver-1")
+    else:
+        transition.assert_awaited_with("1", state, "driver-1")
     transition.return_value = None
     assert await SMSParser.handle_command("+263", command) == missing_text
     transition.side_effect = RuntimeError("boom")

@@ -12,6 +12,9 @@ import 'package:consumer_app/features/filter/filter_screen.dart';
 import 'package:consumer_app/features/favourites/favourites_screen.dart';
 import 'package:consumer_app/features/order/orders_screen.dart';
 import 'package:consumer_app/features/account/account_screen.dart';
+import 'package:consumer_app/features/account/help_screen.dart';
+import 'package:consumer_app/features/account/manage_account_screen.dart';
+import 'package:consumer_app/features/account/payment_methods_screen.dart';
 import 'package:consumer_app/features/cart/cart_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:consumer_app/features/restaurant/menu_screen.dart';
@@ -174,6 +177,21 @@ GoRouter router(Ref ref) {
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) =>
             AddAddressScreen(existing: state.extra as SavedAddress?),
+      ),
+      GoRoute(
+        path: '/account/edit',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const ManageAccountScreen(),
+      ),
+      GoRoute(
+        path: '/payment-methods',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const PaymentMethodsScreen(),
+      ),
+      GoRoute(
+        path: '/help',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const HelpScreen(),
       ),
       GoRoute(
         path: '/payment/:orderId',

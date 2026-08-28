@@ -202,8 +202,14 @@ async def record_earning(order_id: str, driver_id: str, token: str = Depends(oau
         pass
 
     # Coordinates
-    pickup_lng, pickup_lat = order.pickup_location.get("coordinates", [0, 0])
-    dropoff_lng, dropoff_lat = order.dropoff_location.get("coordinates", [0, 0])
+    pickup_lng, pickup_lat = (
+        order.pickup_location.lng if order.pickup_location else 0,
+        order.pickup_location.lat if order.pickup_location else 0,
+    )
+    dropoff_lng, dropoff_lat = (
+        order.dropoff_location.lng if order.dropoff_location else 0,
+        order.dropoff_location.lat if order.dropoff_location else 0,
+    )
 
     # Calculate delivery fee if not set on the order
     if order.delivery_fee and order.delivery_fee > 0:

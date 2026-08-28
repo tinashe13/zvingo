@@ -2,11 +2,9 @@ from typing import Optional, List
 from datetime import datetime
 from app.time_utils import utc_now
 from beanie import Document, Indexed
-from pydantic import EmailStr, Field, BaseModel
+from pydantic import EmailStr, Field
 
-class Location(BaseModel):
-    type: str = "Point"
-    coordinates: List[float]  # [longitude, latitude]
+from app.location.models import Location
 
 class User(Document):
     email: Optional[EmailStr] = Indexed(default=None, unique=True, sparse=True)
@@ -30,6 +28,13 @@ class User(Document):
     is_dashing: bool = False
     current_location: Optional[Location] = None
     dash_radius: int = 10 # miles
+
+    # Driver schedule — list of {"day": int, "slots": [int]} entries.
+    # day: 0=Mon … 6=Sun; slots: 0=Morning, 1=Afternoon, 2=Evening.
+    schedule: List[dict] = []
+
+    # Driver vehicle — {"make", "model", "color", "plate"}
+    vehicle: Optional[dict] = None
 
     class Settings:
         name = "users"

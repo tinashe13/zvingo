@@ -116,8 +116,14 @@ class NotificationService:
             pass
 
         # Locations
-        pickup_lng, pickup_lat = order.pickup_location.get("coordinates", [0, 0])
-        dropoff_lng, dropoff_lat = order.dropoff_location.get("coordinates", [0, 0])
+        pickup_lng, pickup_lat = (
+            order.pickup_location.lng if order.pickup_location else 0,
+            order.pickup_location.lat if order.pickup_location else 0,
+        )
+        dropoff_lng, dropoff_lat = (
+            order.dropoff_location.lng if order.dropoff_location else 0,
+            order.dropoff_location.lat if order.dropoff_location else 0,
+        )
 
         # Delivery distance (pickup → dropoff)
         delivery_dist_km = haversine_km(pickup_lat, pickup_lng, dropoff_lat, dropoff_lng)

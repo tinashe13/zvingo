@@ -4,6 +4,7 @@ from app.time_utils import utc_now
 from beanie import Document, Indexed
 from pydantic import BaseModel, Field
 from app.order.state_machine import OrderState
+from app.location.models import Location
 
 class OrderItem(BaseModel):
     name: str
@@ -26,8 +27,8 @@ class Order(Document):
     items: List[OrderItem]
     total_amount: float
 
-    pickup_location: dict # GeoJSON
-    dropoff_location: dict # GeoJSON
+    pickup_location: Optional[Location] = None  # GeoJSON Point
+    dropoff_location: Optional[Location] = None  # GeoJSON Point
 
     delivery_instructions: Optional[str] = None
     tip_amount: float = 0.0

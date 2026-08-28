@@ -42,6 +42,41 @@ class HomeScreen extends ConsumerWidget {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
+                    if (deliveryLoc != null) ...[
+                      const SizedBox(width: 12),
+                      Flexible(
+                        child: GestureDetector(
+                          onTap: () => AddressSelectionSheet.show(context),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppColors.background,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.location_on_outlined,
+                                    size: 16, color: AppColors.primary),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    deliveryLoc.displayName,
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: AppColors.textPrimary,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                     const Spacer(),
                     // Cart button with badge
                     GestureDetector(
@@ -229,7 +264,8 @@ class HomeScreen extends ConsumerWidget {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: Row(
                   children: [
-                    const Text('Fastest Near You', style: AppTextStyles.titleLarge),
+                    const Text('Fastest Near You',
+                        style: AppTextStyles.titleLarge),
                     const Spacer(),
                     GestureDetector(
                       onTap: () => context.push('/search'),

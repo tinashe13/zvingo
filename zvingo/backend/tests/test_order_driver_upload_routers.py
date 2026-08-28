@@ -170,18 +170,32 @@ async def test_order_cancel_create_and_state_update(monkeypatch):
         {"name": "Meal", "quantity": 1, "price": 5},
         OrderItem(name="Drink", quantity=1, price=2),
     ]))
+    FakeOrder.get.return_value = current
     response = await module.update_order_state(
-        "order-1", OrderUpdateState(state=OrderState.ACCEPTED, driver_id="driver-1"), "token"
+        "order-1", OrderUpdateState(state=OrderState.ACCEPTED), user()
     )
     assert response.state == OrderState.CREATED
-    module.OrderService.transition_state.return_value = None
+    # Ownership check: a consumer may not mutate someone else's order.
     with pytest.raises(HTTPException) as exc:
-        await module.update_order_state("missing", OrderUpdateState(state=OrderState.ACCEPTED), "token")
+        await module.update_order_state("order-1", OrderUpdateState(state=OrderState.ACCEPTED), user("other"))
+    assert exc.value.status_code == 403
+    FakeOrder.get.return_value = None
+    with pytest.raises(HTTPException) as exc:
+        await module.update_order_state("missing", OrderUpdateState(state=OrderState.ACCEPTED), user())
     assert exc.value.status_code == 404
+    FakeOrder.get.return_value = current
     module.OrderService.transition_state.side_effect = InvalidStateTransition("no")
     with pytest.raises(HTTPException) as exc:
-        await module.update_order_state("order-1", OrderUpdateState(state=OrderState.ACCEPTED), "token")
+        await module.update_order_state("order-1", OrderUpdateState(state=OrderState.ACCEPTED), user())
     assert exc.value.status_code == 400
+
+    # The order was found for the access check but the transition returned
+    # None (e.g. it was deleted concurrently) — surface a 404.
+    module.OrderService.transition_state.side_effect = None
+    module.OrderService.transition_state.return_value = None
+    with pytest.raises(HTTPException) as exc:
+        await module.update_order_state("order-1", OrderUpdateState(state=OrderState.ACCEPTED), user())
+    assert exc.value.status_code == 404
 
 
 @pytest.mark.asyncio
@@ -265,6 +279,57 @@ async def test_driver_dash_session(monkeypatch):
     hset.assert_awaited_once_with("driver:driver-1", "status", "OFFLINE")
     await module.update_dash_session(module.DashSessionRequest(active=True), current)
     assert current.save.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_driver_schedule_get_and_save():
+    import app.driver.router as module
+
+    current = user("driver-1", schedule=[], vehicle=None)
+    assert (await module.get_schedule(current)) == {"days": []}
+
+    req = module.ScheduleUpdate(days=[module.ScheduleDay(day=0, slots=[0, 1])])
+    result = await module.save_schedule(req, current)
+    assert result["days"] == [{"day": 0, "slots": [0, 1]}]
+    assert current.schedule == [{"day": 0, "slots": [0, 1]}]
+    assert current.save.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_driver_vehicle_get_and_save():
+    import app.driver.router as module
+
+    current = user("driver-1", schedule=[], vehicle=None)
+    assert (await module.get_vehicle(current)) == {"vehicle": None}
+
+    result = await module.save_vehicle(
+        module.VehicleUpdate(make="Toyota", color="Red"), current
+    )
+    assert result["vehicle"] == {"make": "Toyota", "color": "Red"}
+    assert current.vehicle == {"make": "Toyota", "color": "Red"}
+
+    # Merge into the existing vehicle rather than replacing it.
+    result = await module.save_vehicle(module.VehicleUpdate(model="Corolla"), current)
+    assert result["vehicle"] == {"make": "Toyota", "color": "Red", "model": "Corolla"}
+    assert current.save.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_order_location_helper_handles_location_and_legacy_dict():
+    import app.order.router as module
+    from app.location.models import Location
+
+    loc = Location.from_lat_lng(-17.0, 31.0)
+    assert module._lat(loc) == -17.0
+    assert module._lng(loc) == 31.0
+    assert module._lat(None) is None
+    assert module._lng(None) is None
+    assert module._lat({"coordinates": [31.0, -17.0]}) == -17.0
+    assert module._lng({"coordinates": [31.0, -17.0]}) == 31.0
+    assert module._lat({"coordinates": []}) is None
+    assert module._lng({}) is None
+    assert module._lat("not-a-location") is None
+    assert module._lng("not-a-location") is None
 
 
 @pytest.mark.asyncio

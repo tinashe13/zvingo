@@ -154,9 +154,13 @@ async def test_restaurant_and_menu_mutations(monkeypatch):
         delivery_fee_usd=1.5, lat=-18, lng=32,
         free_delivery_threshold=20, is_zvingo_plus=True, review_count=10,
         neighbors_liked=3, customer_photos_count=4,
+        is_active=False, operating_hours="08:00-22:00", address="1 Main St",
     )
     result = await module.update_restaurant("restaurant-1", full_update, user())
     assert result.name == "Updated"
+    assert result.is_active is False
+    assert result.operating_hours == "08:00-22:00"
+    assert result.address == "1 Main St"
     assert result.location.coordinates == [32, -18]
     result.save.assert_awaited()
 
