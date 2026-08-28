@@ -9,6 +9,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Build-time memory guards. Poetry defaults to min(cpu_count + 4, 10) parallel
+# installer workers, each unpacking a wheel in memory at once; on a small
+# droplet that is enough to get the build OOM-killed ("signal: killed") during
+# `poetry install`. One worker is slower but has a much lower peak.
+ENV POETRY_INSTALLER_MAX_WORKERS=1 \r
+    POETRY_NO_INTERACTION=1 \r
+    PIP_NO_CACHE_DIR=1 \r
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \r
+    PYTHONDONTWRITEBYTECODE=1
+
 # Install poetry
 RUN pip install --no-cache-dir poetry
 

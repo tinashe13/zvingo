@@ -9,8 +9,11 @@ unchanged and still mounts source with `--reload`.
 ## 1. Provision a server
 
 Any Linux host (Ubuntu 24.04 LTS recommended) with Docker Engine and the
-Docker Compose plugin. **2 GB RAM minimum** — the Next.js dashboard build runs
-out of memory on 1 GB.
+Docker Compose plugin.
+
+**2 GB RAM minimum, 4 GB recommended.** A 512 MB droplet cannot build *or* run
+this stack — MongoDB alone will not fit. See "Build runs out of memory" below
+for the sizing table and what to do if you are already on a small box.
 
 Open inbound ports in your firewall/security group:
 
@@ -262,11 +265,56 @@ need no change.
 ## Build runs out of memory
 
 A build that dies with `failed to execute bake: signal: killed` was terminated
-by the kernel's OOM reaper, not by a code error. The Next.js dashboard build
-needs roughly 1.5 GB on its own, and compose builds services in parallel, so
-building the backend and dashboard together on a small droplet exceeds RAM.
+by the kernel's OOM reaper, not by a code error.
 
-Any one of these fixes it:
+### Check the droplet size first
+
+| Droplet | Verdict |
+|---------|---------|
+| 512 MB (`s-1vcpu-512mb`) | **Too small.** Will not build, and will not run. |
+| 1 GB | Builds only with swap; MongoDB will thrash under load. |
+| 2 GB | Minimum for the backend stack. |
+| 4 GB | Comfortable, and builds the dashboard without swap. |
+
+512 MB cannot run this stack even if you get the image built elsewhere.
+MongoDB 7's WiredTiger cache alone has a 256 MB floor, and `mongod` plus
+Redis, uvicorn, and nginx will not fit in what remains. Resize the droplet to
+at least 2 GB (Power off → Resize → pick a plan; a resize that only changes
+RAM/CPU keeps the disk and needs no rebuild).
+
+### Then reduce peak memory
+
+Swap is worth adding on any droplet under 4 GB, and is *required* below 2 GB:
+
+```bash
+sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+free -h
+```
+
+The backend Dockerfile pins `POETRY_INSTALLER_MAX_WORKERS=1`, which is the
+main lever for `poetry install` — the default of `min(cpu + 4, 10)` unpacks
+that many wheels concurrently, and `cryptography`, `grpcio`, and `protobuf`
+are each large.
+
+If the droplet is genuinely too small to build on, build the image somewhere
+with more RAM and pull it instead of building on the server:
+
+```bash
+# on a build machine or in CI
+docker build -t ghcr.io/<you>/zvingo-backend:latest ./backend
+docker push ghcr.io/<you>/zvingo-backend:latest
+
+# on the droplet — swap `build:` for `image:` in docker-compose.backend.yml
+docker compose -f docker-compose.backend.yml pull && docker compose -f docker-compose.backend.yml up -d
+```
+
+That removes the build entirely, but not the runtime requirement above.
+
+### Other levers
+
+Any one of these also helps:
 
 ```bash
 # 1. Add swap (do this regardless — it is the cheapest insurance)
@@ -284,8 +332,13 @@ docker compose -f docker-compose.prod.yml up -d
 NODE_BUILD_MEMORY_MB=1024 docker compose -f docker-compose.prod.yml build merchant-dashboard
 ```
 
-Splitting the hosts (above) sidesteps it entirely: the backend host never runs
-a Node build. Resizing the droplet to 4 GB also works.
+Splitting the hosts (above) removes the Node build from the backend host
+entirely, which is the single biggest saving if you are deploying both.
+
+On a memory-constrained box you can also cap MongoDB's cache by adding
+`command: mongod --wiredTigerCacheSizeGB 0.25` to the `mongo` service. Do not
+carry that setting onto a larger host — it would throttle a database that has
+room to cache more.
 
 If a killed build left partial layers behind, `docker builder prune -f`
 reclaims the space before you retry.
