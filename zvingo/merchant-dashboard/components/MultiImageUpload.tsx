@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from 'react';
-import { UPLOAD_API_URL } from '@/lib/api';
+import { ImagePlus, Loader2, X } from 'lucide-react';
+import { getToken, UPLOAD_API_URL } from '@/lib/api';
 
 interface MultiImageUploadProps {
     values: string[];
@@ -20,7 +21,7 @@ export default function MultiImageUpload({ values = [], onChange }: MultiImageUp
             const formData = new FormData();
             formData.append('file', file);
 
-            const token = localStorage.getItem('token');
+            const token = getToken();
             const res = await fetch(`${UPLOAD_API_URL}/upload/`, {
                 method: 'POST',
                 headers: {
@@ -55,26 +56,25 @@ export default function MultiImageUpload({ values = [], onChange }: MultiImageUp
     };
 
     return (
-        <div className="space-y-2">
-            <div className="flex flex-wrap gap-4">
+        <div className="rounded-2xl bg-neutral-50 p-4">
+            <div className="flex flex-wrap gap-3">
                 {values.map((url, index) => (
-                    <div key={index} className="relative h-24 w-24 rounded-lg overflow-hidden border border-gray-200 group">
+                    <div key={index} className="group relative h-24 w-24 overflow-hidden rounded-xl bg-neutral-200">
                         <img src={url} alt={`Preview ${index}`} className="h-full w-full object-cover" />
                         <button
                             type="button"
                             onClick={() => removeImage(index)}
-                            className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-neutral-900/80 text-white opacity-0 backdrop-blur transition-opacity group-hover:opacity-100 focus:opacity-100"
+                            aria-label={`Remove image ${index + 1}`}
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
+                            <X className="h-3.5 w-3.5" />
                         </button>
                     </div>
                 ))}
 
-                <label className="h-24 w-24 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                    <span className="text-2xl text-gray-400">+</span>
-                    <span className="text-xs text-gray-500 mt-1">{uploading ? '...' : 'Add'}</span>
+                <label className="flex h-24 w-24 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-neutral-300 text-neutral-500 transition-colors hover:border-neutral-500 hover:bg-white">
+                    {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
+                    <span className="mt-2 text-xs font-bold">{uploading ? 'Uploading' : 'Add image'}</span>
                     <input
                         type="file"
                         accept="image/*"

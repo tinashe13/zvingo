@@ -1,5 +1,6 @@
 import 'package:consumer_app/core/app_colors.dart';
 import 'package:consumer_app/core/app_text_styles.dart';
+import 'package:consumer_app/common/widgets/app_ui.dart';
 import 'package:consumer_app/core/delivery_location_provider.dart';
 import 'package:consumer_app/features/address/address_provider.dart';
 import 'package:flutter/material.dart';
@@ -15,15 +16,12 @@ class SavedAddressesScreen extends ConsumerWidget {
     final deliveryLoc = ref.watch(deliveryLocationNotifierProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.white,
       appBar: AppBar(
-        backgroundColor: AppColors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () => context.pop(),
         ),
-        title: const Text('Saved Addresses', style: AppTextStyles.titleLarge),
-        centerTitle: true,
+        title: const Text('Saved addresses'),
       ),
       body: addresses.isEmpty
           ? _emptyState(context)
@@ -38,12 +36,12 @@ class SavedAddressesScreen extends ConsumerWidget {
 
                 return Container(
                   decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppColors.primarySurface
-                        : AppColors.background,
-                    borderRadius: BorderRadius.circular(14),
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: isSelected ? AppColors.primary : AppColors.border,
+                      color: isSelected
+                          ? AppColors.textPrimary
+                          : AppColors.divider,
                       width: isSelected ? 1.5 : 1,
                     ),
                   ),
@@ -54,13 +52,15 @@ class SavedAddressesScreen extends ConsumerWidget {
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: AppColors.white,
-                        borderRadius: BorderRadius.circular(12),
+                        color: isSelected
+                            ? AppColors.accent
+                            : AppColors.surfaceMuted,
+                        borderRadius: BorderRadius.circular(14),
                       ),
                       child: Icon(
                         _iconForLabel(addr.label),
                         color: isSelected
-                            ? AppColors.primary
+                            ? AppColors.textPrimary
                             : AppColors.textSecondary,
                         size: 22,
                       ),
@@ -74,13 +74,13 @@ class SavedAddressesScreen extends ConsumerWidget {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: AppColors.primary.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(4),
+                              color: AppColors.accentSurface,
+                              borderRadius: BorderRadius.circular(999),
                             ),
                             child: Text(
                               'Default',
                               style: AppTextStyles.caption.copyWith(
-                                color: AppColors.primary,
+                                color: AppColors.textPrimary,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -173,40 +173,23 @@ class SavedAddressesScreen extends ConsumerWidget {
             ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push('/addresses/add'),
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.selectedDark,
         foregroundColor: AppColors.white,
         icon: const Icon(Icons.add),
-        label: const Text('Add Address'),
+        label: const Text('Add address'),
       ),
     );
   }
 
   Widget _emptyState(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.location_off_outlined,
-              size: 64, color: AppColors.primary.withOpacity(0.3)),
-          const SizedBox(height: 16),
-          const Text('No saved addresses', style: AppTextStyles.titleMedium),
-          const SizedBox(height: 6),
-          const Text('Add a delivery address to get started',
-              style: AppTextStyles.bodySmall),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: () => context.push('/addresses/add'),
-            icon: const Icon(Icons.add),
-            label: const Text('Add Address'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: AppColors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
-        ],
+    return AppEmptyState(
+      icon: Icons.location_on_outlined,
+      title: 'No saved addresses',
+      message: 'Save home or work to make checkout almost instant.',
+      action: ElevatedButton.icon(
+        onPressed: () => context.push('/addresses/add'),
+        icon: const Icon(Icons.add),
+        label: const Text('Add address'),
       ),
     );
   }

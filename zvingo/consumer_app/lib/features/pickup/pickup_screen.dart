@@ -1,5 +1,6 @@
 import 'package:consumer_app/core/app_colors.dart';
 import 'package:consumer_app/core/app_text_styles.dart';
+import 'package:consumer_app/common/widgets/app_ui.dart';
 import 'package:consumer_app/features/home/widgets/restaurant_card.dart';
 import 'package:consumer_app/features/restaurant/restaurant_provider.dart';
 import 'package:flutter/material.dart';
@@ -51,14 +52,14 @@ class _PickupScreenState extends ConsumerState<PickupScreen> {
     final restaurantsAsync = ref.watch(restaurantListProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.white,
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
             const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
-                child: Text('Pickup', style: AppTextStyles.headlineMedium),
+              child: AppPageTitle(
+                eyebrow: 'Skip delivery',
+                title: 'Pickup',
+                subtitle: 'Order ahead and collect when it suits you.',
               ),
             ),
 
@@ -116,10 +117,10 @@ class _PickupScreenState extends ConsumerState<PickupScreen> {
                         onSelected: (_) =>
                             setState(() => _selectedCategory = category),
                         backgroundColor: AppColors.background,
-                        selectedColor: AppColors.primarySurface,
+                        selectedColor: AppColors.selectedDark,
                         labelStyle: TextStyle(
                           color: selected
-                              ? AppColors.primary
+                              ? AppColors.white
                               : AppColors.textPrimary,
                           fontWeight:
                               selected ? FontWeight.w600 : FontWeight.w400,
@@ -207,6 +208,7 @@ class _PickupScreenState extends ConsumerState<PickupScreen> {
                 ),
               ),
             ),
+            const SliverToBoxAdapter(child: SizedBox(height: 118)),
           ],
         ),
       ),

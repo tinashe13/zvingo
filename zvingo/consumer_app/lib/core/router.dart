@@ -5,7 +5,7 @@ import 'package:consumer_app/features/checkout/checkout_screen.dart';
 import 'package:consumer_app/features/auth/login_screen.dart';
 import 'package:consumer_app/features/auth/register_screen.dart';
 import 'package:consumer_app/features/home/home_screen.dart';
-import 'package:consumer_app/features/pickup/pickup_screen.dart';
+import 'package:consumer_app/features/restaurant/restaurant_map_screen.dart';
 import 'package:consumer_app/features/search/search_screen.dart';
 import 'package:consumer_app/features/offers/offers_screen.dart';
 import 'package:consumer_app/features/filter/filter_screen.dart';
@@ -82,21 +82,21 @@ GoRouter router(Ref ref) {
               ),
             ],
           ),
-          // Tab 1: Pickup
+          // Tab 1: Nearby restaurant map
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/pickup',
-                builder: (context, state) => const PickupScreen(),
+                path: '/map',
+                builder: (context, state) => const RestaurantMapScreen(),
               ),
             ],
           ),
-          // Tab 2: Offers (replaced Search tab per article)
+          // Tab 2: Search
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/offers',
-                builder: (context, state) => const OffersScreen(),
+                path: '/search',
+                builder: (context, state) => const SearchScreen(embedded: true),
               ),
             ],
           ),
@@ -123,9 +123,13 @@ GoRouter router(Ref ref) {
 
       // ── Detail routes (full-screen, outside shell) ────
       GoRoute(
-        path: '/search',
+        path: '/pickup',
+        redirect: (context, state) => '/map',
+      ),
+      GoRoute(
+        path: '/offers',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const SearchScreen(),
+        builder: (context, state) => const OffersScreen(),
       ),
       GoRoute(
         path: '/filters',

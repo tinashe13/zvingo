@@ -23,10 +23,10 @@ Future<List<PromoData>> activePromos(Ref ref) async {
 
 /// Gradient palettes per promo type
 const _gradients = {
-  'percentage': [Color(0xFF43A047), Color(0xFF2E7D32)],
-  'flat': [Color(0xFF1565C0), Color(0xFF0D47A1)],
-  'free_delivery': [Color(0xFFE65100), Color(0xFFBF360C)],
-  'free_item': [Color(0xFF00897B), Color(0xFF00695C)],
+  'percentage': [Color(0xFFD7F654), Color(0xFFC8EA3B)],
+  'flat': [Color(0xFF171917), Color(0xFF30332F)],
+  'free_delivery': [Color(0xFFFFC86B), Color(0xFFF2A83B)],
+  'free_item': [Color(0xFF0A8F5B), Color(0xFF076C45)],
 };
 
 /// Data model for a promotion received from the backend
@@ -80,6 +80,10 @@ class PromoData {
         return Icons.local_offer;
     }
   }
+
+  Color get foreground => promoType == 'flat' || promoType == 'free_item'
+      ? Colors.white
+      : AppColors.textPrimary;
 }
 
 /// Horizontal scrolling promo/deal banner cards — fetches from backend.
@@ -129,7 +133,7 @@ class PromoBanner extends ConsumerWidget {
 
   Widget _buildPromoList(List<PromoData> promos) {
     return SizedBox(
-      height: 120,
+      height: 112,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -138,14 +142,14 @@ class PromoBanner extends ConsumerWidget {
         itemBuilder: (context, index) {
           final promo = promos[index];
           return Container(
-            width: 240,
+            width: 278,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: promo.gradient,
               ),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(15),
             ),
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -158,7 +162,7 @@ class PromoBanner extends ConsumerWidget {
                       Text(
                         promo.title,
                         style: AppTextStyles.titleMedium.copyWith(
-                          color: Colors.white,
+                          color: promo.foreground,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -166,7 +170,7 @@ class PromoBanner extends ConsumerWidget {
                       Text(
                         promo.subtitle,
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: Colors.white.withOpacity(0.85),
+                          color: promo.foreground.withOpacity(0.72),
                         ),
                         maxLines: 2,
                       ),
@@ -176,13 +180,13 @@ class PromoBanner extends ConsumerWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.25),
+                            color: promo.foreground.withOpacity(0.12),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
                             promo.code!,
                             style: AppTextStyles.bodySmall.copyWith(
-                              color: Colors.white,
+                              color: promo.foreground,
                               fontWeight: FontWeight.w700,
                               fontSize: 11,
                               letterSpacing: 1.2,
@@ -198,10 +202,10 @@ class PromoBanner extends ConsumerWidget {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: promo.foreground.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Icon(promo.icon, color: Colors.white, size: 26),
+                  child: Icon(promo.icon, color: promo.foreground, size: 26),
                 ),
               ],
             ),

@@ -42,25 +42,27 @@ export default function LoginPage() {
             const data = await res.json();
             setToken(data.access_token);
             router.push('/dashboard');
-        } catch (err: any) {
-            setError(err.message || 'Login failed');
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Login failed');
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-neutral-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen flex items-center justify-center bg-neutral-900 py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+            <div className="absolute -left-24 -top-24 h-80 w-80 rounded-full bg-[#d7f654]/10 blur-3xl" />
+            <div className="absolute -bottom-32 -right-20 h-96 w-96 rounded-full bg-primary/20 blur-3xl" />
             <div className="max-w-md w-full space-y-8">
                 <div className="text-center">
-                    <h1 className="text-3xl font-bold text-primary mb-2">Zvingo Partner</h1>
+                    <h1 className="text-3xl font-black tracking-[-0.04em] text-white mb-2">zvingo<span className="text-[#d7f654]">partner</span></h1>
                 </div>
 
-                <Card className="shadow-lg border-neutral-100">
+                <Card className="shadow-2xl border-0 rounded-3xl">
                     <CardHeader className="space-y-1 text-center">
-                        <CardTitle className="text-2xl">Merchant Login</CardTitle>
+                        <CardTitle className="text-3xl font-black tracking-tight">Welcome back</CardTitle>
                         <CardDescription>
-                            Sign in to manage your restaurant
+                            Sign in to run tonight&apos;s service
                         </CardDescription>
                     </CardHeader>
                     <CardContent>

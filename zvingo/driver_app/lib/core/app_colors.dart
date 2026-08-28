@@ -5,22 +5,22 @@ class AppColors {
   AppColors._();
 
   // ── Primary Brand Colors ──────────────────────────────
-  static const Color primary = Color(0xFF10B981);
-  static const Color primaryHover = Color(0xFF059669);
-  static const Color primaryLight = Color(0xFFD1FAE5);
-  static const Color primarySurface = Color(0xFFECFDF5);
+  static const Color primary = Color(0xFF0A8F5B);
+  static const Color primaryHover = Color(0xFF076C45);
+  static const Color primaryLight = Color(0xFFD9F6E9);
+  static const Color primarySurface = Color(0xFFEEFAF4);
 
   // ── Neutrals ──────────────────────────────────────────
-  static const Color neutral50 = Color(0xFFF8FAFC);
-  static const Color neutral100 = Color(0xFFF1F5F9);
-  static const Color neutral200 = Color(0xFFE2E8F0);
-  static const Color neutral300 = Color(0xFFCBD5E1);
-  static const Color neutral400 = Color(0xFF94A3B8);
-  static const Color neutral500 = Color(0xFF64748B);
-  static const Color neutral600 = Color(0xFF475569);
-  static const Color neutral700 = Color(0xFF334155);
-  static const Color neutral800 = Color(0xFF1E293B);
-  static const Color neutral900 = Color(0xFF0F172A);
+  static const Color neutral50 = Color(0xFFF7F7F5);
+  static const Color neutral100 = Color(0xFFEFEFEC);
+  static const Color neutral200 = Color(0xFFE2E2DE);
+  static const Color neutral300 = Color(0xFFCDCDC7);
+  static const Color neutral400 = Color(0xFF999B96);
+  static const Color neutral500 = Color(0xFF737570);
+  static const Color neutral600 = Color(0xFF555752);
+  static const Color neutral700 = Color(0xFF383A37);
+  static const Color neutral800 = Color(0xFF222421);
+  static const Color neutral900 = Color(0xFF101210);
 
   // ── Semantic Colors ───────────────────────────────────
   static const Color success = Color(0xFF22C55E);
@@ -44,7 +44,7 @@ class AppColors {
   static const Color textOnPrimary = Colors.white;
 
   // ── Navigation ────────────────────────────────────────
-  static const Color navSelected = primary;
+  static const Color navSelected = neutral900;
   static const Color navUnselected = neutral400;
 
   // ── Dark theme ────────────────────────────────────────

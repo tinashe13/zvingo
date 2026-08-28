@@ -694,7 +694,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Horizontally scrollable payment options (DoorDash style)
+          // Horizontally scrollable payment options.
           SizedBox(
             height: 80,
             child: ListView(

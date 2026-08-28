@@ -1,175 +1,49 @@
 "use client";
 
-import { useState } from 'react';
-import Link from 'next/link';
+import { useState } from "react";
+import Link from "next/link";
+import { ArrowLeft, Check, KeyRound, MessageSquareText, Zap } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 
 export default function ForgotPasswordPage() {
-    const [phone, setPhone] = useState('');
-    const [code, setCode] = useState('');
-    const [newPassword, setNewPassword] = useState('');
-    const [step, setStep] = useState<'request' | 'confirm' | 'done'>('request');
+    const [phone, setPhone] = useState("");
+    const [code, setCode] = useState("");
+    const [newPassword, setNewPassword] = useState("");
+    const [step, setStep] = useState<"request" | "confirm" | "done">("request");
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [resetToken, setResetToken] = useState('');
+    const [error, setError] = useState("");
+    const [resetToken, setResetToken] = useState("");
 
-    const handleRequest = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-        setError('');
+    async function handleRequest(event: React.FormEvent) {
+        event.preventDefault(); setLoading(true); setError("");
+        try { const response = await fetch("/api/auth/reset-password/request", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone }) }); if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data.detail || "Failed to send reset code"); } const data = await response.json(); if (data.token) setResetToken(data.token); setStep("confirm"); }
+        catch (err) { setError(err instanceof Error ? err.message : "Something went wrong"); }
+        finally { setLoading(false); }
+    }
 
-        try {
-            const res = await fetch('/api/auth/reset-password/request', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone }),
-            });
-
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                throw new Error(data.detail || 'Failed to send reset code');
-            }
-
-            const data = await res.json();
-            if (data.token) {
-                setResetToken(data.token);
-            }
-            setStep('confirm');
-        } catch (err: any) {
-            setError(err.message || 'Something went wrong');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleConfirm = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-        setError('');
-
-        try {
-            const res = await fetch('/api/auth/reset-password/confirm', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    token: resetToken || code,
-                    new_password: newPassword,
-                }),
-            });
-
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                throw new Error(data.detail || 'Failed to reset password');
-            }
-
-            setStep('done');
-        } catch (err: any) {
-            setError(err.message || 'Something went wrong');
-        } finally {
-            setLoading(false);
-        }
-    };
+    async function handleConfirm(event: React.FormEvent) {
+        event.preventDefault(); setLoading(true); setError("");
+        try { const response = await fetch("/api/auth/reset-password/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: resetToken || code, new_password: newPassword }) }); if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data.detail || "Failed to reset password"); } setStep("done"); }
+        catch (err) { setError(err instanceof Error ? err.message : "Something went wrong"); }
+        finally { setLoading(false); }
+    }
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-md w-full space-y-8">
-                <div>
-                    <h1 className="text-center text-2xl font-bold text-green-600">Zvingo Partner</h1>
-                    <h2 className="mt-4 text-center text-3xl font-extrabold text-gray-900">
-                        Reset Password
-                    </h2>
+        <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-neutral-900 px-4 py-12">
+            <div className="absolute -left-24 -top-24 h-80 w-80 rounded-full bg-[#d7f654]/10 blur-3xl" /><div className="absolute -bottom-32 -right-20 h-96 w-96 rounded-full bg-primary/20 blur-3xl" />
+            <div className="relative w-full max-w-md">
+                <Link href="/login" className="mb-6 inline-flex items-center gap-2 text-sm font-bold text-neutral-300 hover:text-white"><ArrowLeft className="h-4 w-4" />Back to sign in</Link>
+                <div className="rounded-3xl bg-white p-7 shadow-2xl sm:p-8">
+                    <div className="mb-7 flex items-center justify-between"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#d7f654] text-neutral-900"><Zap className="h-5 w-5" fill="currentColor" /></div><div className="flex gap-2">{["request", "confirm", "done"].map((entry, index) => <span key={entry} className={`h-1.5 rounded-full transition-all ${["request", "confirm", "done"].indexOf(step) >= index ? "w-7 bg-neutral-900" : "w-3 bg-neutral-200"}`} />)}</div></div>
+                    {step === "request" && <AuthStep icon={MessageSquareText} title="Reset your password" description="Enter the phone number on your partner account and we’ll send a secure reset code."><form className="mt-7 space-y-5" onSubmit={handleRequest}><ErrorMessage message={error} /><label className="block"><span className="mb-2 block text-sm font-bold text-neutral-800">Phone number</span><Input type="tel" required value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+263 77 000 0000" autoComplete="tel" /></label><Button type="submit" className="w-full" isLoading={loading}>Send reset code</Button></form></AuthStep>}
+                    {step === "confirm" && <AuthStep icon={KeyRound} title="Choose a new password" description={`Enter the code sent to ${phone || "your phone"}, then create a new password.`}><form className="mt-7 space-y-5" onSubmit={handleConfirm}><ErrorMessage message={error} />{!resetToken && <label className="block"><span className="mb-2 block text-sm font-bold text-neutral-800">Reset code</span><Input required value={code} onChange={(event) => setCode(event.target.value)} placeholder="6-digit code" inputMode="numeric" /></label>}<label className="block"><span className="mb-2 block text-sm font-bold text-neutral-800">New password</span><Input type="password" required minLength={6} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="At least 6 characters" autoComplete="new-password" /></label><Button type="submit" className="w-full" isLoading={loading}>Reset password</Button></form></AuthStep>}
+                    {step === "done" && <AuthStep icon={Check} title="Password updated" description="Your account is secure and your new password is ready to use."><Link href="/login" className="mt-7 flex h-12 items-center justify-center rounded-xl bg-neutral-900 text-sm font-bold text-white hover:bg-neutral-800">Return to sign in</Link></AuthStep>}
                 </div>
-
-                {error && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md text-sm">
-                        {error}
-                    </div>
-                )}
-
-                {step === 'request' && (
-                    <form className="mt-8 space-y-6" onSubmit={handleRequest}>
-                        <p className="text-sm text-gray-600 text-center">
-                            Enter your phone number and we&apos;ll send you a reset code via SMS.
-                        </p>
-                        <div>
-                            <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-                            <input
-                                id="phone"
-                                type="text"
-                                required
-                                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
-                                placeholder="+263 7X XXX XXXX"
-                                value={phone}
-                                onChange={(e) => setPhone(e.target.value)}
-                            />
-                        </div>
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
-                        >
-                            {loading ? 'Sending...' : 'Send Reset Code'}
-                        </button>
-                        <div className="text-center">
-                            <Link href="/login" className="text-sm text-green-600 hover:text-green-500 font-medium">
-                                Back to Login
-                            </Link>
-                        </div>
-                    </form>
-                )}
-
-                {step === 'confirm' && (
-                    <form className="mt-8 space-y-6" onSubmit={handleConfirm}>
-                        <p className="text-sm text-gray-600 text-center">
-                            Check your phone for the reset code and enter your new password.
-                        </p>
-                        <div className="space-y-4">
-                            <div>
-                                <label htmlFor="code" className="block text-sm font-medium text-gray-700 mb-1">Reset Code</label>
-                                <input
-                                    id="code"
-                                    type="text"
-                                    required={!resetToken}
-                                    className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
-                                    placeholder="Enter reset code"
-                                    value={code}
-                                    onChange={(e) => setCode(e.target.value)}
-                                />
-                            </div>
-                            <div>
-                                <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
-                                <input
-                                    id="newPassword"
-                                    type="password"
-                                    required
-                                    minLength={6}
-                                    className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
-                                    placeholder="New password (min 6 characters)"
-                                    value={newPassword}
-                                    onChange={(e) => setNewPassword(e.target.value)}
-                                />
-                            </div>
-                        </div>
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
-                        >
-                            {loading ? 'Resetting...' : 'Reset Password'}
-                        </button>
-                    </form>
-                )}
-
-                {step === 'done' && (
-                    <div className="text-center space-y-4">
-                        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md text-sm">
-                            Password reset successfully!
-                        </div>
-                        <Link href="/login" className="inline-block py-2 px-6 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700">
-                            Back to Login
-                        </Link>
-                    </div>
-                )}
             </div>
-        </div>
+        </main>
     );
 }
+
+function AuthStep({ icon: Icon, title, description, children }: { icon: typeof KeyRound; title: string; description: string; children: React.ReactNode }) { return <section><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-light text-primary"><Icon className="h-5 w-5" /></span><h1 className="mt-5 text-3xl font-black tracking-[-0.04em] text-neutral-900">{title}</h1><p className="mt-3 text-sm leading-6 text-neutral-500">{description}</p>{children}</section>; }
+function ErrorMessage({ message }: { message: string }) { return message ? <div role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{message}</div> : null; }

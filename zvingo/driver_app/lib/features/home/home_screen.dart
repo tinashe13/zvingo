@@ -36,7 +36,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     // Listen for incoming offers and auto-navigate to the offer screen
     ref.listenManual(deliveryProvider, (prev, next) {
-      debugPrint('HomeScreen: deliveryProvider changed. prev=${prev?.deliveryState}, next=${next.deliveryState}, hasOffer=${next.currentOffer != null}');
+      debugPrint(
+          'HomeScreen: deliveryProvider changed. prev=${prev?.deliveryState}, next=${next.deliveryState}, hasOffer=${next.currentOffer != null}');
       if (next.deliveryState == DeliveryState.offered &&
           next.currentOffer != null &&
           (prev == null || prev.deliveryState != DeliveryState.offered)) {
@@ -65,7 +66,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         return Future.error('Location permissions are denied');
       }
     }
-    
+
     if (permission == LocationPermission.deniedForever) {
       return Future.error(
           'Location permissions are permanently denied, we cannot request permissions.');
@@ -80,14 +81,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         });
         _mapController.move(_currentLocation!, 15);
       }
-      
+
       // 3. Fetch backend state (active order?)
       // We need userId. For now assume auth is ready.
       final auth = ref.read(authProvider);
       if (auth.isAuthenticated && auth.userId != null) {
         ref.read(deliveryProvider.notifier).fetchCurrentState(auth.userId!);
       }
-      
     } catch (e) {
       debugPrint('Error getting location/state: $e');
     }
@@ -106,7 +106,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             child: FlutterMap(
               mapController: _mapController,
               options: MapOptions(
-                initialCenter: _currentLocation ?? const LatLng(-17.8216, 31.0492), // Harare default
+                initialCenter: _currentLocation ??
+                    const LatLng(-17.8216, 31.0492), // Harare default
                 initialZoom: 15.0,
                 interactionOptions: const InteractionOptions(
                   flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
@@ -114,8 +115,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               children: [
                 TileLayer(
-                  // Use CartoDB Voyager for a cleaner, Google-like look
-                  urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+                  urlTemplate:
+                      'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
                   subdomains: const ['a', 'b', 'c', 'd'],
                   userAgentPackageName: 'com.zvingo.driver',
                 ),
@@ -128,7 +129,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         height: 40,
                         child: Container(
                           decoration: BoxDecoration(
-                            color: Colors.blue,
+                            color: AppColors.neutral900,
                             shape: BoxShape.circle,
                             border: Border.all(color: Colors.white, width: 3),
                             boxShadow: [
@@ -140,7 +141,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ),
                           child: const Icon(
                             Icons.navigation,
-                            color: Colors.white,
+                            color: Color(0xFFD7F654),
                             size: 20,
                           ),
                         ),
@@ -157,28 +158,43 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             left: 16,
             right: 16,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
+                    color: Colors.black.withOpacity(0.10),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
                   ),
                 ],
               ),
               child: Row(
                 children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(
+                      color: AppColors.neutral900,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Text('ZD',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        )),
+                  ),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'Zvingo Driver',
+                          home.isDashing ? "You're online" : "You're offline",
                           style: Theme.of(context)
                               .textTheme
                               .titleMedium
@@ -187,32 +203,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         const SizedBox(height: 2),
                         Text(
                           home.isDashing
-                              ? "You're online"
-                              : "You're offline",
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(
-                                color: home.isDashing
-                                    ? AppColors.success
-                                    : AppColors.textSecondary,
-                              ),
+                              ? 'Finding nearby orders'
+                              : 'Go online when you are ready',
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: home.isDashing
+                                        ? AppColors.success
+                                        : AppColors.textSecondary,
+                                  ),
                         ),
                       ],
                     ),
                   ),
                   // Earnings pill
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryLight,
-                      borderRadius: BorderRadius.circular(100),
+                      color: AppColors.neutral900,
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
                       home.formattedEarnings,
                       style: const TextStyle(
-                        color: AppColors.primaryHover,
+                        color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
                       ),
@@ -226,7 +240,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           // ── FABs (right side, above bottom panel) ──────
           Positioned(
             right: 16,
-            bottom: 300 + bottomPadding,
+            bottom: 285 + bottomPadding,
             child: Column(
               children: [
                 FloatingMapButton(
@@ -277,8 +291,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-
-
 /// Bottom panel with zone selector and dash button.
 class _BottomPanel extends StatelessWidget {
   final bool isDashing;
@@ -306,8 +318,7 @@ class _BottomPanel extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.1),
@@ -316,7 +327,7 @@ class _BottomPanel extends StatelessWidget {
           ),
         ],
       ),
-      padding: EdgeInsets.fromLTRB(20, 16, 20, 16 + bottomPadding),
+      padding: EdgeInsets.fromLTRB(18, 14, 18, 14 + bottomPadding),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -331,44 +342,17 @@ class _BottomPanel extends StatelessWidget {
             ),
           ),
 
-          // Today's stats row
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Today's Earnings",
-                      style:
-                          Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
-                    ),
-                    Text(
-                      todayEarnings,
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppColors.neutral100,
-                  borderRadius: BorderRadius.circular(100),
-                ),
-                child: Text(
-                  '$todayTrips trips',
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
-              ),
-            ],
-          ),
+          Row(children: [
+            Expanded(child: _StatTile(label: 'Today', value: todayEarnings)),
+            const SizedBox(width: 8),
+            Expanded(child: _StatTile(label: 'Trips', value: '$todayTrips')),
+            const SizedBox(width: 8),
+            Expanded(
+                child: _StatTile(
+              label: 'Area',
+              value: selectedZone.isEmpty ? 'Nearby' : selectedZone,
+            )),
+          ]),
           const SizedBox(height: 16),
 
           // Zone selector (horizontal scroll, when offline)
@@ -393,8 +377,7 @@ class _BottomPanel extends StatelessWidget {
                             : AppColors.neutral100,
                         borderRadius: BorderRadius.circular(100),
                         border: isSelected
-                            ? Border.all(
-                                color: AppColors.primary, width: 1)
+                            ? Border.all(color: AppColors.primary, width: 1)
                             : null,
                       ),
                       child: Row(
@@ -442,23 +425,53 @@ class _BottomPanel extends StatelessWidget {
             child: ElevatedButton(
               onPressed: onToggleDash,
               style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    isDashing ? AppColors.error : AppColors.primary,
+                backgroundColor: AppColors.neutral900,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
               child: Text(
-                isDashing ? 'End Dash' : 'Start Dashing',
+                isDashing ? 'Go offline' : 'Go online',
                 style: const TextStyle(
-                  fontSize: 18,
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
 
+class _StatTile extends StatelessWidget {
+  const _StatTile({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.neutral50,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: AppColors.textSecondary,
+                  )),
+          const SizedBox(height: 3),
+          Text(value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium),
         ],
       ),
     );

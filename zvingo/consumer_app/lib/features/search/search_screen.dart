@@ -22,7 +22,9 @@ Future<List<Restaurant>> searchRestaurants(Ref ref, String query) async {
 }
 
 class SearchScreen extends ConsumerStatefulWidget {
-  const SearchScreen({super.key});
+  const SearchScreen({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   ConsumerState<SearchScreen> createState() => _SearchScreenState();
@@ -82,18 +84,19 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // DoorDash-style search bar with X close button
+            // Focused search bar with a one-tap close action.
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: Row(
                 children: [
-                  // Close button
-                  GestureDetector(
-                    onTap: () => context.pop(),
-                    child: const Icon(Icons.close,
-                        size: 24, color: AppColors.textPrimary),
-                  ),
-                  const SizedBox(width: 12),
+                  if (!widget.embedded) ...[
+                    GestureDetector(
+                      onTap: () => context.pop(),
+                      child: const Icon(Icons.close,
+                          size: 24, color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
                   // Search field
                   Expanded(
                     child: Container(
@@ -104,7 +107,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       ),
                       child: TextField(
                         controller: _searchController,
-                        autofocus: true,
+                        autofocus: !widget.embedded,
                         onChanged: (val) {
                           setState(() => _query = val.trim());
                         },
@@ -164,6 +167,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     ];
     return Expanded(
       child: ListView(
+        padding: const EdgeInsets.only(bottom: 118),
         children: suggestions.map((s) => _searchSuggestionItem(s)).toList(),
       ),
     );
@@ -222,9 +226,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             );
           }
 
-          // DoorDash-style: first show search suggestion items, then store results
+          // Show suggestions before matching stores.
           return ListView.builder(
-            padding: EdgeInsets.zero,
+            padding: const EdgeInsets.only(bottom: 118),
             itemCount: restaurants.length + 3, // +3 for suggestion items
             itemBuilder: (context, index) {
               // First item: direct match suggestion
@@ -242,7 +246,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 );
               }
 
-              // Store results (compact DoorDash-style)
+              // Compact store results.
               final r = restaurants[index - 3];
               final isFirst = index == 3;
               return _SearchResultItem(
@@ -263,6 +267,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   Widget _buildBrowseContent() {
     return Expanded(
       child: ListView(
+        padding: const EdgeInsets.only(bottom: 118),
         children: [
           // Recent searches
           if (_recentSearches.isNotEmpty) ...[
@@ -270,7 +275,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
-                  const Text('Recent Searches', style: AppTextStyles.titleMedium),
+                  const Text('Recent Searches',
+                      style: AppTextStyles.titleMedium),
                   const Spacer(),
                   GestureDetector(
                     onTap: _clearRecentSearches,
@@ -365,7 +371,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 }
 
-// ── Compact Search Result Item (DoorDash style) ──────────
+// ── Compact Search Result Item ────────────────────────────
 class _SearchResultItem extends StatelessWidget {
   final Restaurant restaurant;
   final bool isSponsored;

@@ -1,6 +1,7 @@
 import 'package:consumer_app/core/api_client.dart';
 import 'package:consumer_app/core/app_colors.dart';
 import 'package:consumer_app/core/app_text_styles.dart';
+import 'package:consumer_app/common/widgets/app_ui.dart';
 import 'package:consumer_app/features/auth/auth_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -71,15 +72,12 @@ class _ManageAccountScreenState extends ConsumerState<ManageAccountScreen> {
     final profileAsync = ref.watch(userProfileProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.white,
       appBar: AppBar(
-        backgroundColor: AppColors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () => context.pop(),
         ),
-        title: const Text('Manage Account', style: AppTextStyles.titleLarge),
-        centerTitle: true,
+        title: const Text('Personal details'),
       ),
       body: profileAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -88,71 +86,74 @@ class _ManageAccountScreenState extends ConsumerState<ManageAccountScreen> {
           _prefill(profile);
 
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text('Full Name', style: AppTextStyles.titleSmall),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _nameController,
-                    style: AppTextStyles.bodyLarge,
-                    textCapitalization: TextCapitalization.words,
-                    decoration: _inputDecoration('Your full name'),
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) {
-                        return 'Enter your full name';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  const Text('Email', style: AppTextStyles.titleSmall),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _emailController,
-                    style: AppTextStyles.bodyLarge,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: _inputDecoration('you@example.com'),
-                    validator: (v) {
-                      final value = v?.trim() ?? '';
-                      if (value.isEmpty) return null;
-                      if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
-                          .hasMatch(value)) {
-                        return 'Enter a valid email';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 32),
-                  SizedBox(
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: _saving ? null : _save,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: AppColors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        elevation: 2,
-                      ),
-                      child: _saving
-                          ? const SizedBox(
-                              height: 22,
-                              width: 22,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2.5,
-                              ),
-                            )
-                          : const Text('Save Changes',
-                              style: AppTextStyles.button),
+            padding: const EdgeInsets.all(16),
+            child: AppSurface(
+              padding: const EdgeInsets.all(20),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text('Full name', style: AppTextStyles.titleSmall),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _nameController,
+                      style: AppTextStyles.bodyLarge,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: _inputDecoration('Your full name'),
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) {
+                          return 'Enter your full name';
+                        }
+                        return null;
+                      },
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 20),
+                    const Text('Email', style: AppTextStyles.titleSmall),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _emailController,
+                      style: AppTextStyles.bodyLarge,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: _inputDecoration('you@example.com'),
+                      validator: (v) {
+                        final value = v?.trim() ?? '';
+                        if (value.isEmpty) return null;
+                        if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+                            .hasMatch(value)) {
+                          return 'Enter a valid email';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      height: 56,
+                      child: ElevatedButton(
+                        onPressed: _saving ? null : _save,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: AppColors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          elevation: 2,
+                        ),
+                        child: _saving
+                            ? const SizedBox(
+                                height: 22,
+                                width: 22,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2.5,
+                                ),
+                              )
+                            : const Text('Save Changes',
+                                style: AppTextStyles.button),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           );

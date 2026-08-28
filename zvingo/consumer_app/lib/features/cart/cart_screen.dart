@@ -1,5 +1,6 @@
 import 'package:consumer_app/core/app_colors.dart';
 import 'package:consumer_app/core/app_text_styles.dart';
+import 'package:consumer_app/common/widgets/app_ui.dart';
 import 'package:consumer_app/core/delivery_location_provider.dart';
 import 'package:consumer_app/features/address/address_selection_sheet.dart';
 import 'package:consumer_app/features/cart/cart_provider.dart';
@@ -7,7 +8,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:lottie/lottie.dart';
 
 class CartScreen extends ConsumerWidget {
   const CartScreen({super.key});
@@ -34,15 +34,13 @@ class CartScreen extends ConsumerWidget {
     final deliveryLoc = ref.watch(deliveryLocationNotifierProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.white,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.white,
         leading: IconButton(
           icon: const Icon(Icons.close, color: AppColors.textPrimary),
           onPressed: () => context.pop(),
         ),
-        title: const Text('Your Carts', style: AppTextStyles.titleLarge),
-        centerTitle: true,
+        title: const Text('Your cart'),
       ),
       body: cartItems.isEmpty
           ? _emptyState()
@@ -125,23 +123,10 @@ class CartScreen extends ConsumerWidget {
   }
 
   Widget _emptyState() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Lottie.asset(
-            'assets/animations/empty_cart.json',
-            width: 180,
-            height: 180,
-            repeat: true,
-          ),
-          const SizedBox(height: 16),
-          const Text('Your cart is empty', style: AppTextStyles.titleMedium),
-          const SizedBox(height: 6),
-          const Text('Add items from a restaurant to get started',
-              style: AppTextStyles.bodySmall),
-        ],
-      ),
+    return const AppEmptyState(
+      icon: Icons.shopping_bag_outlined,
+      title: 'Your cart is empty',
+      message: 'Add something delicious and it will show up here.',
     );
   }
 }
@@ -168,9 +153,9 @@ class _StoreCartSection extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
       decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.divider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -245,7 +230,7 @@ class _StoreCartSection extends StatelessWidget {
                   child: ElevatedButton(
                     onPressed: onCheckout,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: AppColors.selectedDark,
                       foregroundColor: Colors.white,
                     ),
                     child: const Text('Checkout Store'),
@@ -352,7 +337,7 @@ class _CartItemTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      color: Colors.white,
+      color: AppColors.surface,
       child: Row(
         children: [
           // Thumbnail
@@ -405,11 +390,13 @@ class _CartItemTile extends StatelessWidget {
           Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.remove_circle_outline,
-                    size: 20, color: Colors.grey),
+                icon: const Icon(Icons.remove_rounded,
+                    size: 18, color: AppColors.textPrimary),
                 onPressed: onDecrement,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
+                style: IconButton.styleFrom(
+                  backgroundColor: AppColors.surfaceMuted,
+                  minimumSize: const Size(36, 36),
+                ),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -417,11 +404,13 @@ class _CartItemTile extends StatelessWidget {
                     Text('${item.quantity}', style: AppTextStyles.bodyMedium),
               ),
               IconButton(
-                icon: const Icon(Icons.add_circle_outline,
-                    size: 20, color: AppColors.primary),
+                icon: const Icon(Icons.add_rounded,
+                    size: 18, color: AppColors.textPrimary),
                 onPressed: onIncrement,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
+                style: IconButton.styleFrom(
+                  backgroundColor: AppColors.surfaceMuted,
+                  minimumSize: const Size(36, 36),
+                ),
               ),
               const SizedBox(width: 8),
               GestureDetector(

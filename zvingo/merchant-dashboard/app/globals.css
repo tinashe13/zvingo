@@ -3,29 +3,29 @@
 @theme {
   --font-sans: var(--font-inter), system-ui, sans-serif;
 
-  --color-primary: #10B981;
-  --color-primary-hover: #059669;
-  --color-primary-light: #D1FAE5;
+  --color-primary: #0A8F5B;
+  --color-primary-hover: #076C45;
+  --color-primary-light: #E9F8F1;
 
-  --color-neutral-50: #F8FAFC;
-  --color-neutral-100: #F1F5F9;
-  --color-neutral-200: #E2E8F0;
-  --color-neutral-300: #CBD5E1;
-  --color-neutral-400: #94A3B8;
-  --color-neutral-500: #64748B;
-  --color-neutral-600: #475569;
-  --color-neutral-700: #334155;
-  --color-neutral-800: #1E293B;
-  --color-neutral-900: #0F172A;
+  --color-neutral-50: #F7F7F5;
+  --color-neutral-100: #EFEFEC;
+  --color-neutral-200: #E2E2DE;
+  --color-neutral-300: #CDCDC7;
+  --color-neutral-400: #999B96;
+  --color-neutral-500: #737570;
+  --color-neutral-600: #555752;
+  --color-neutral-700: #383A37;
+  --color-neutral-800: #222421;
+  --color-neutral-900: #101210;
 
   --color-success: #22C55E;
   --color-warning: #F59E0B;
   --color-error: #EF4444;
   --color-info: #3B82F6;
 
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-sm: 0 1px 2px rgb(16 18 16 / 0.04);
+  --shadow-md: 0 8px 24px rgb(16 18 16 / 0.08);
+  --shadow-lg: 0 20px 48px rgb(16 18 16 / 0.12);
   --shadow-button: 0 4px 6px -1px rgba(16, 185, 129, 0.2);
   --shadow-button-hover: 0 6px 8px -1px rgba(16, 185, 129, 0.3);
 
@@ -34,27 +34,41 @@
   --radius-full: 9999px;
 }
 
+* { box-sizing: border-box; }
+
+html { background: #f7f7f5; }
+
+body { margin: 0; }
+
+button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+
+button, a { transition: transform 160ms ease, background-color 160ms ease, color 160ms ease, border-color 160ms ease, box-shadow 160ms ease; }
+
+button:active, a:active { transform: scale(.985); }
+
+::selection { background: #d9f6e9; color: #101210; }
+
 /* Custom Utilities for frequent patterns if needed, though Tailwind classes usually suffice */
 @layer components {
   .btn-primary {
-    @apply px-6 py-3 rounded-full font-semibold transition-all duration-200 ease-out;
-    background-color: var(--color-primary);
+    @apply px-6 py-3 rounded-xl font-semibold transition-all duration-200 ease-out;
+    background-color: var(--color-neutral-900);
     color: white;
     box-shadow: var(--shadow-button);
   }
   
   .btn-primary:hover {
-    background-color: var(--color-primary-hover);
+    background-color: #2a2c29;
     transform: translateY(-1px);
     box-shadow: var(--shadow-button-hover);
   }
 
   .card {
-    @apply p-4 rounded-2xl bg-white border border-neutral-100 shadow-sm transition-all duration-200;
+    @apply p-5 rounded-2xl bg-white border border-neutral-200/70 shadow-sm transition-all duration-200;
   }
   
   .input-field {
-    @apply h-12 px-4 border border-neutral-200 rounded-xl bg-white transition-colors duration-200 w-full;
+    @apply h-12 px-4 border-0 rounded-xl bg-neutral-100 transition-colors duration-200 w-full;
   }
   
   .input-field:focus {

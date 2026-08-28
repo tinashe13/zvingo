@@ -1,12 +1,10 @@
-import 'package:consumer_app/core/app_colors.dart';
-import 'package:consumer_app/core/app_text_styles.dart';
+import 'package:consumer_app/common/widgets/app_ui.dart';
 import 'package:consumer_app/features/favourites/favourites_provider.dart';
 import 'package:consumer_app/features/home/widgets/restaurant_card.dart';
 import 'package:consumer_app/features/restaurant/restaurant_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:lottie/lottie.dart';
 
 class FavouritesScreen extends ConsumerWidget {
   const FavouritesScreen({super.key});
@@ -17,11 +15,8 @@ class FavouritesScreen extends ConsumerWidget {
     final allRestaurants = ref.watch(restaurantListProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.white,
       appBar: AppBar(
-        backgroundColor: AppColors.white,
-        title: const Text('Favourites', style: AppTextStyles.titleLarge),
-        centerTitle: true,
+        title: const Text('Saved stores'),
       ),
       body: allRestaurants.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -31,31 +26,19 @@ class FavouritesScreen extends ConsumerWidget {
               restaurants.where((r) => favouriteIds.contains(r.id)).toList();
 
           if (favRestaurants.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Lottie.asset(
-                    'assets/animations/favourite_heart.json',
-                    width: 150,
-                    height: 150,
-                    repeat: true,
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('No favourites yet', style: AppTextStyles.titleMedium),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Tap the heart on restaurants\nyou love to save them here',
-                    style: AppTextStyles.bodySmall,
-                    textAlign: TextAlign.center,
-                  ),
-                ],
+            return AppEmptyState(
+              icon: Icons.favorite_border_rounded,
+              title: 'No saved stores yet',
+              message: 'Tap the heart on a restaurant to keep it close.',
+              action: ElevatedButton(
+                onPressed: () => context.go('/home'),
+                child: const Text('Explore restaurants'),
               ),
             );
           }
 
           return ListView.builder(
-            padding: const EdgeInsets.only(top: 8),
+            padding: const EdgeInsets.fromLTRB(0, 8, 0, 28),
             itemCount: favRestaurants.length,
             itemBuilder: (context, index) {
               final r = favRestaurants[index];

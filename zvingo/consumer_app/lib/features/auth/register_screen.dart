@@ -71,7 +71,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ── Hero Top Section ────────────────────────
+            // ── Brand hero ──────────────────────────────
             SizedBox(
               height: MediaQuery.of(context).size.height * 0.25,
               child: Stack(
@@ -83,32 +83,31 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          AppColors.primaryDark,
-                          AppColors.primary,
-                          Color(0xFF19A974),
+                          Color(0xFF0B0D0B),
+                          Color(0xFF171A17),
                         ],
                       ),
                     ),
-                    child: Stack(
-                      children: [
-                        Positioned(
-                            top: 50,
-                            left: 30,
-                            child: _foodCircle(Icons.fastfood, 55)),
-                        Positioned(
-                            top: 40,
-                            right: 50,
-                            child: _foodCircle(Icons.local_pizza, 45)),
-                        Positioned(
-                          bottom: 40,
-                          left: MediaQuery.of(context).size.width * 0.4,
-                          child: _foodCircle(Icons.restaurant_menu, 60),
-                        ),
-                        Positioned(
-                            bottom: 30,
-                            right: 30,
-                            child: _foodCircle(Icons.cake, 40)),
-                      ],
+                    child: Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: AppColors.accent,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: const Icon(Icons.bolt_rounded,
+                                color: AppColors.textPrimary, size: 28),
+                          ),
+                          const SizedBox(width: 12),
+                          Text('zvingo',
+                              style: AppTextStyles.headlineMedium
+                                  .copyWith(color: AppColors.white)),
+                        ],
+                      ),
                     ),
                   ),
                   Positioned(
@@ -131,8 +130,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     left: 8,
                     child: IconButton(
                       onPressed: () => context.pop(),
-                      icon: const Icon(Icons.arrow_back,
-                          color: AppColors.textPrimary),
+                      icon:
+                          const Icon(Icons.arrow_back, color: AppColors.white),
                     ),
                   ),
                 ],
@@ -145,10 +144,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Create Account', style: AppTextStyles.headlineLarge),
+                  const Text('Create your account',
+                      style: AppTextStyles.headlineLarge),
                   const SizedBox(height: 8),
                   Text(
-                    'Sign up to get started with Zvingo',
+                    'Save addresses, track orders and reorder in seconds.',
                     style: AppTextStyles.bodyMedium
                         .copyWith(color: AppColors.textSecondary),
                   ),
@@ -178,7 +178,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   ],
 
                   // Full Name
-                  _fieldLabel('FULL NAME'),
+                  _fieldLabel('Full name'),
                   TextField(
                     controller: _nameController,
                     style: AppTextStyles.bodyLarge,
@@ -191,7 +191,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   const SizedBox(height: 20),
 
                   // Email
-                  _fieldLabel('EMAIL ADDRESS'),
+                  _fieldLabel('Email address'),
                   TextField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
@@ -205,7 +205,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   const SizedBox(height: 20),
 
                   // Phone
-                  _fieldLabel('PHONE NUMBER'),
+                  _fieldLabel('Phone number'),
                   TextField(
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
@@ -219,7 +219,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   const SizedBox(height: 20),
 
                   // Password
-                  _fieldLabel('PASSWORD'),
+                  _fieldLabel('Password'),
                   TextField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
@@ -257,7 +257,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                               child: CircularProgressIndicator(
                                   color: Colors.white, strokeWidth: 2.5),
                             )
-                          : const Text('Create Account', style: AppTextStyles.button),
+                          : const Text('Create account',
+                              style: AppTextStyles.button),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -294,25 +295,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       padding: const EdgeInsets.only(bottom: 4),
       child: Text(text,
           style: AppTextStyles.labelSmall
-              .copyWith(letterSpacing: 1.5, color: AppColors.textSecondary)),
-    );
-  }
-
-  Widget _foodCircle(IconData icon, double size) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: AppColors.white.withOpacity(0.85),
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 12,
-              offset: const Offset(0, 4)),
-        ],
-      ),
-      child: Icon(icon, size: size * 0.45, color: AppColors.primary),
+              .copyWith(letterSpacing: 0, color: AppColors.textPrimary)),
     );
   }
 }

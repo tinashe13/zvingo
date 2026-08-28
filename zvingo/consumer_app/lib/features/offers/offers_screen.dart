@@ -1,11 +1,11 @@
 import 'package:consumer_app/core/app_colors.dart';
 import 'package:consumer_app/core/app_text_styles.dart';
+import 'package:consumer_app/common/widgets/app_ui.dart';
 import 'package:consumer_app/features/home/widgets/restaurant_card.dart';
 import 'package:consumer_app/features/restaurant/restaurant_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:lottie/lottie.dart';
 
 /// Offers tab — replaces Search tab per article Experience 1
 class OffersScreen extends ConsumerWidget {
@@ -16,25 +16,14 @@ class OffersScreen extends ConsumerWidget {
     final restaurantsAsync = ref.watch(restaurantListProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.white,
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
             const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child:
-                    Text('Offers & Deals', style: AppTextStyles.headlineMedium),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: Text(
-                  'Best deals from your favourite restaurants',
-                  style: AppTextStyles.bodyMedium
-                      .copyWith(color: AppColors.textSecondary),
-                ),
+              child: AppPageTitle(
+                eyebrow: 'Save on your next meal',
+                title: 'Offers',
+                subtitle: 'Fresh deals, free delivery and member-only value.',
               ),
             ),
 
@@ -46,24 +35,11 @@ class OffersScreen extends ConsumerWidget {
                     .toList();
 
                 if (withDeals.isEmpty) {
-                  return SliverFillRemaining(
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Lottie.asset(
-                            'assets/animations/no_results.json',
-                            width: 150,
-                            height: 150,
-                          ),
-                          const SizedBox(height: 16),
-                          const Text('No deals right now',
-                              style: AppTextStyles.titleMedium),
-                          const SizedBox(height: 6),
-                          const Text('Check back soon for offers!',
-                              style: AppTextStyles.bodySmall),
-                        ],
-                      ),
+                  return const SliverFillRemaining(
+                    child: AppEmptyState(
+                      icon: Icons.local_offer_outlined,
+                      title: 'No offers right now',
+                      message: 'New restaurant promotions will appear here.',
                     ),
                   );
                 }
@@ -77,25 +53,24 @@ class OffersScreen extends ConsumerWidget {
                           // Deal badge
                           if (r.promotions.isNotEmpty)
                             Container(
-                              margin: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                              margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 6),
-                              decoration: const BoxDecoration(
-                                color: AppColors.primarySurface,
-                                borderRadius: BorderRadius.vertical(
-                                    top: Radius.circular(12)),
+                                  horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: AppColors.accentSurface,
+                                borderRadius: BorderRadius.circular(14),
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(Icons.local_offer,
-                                      size: 16, color: AppColors.primary),
+                                  const Icon(Icons.local_offer_rounded,
+                                      size: 17, color: AppColors.textPrimary),
                                   const SizedBox(width: 6),
                                   Expanded(
                                     child: Text(
                                       r.promotions.first,
                                       style: AppTextStyles.bodySmall.copyWith(
-                                        color: AppColors.primaryDark,
-                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.textPrimary,
+                                        fontWeight: FontWeight.w800,
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,

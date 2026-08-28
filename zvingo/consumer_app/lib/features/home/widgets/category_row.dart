@@ -4,7 +4,7 @@ import 'package:consumer_app/features/filter/filter_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Horizontal scrolling category row with circular icons
+/// Compact discovery filters that keep the food feed visually dominant.
 class CategoryRow extends ConsumerWidget {
   const CategoryRow({super.key});
 
@@ -22,12 +22,12 @@ class CategoryRow extends ConsumerWidget {
     ];
 
     return SizedBox(
-      height: 95,
+      height: 46,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: categories.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 16),
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final cat = categories[index];
           final isSelected = selectedCategories.contains(cat.label);
@@ -35,45 +35,29 @@ class CategoryRow extends ConsumerWidget {
             onTap: () {
               ref.read(filtersProvider.notifier).toggleCategory(cat.label);
             },
-            child: SizedBox(
-              width: 68,
-              child: Column(
-                children: [
-                  Container(
-                    width: 58,
-                    height: 58,
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? AppColors.primary.withOpacity(0.15)
-                          : AppColors.primarySurface,
-                      borderRadius: BorderRadius.circular(18),
-                      border: isSelected
-                          ? Border.all(color: AppColors.primary, width: 2)
-                          : null,
-                    ),
-                    child: Icon(cat.icon,
-                        color: isSelected
-                            ? AppColors.primary
-                            : AppColors.primary.withOpacity(0.7),
-                        size: 28),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    cat.label,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      fontSize: 11,
-                      color: isSelected
-                          ? AppColors.primary
-                          : AppColors.textPrimary,
-                      fontWeight:
-                          isSelected ? FontWeight.w700 : FontWeight.w500,
-                    ),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+            child: Container(
+              height: 36,
+              padding: const EdgeInsets.symmetric(horizontal: 13),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? AppColors.selectedDark
+                    : AppColors.surfaceMuted,
+                borderRadius: BorderRadius.circular(20),
               ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(cat.icon,
+                    color: isSelected ? AppColors.white : AppColors.textPrimary,
+                    size: 15),
+                const SizedBox(width: 6),
+                Text(
+                  cat.label,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    fontSize: 11,
+                    color: isSelected ? AppColors.white : AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ]),
             ),
           );
         },

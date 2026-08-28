@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from 'react';
-import { UPLOAD_API_URL } from '@/lib/api';
+import { ImagePlus, Loader2 } from 'lucide-react';
+import { getToken, UPLOAD_API_URL } from '@/lib/api';
 
 interface ImageUploadProps {
     value: string;
@@ -22,7 +23,7 @@ export default function ImageUpload({ value, onChange, placeholder }: ImageUploa
             formData.append('file', file);
 
             // Use direct fetch since apiJson handles JSON
-            const token = localStorage.getItem('token');
+            const token = getToken();
             const res = await fetch(`${UPLOAD_API_URL}/upload/`, {
                 method: 'POST',
                 headers: {
@@ -51,29 +52,24 @@ export default function ImageUpload({ value, onChange, placeholder }: ImageUploa
     };
 
     return (
-        <div className="mt-1 flex items-center space-x-4">
-            <div className="h-20 w-20 rounded bg-gray-100 flex items-center justify-center overflow-hidden border border-gray-300">
+        <div className="flex items-center gap-4 rounded-2xl bg-neutral-50 p-3">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-neutral-200">
                 {value ? (
                     <img src={value} alt="Preview" className="h-full w-full object-cover" />
                 ) : (
-                    <span className="text-gray-400 text-xs text-center p-1">{placeholder || "No Image"}</span>
+                    <ImagePlus className="h-6 w-6 text-neutral-400" aria-label={placeholder || "No image"} />
                 )}
             </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700">
-                    {uploading ? 'Uploading...' : 'Change'}
+            <div className="min-w-0 flex-1">
+                <label className="mb-2 flex items-center gap-2 text-sm font-bold text-neutral-800">
+                    {uploading && <Loader2 className="h-4 w-4 animate-spin" />}{uploading ? 'Uploading image' : value ? 'Replace image' : 'Choose image'}
                 </label>
                 <input
                     type="file"
                     accept="image/*"
                     onChange={handleFileChange}
                     disabled={uploading}
-                    className="block w-full text-sm text-gray-500
-                        file:mr-4 file:py-2 file:px-4
-                        file:rounded-full file:border-0
-                        file:text-sm file:font-semibold
-                        file:bg-green-50 file:text-green-700
-                        hover:file:bg-green-100"
+                    className="block w-full text-xs text-neutral-500 file:mr-3 file:rounded-lg file:border-0 file:bg-neutral-900 file:px-3 file:py-2 file:text-xs file:font-bold file:text-white hover:file:bg-neutral-800"
                 />
             </div>
         </div>

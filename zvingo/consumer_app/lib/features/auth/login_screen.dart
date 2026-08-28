@@ -59,7 +59,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 SizedBox(
-                  height: MediaQuery.sizeOf(context).height * 0.34,
+                  height: MediaQuery.sizeOf(context).height * 0.30,
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
@@ -69,41 +69,55 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                             colors: [
-                              AppColors.primaryDark,
-                              AppColors.primary,
-                              Color(0xFF19A974),
+                              Color(0xFF0B0D0B),
+                              Color(0xFF171A17),
                             ],
                           ),
                         ),
                       ),
                       Positioned(
-                          top: 54,
-                          left: 28,
-                          child: _foodCircle(Icons.restaurant_rounded, 58)),
-                      Positioned(
-                          top: 38,
-                          right: 34,
-                          child: _foodCircle(Icons.local_pizza_rounded, 48)),
-                      Positioned(
-                          bottom: 62,
-                          left: 62,
-                          child: _foodCircle(Icons.local_cafe_rounded, 44)),
-                      Positioned(
-                        top: 102,
-                        left: MediaQuery.sizeOf(context).width * 0.37,
-                        child: _foodCircle(Icons.lunch_dining_rounded, 72),
+                        right: -42,
+                        top: -54,
+                        child: Container(
+                          width: 220,
+                          height: 220,
+                          decoration: BoxDecoration(
+                            color: AppColors.accent.withOpacity(0.10),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
                       ),
                       Positioned(
-                          bottom: 42,
-                          right: 28,
-                          child: _foodCircle(Icons.icecream_rounded, 52)),
+                        left: 24,
+                        bottom: 66,
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: AppColors.accent,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: const Icon(Icons.bolt_rounded,
+                                  color: AppColors.textPrimary, size: 28),
+                            ),
+                            const SizedBox(width: 12),
+                            Text('zvingo',
+                                style: AppTextStyles.headlineMedium
+                                    .copyWith(color: AppColors.white)),
+                          ],
+                        ),
+                      ),
                       Positioned(
                         left: 28,
                         top: MediaQuery.paddingOf(context).top + 4,
                         child: Text(
-                          'Zvingo',
-                          style: AppTextStyles.headlineMedium
-                              .copyWith(color: AppColors.white),
+                          'Delivery, your way.',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.accent,
+                            letterSpacing: 1.4,
+                          ),
                         ),
                       ),
                       const Positioned(
@@ -230,26 +244,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _foodCircle(IconData icon, double size) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: AppColors.white.withOpacity(0.16),
-        shape: BoxShape.circle,
-        border: Border.all(color: AppColors.white.withOpacity(0.14)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.10),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Icon(icon, size: size * 0.45, color: AppColors.white),
     );
   }
 }

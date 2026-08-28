@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
 
-/// Shared typography tokens. The app theme uses this same Inter family.
+/// Shared typography tokens used across consumer and partner experiences.
 class AppTextStyles {
   AppTextStyles._();
 

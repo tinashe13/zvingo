@@ -19,7 +19,7 @@ class PrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = backgroundColor ?? AppColors.primary;
+    final bgColor = backgroundColor ?? AppColors.selectedDark;
     return SizedBox(
       width: isFullWidth ? double.infinity : null,
       height: 54,

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
-/// Theme matching the Kotlin driver app's Theme.kt (light + dark color schemes).
+/// Shared high-contrast theme for the driver experience.
 class AppTheme {
   AppTheme._();
 
@@ -25,7 +25,17 @@ class AppTheme {
       outline: AppColors.neutral200,
     ),
     scaffoldBackgroundColor: AppColors.background,
-    textTheme: GoogleFonts.interTextTheme(),
+    textTheme: GoogleFonts.interTextTheme().copyWith(
+      headlineLarge:
+          GoogleFonts.inter(fontWeight: FontWeight.w800, letterSpacing: -0.8),
+      headlineMedium:
+          GoogleFonts.inter(fontWeight: FontWeight.w800, letterSpacing: -0.6),
+      headlineSmall:
+          GoogleFonts.inter(fontWeight: FontWeight.w800, letterSpacing: -0.4),
+      titleLarge:
+          GoogleFonts.inter(fontWeight: FontWeight.w700, letterSpacing: -0.2),
+      titleMedium: GoogleFonts.inter(fontWeight: FontWeight.w700),
+    ),
 
     // ── AppBar ──────────────────────────────────────────
     appBarTheme: const AppBarTheme(
@@ -49,26 +59,25 @@ class AppTheme {
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: AppColors.divider, width: 1),
       ),
     ),
 
     // ── InputDecoration ─────────────────────────────────
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: AppColors.white,
+      fillColor: AppColors.neutral100,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.border),
+        borderSide: BorderSide.none,
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.border),
+        borderSide: BorderSide.none,
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.primary, width: 1),
+        borderSide: const BorderSide(color: AppColors.neutral900, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -88,10 +97,10 @@ class AppTheme {
     // ── Elevated Button ─────────────────────────────────
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.neutral900,
         foregroundColor: AppColors.textOnPrimary,
         elevation: 0,
-        shape: const StadiumBorder(),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
         minimumSize: const Size(double.infinity, 48),
         textStyle: const TextStyle(
@@ -107,7 +116,7 @@ class AppTheme {
       style: OutlinedButton.styleFrom(
         foregroundColor: AppColors.textPrimary,
         side: const BorderSide(color: AppColors.border),
-        shape: const StadiumBorder(),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
         minimumSize: const Size(double.infinity, 48),
         textStyle: const TextStyle(
@@ -125,11 +134,34 @@ class AppTheme {
       unselectedItemColor: AppColors.navUnselected,
       type: BottomNavigationBarType.fixed,
       elevation: 8,
-      selectedLabelStyle:
-          TextStyle(fontSize: 12, fontWeight: FontWeight.w600, fontFamily: 'Inter'),
-      unselectedLabelStyle:
-          TextStyle(fontSize: 12, fontWeight: FontWeight.w500, fontFamily: 'Inter'),
+      selectedLabelStyle: TextStyle(
+          fontSize: 12, fontWeight: FontWeight.w600, fontFamily: 'Inter'),
+      unselectedLabelStyle: TextStyle(
+          fontSize: 12, fontWeight: FontWeight.w500, fontFamily: 'Inter'),
       showUnselectedLabels: true,
+    ),
+
+    navigationBarTheme: NavigationBarThemeData(
+      height: 70,
+      backgroundColor: AppColors.white,
+      surfaceTintColor: Colors.transparent,
+      indicatorColor: Colors.transparent,
+      elevation: 0,
+      iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
+            color: states.contains(WidgetState.selected)
+                ? AppColors.neutral900
+                : AppColors.neutral400,
+            size: 22,
+          )),
+      labelTextStyle: WidgetStateProperty.resolveWith((states) => TextStyle(
+            color: states.contains(WidgetState.selected)
+                ? AppColors.neutral900
+                : AppColors.neutral500,
+            fontSize: 11,
+            fontWeight: states.contains(WidgetState.selected)
+                ? FontWeight.w700
+                : FontWeight.w500,
+          )),
     ),
 
     // ── Divider ─────────────────────────────────────────

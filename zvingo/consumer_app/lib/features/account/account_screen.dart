@@ -1,3 +1,4 @@
+import 'package:consumer_app/common/widgets/app_ui.dart';
 import 'package:consumer_app/core/app_colors.dart';
 import 'package:consumer_app/core/app_text_styles.dart';
 import 'package:consumer_app/features/auth/auth_provider.dart';
@@ -11,75 +12,144 @@ class AccountScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(userProfileProvider);
-
     return Scaffold(
-      backgroundColor: AppColors.white,
       body: SafeArea(
         child: profileAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => const Center(child: Text('Error loading profile')),
+          error: (_, __) => AppEmptyState(
+            icon: Icons.person_off_outlined,
+            title: 'Profile unavailable',
+            message: 'We could not load your account right now.',
+            action: ElevatedButton(
+              onPressed: () => ref.invalidate(userProfileProvider),
+              child: const Text('Try again'),
+            ),
+          ),
           data: (profile) => ListView(
+            padding: const EdgeInsets.only(bottom: 118),
             children: [
-              const SizedBox(height: 24),
-              // Avatar + Name
-              Center(
-                child: Column(
-                  children: [
-                    Container(
-                      width: 72,
-                      height: 72,
-                      decoration: const BoxDecoration(
-                        color: AppColors.primarySurface,
-                        shape: BoxShape.circle,
+              const AppPageTitle(
+                eyebrow: 'Your Zvingo',
+                title: 'Account',
+                subtitle: 'Personal details, payments, addresses and support.',
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: AppSurface(
+                  color: AppColors.selectedDark,
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: AppColors.accent,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Icon(Icons.person_rounded,
+                            size: 30, color: AppColors.textPrimary),
                       ),
-                      child: const Icon(Icons.person,
-                          size: 36, color: AppColors.primary),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(profile['full_name'] ?? 'User',
-                        style: AppTextStyles.titleLarge),
-                    const SizedBox(height: 4),
-                    Text(
-                      profile['email'] ?? profile['phone'] ?? '',
-                      style: AppTextStyles.bodySmall,
-                    ),
-                  ],
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              profile['full_name'] ?? 'Zvingo customer',
+                              style: AppTextStyles.titleLarge
+                                  .copyWith(color: AppColors.white),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              profile['email'] ?? profile['phone'] ?? '',
+                              style: AppTextStyles.bodySmall
+                                  .copyWith(color: Colors.white70),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Edit account',
+                        onPressed: () => context.push('/account/edit'),
+                        icon: const Icon(Icons.edit_outlined,
+                            color: AppColors.white),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 28),
-              const Divider(),
-
-              _settingsTile(context, Icons.person_outline, 'Manage Account',
-                  onTap: () => context.push('/account/edit')),
-              _settingsTile(context, Icons.payment, 'Payment Methods',
-                  onTap: () => context.push('/payment-methods')),
-              _settingsTile(
-                  context, Icons.location_on_outlined, 'Saved Addresses',
-                  onTap: () {
-                context.push('/addresses');
-              }),
-              _settingsTile(context, Icons.favorite_border, 'Saved Stores',
-                  onTap: () => context.push('/favourites')),
-              _settingsTile(context, Icons.local_offer_outlined, 'Promotions',
-                  onTap: () => context.push('/offers')),
-              const Divider(),
-              _settingsTile(context, Icons.help_outline, 'Help',
-                  onTap: () => context.push('/help')),
-              _settingsTile(context, Icons.info_outline, 'About', onTap: () {
-                showAboutDialog(
-                  context: context,
-                  applicationName: 'Zvingo',
-                  applicationVersion: '1.0.0',
-                  children: [const Text('Food delivery made easy.')],
-                );
-              }),
-              _settingsTile(context, Icons.logout, 'Sign Out',
-                  isDestructive: true, onTap: () async {
-                await ref.read(authProvider.notifier).signOut();
-                if (context.mounted) {
-                  context.go('/login');
-                }
-              }),
+              const SizedBox(height: 22),
+              _section(
+                children: [
+                  AppIconTile(
+                    icon: Icons.person_outline_rounded,
+                    title: 'Manage account',
+                    subtitle: 'Name, email and phone',
+                    onTap: () => context.push('/account/edit'),
+                  ),
+                  AppIconTile(
+                    icon: Icons.credit_card_rounded,
+                    title: 'Payment methods',
+                    subtitle: 'Manage how you pay',
+                    onTap: () => context.push('/payment-methods'),
+                  ),
+                  AppIconTile(
+                    icon: Icons.location_on_outlined,
+                    title: 'Saved addresses',
+                    subtitle: 'Home, work and recent places',
+                    onTap: () => context.push('/addresses'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              _section(
+                children: [
+                  AppIconTile(
+                    icon: Icons.favorite_border_rounded,
+                    title: 'Saved stores',
+                    onTap: () => context.push('/favourites'),
+                  ),
+                  AppIconTile(
+                    icon: Icons.local_offer_outlined,
+                    title: 'Promotions',
+                    onTap: () => context.push('/offers'),
+                  ),
+                  AppIconTile(
+                    icon: Icons.help_outline_rounded,
+                    title: 'Help and support',
+                    onTap: () => context.push('/help'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              _section(
+                children: [
+                  AppIconTile(
+                    icon: Icons.info_outline_rounded,
+                    title: 'About Zvingo',
+                    onTap: () => showAboutDialog(
+                      context: context,
+                      applicationName: 'Zvingo',
+                      applicationVersion: '1.0.0',
+                      children: const [
+                        Text(
+                            'Food and everyday delivery, thoughtfully designed.')
+                      ],
+                    ),
+                  ),
+                  AppIconTile(
+                    icon: Icons.logout_rounded,
+                    title: 'Sign out',
+                    destructive: true,
+                    trailing: const SizedBox.shrink(),
+                    onTap: () async {
+                      await ref.read(authProvider.notifier).signOut();
+                      if (context.mounted) context.go('/login');
+                    },
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -87,21 +157,21 @@ class AccountScreen extends ConsumerWidget {
     );
   }
 
-  Widget _settingsTile(BuildContext context, IconData icon, String title,
-      {bool isDestructive = false, VoidCallback? onTap}) {
-    return ListTile(
-      leading: Icon(icon,
-          color: isDestructive ? AppColors.error : AppColors.textSecondary,
-          size: 22),
-      title: Text(
-        title,
-        style: AppTextStyles.bodyLarge.copyWith(
-          color: isDestructive ? AppColors.error : AppColors.textPrimary,
+  Widget _section({required List<Widget> children}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: AppSurface(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Column(
+          children: [
+            for (var i = 0; i < children.length; i++) ...[
+              children[i],
+              if (i != children.length - 1)
+                const Divider(indent: 70, endIndent: 16),
+            ],
+          ],
         ),
       ),
-      trailing:
-          const Icon(Icons.chevron_right, color: AppColors.textHint, size: 20),
-      onTap: onTap,
     );
   }
 }

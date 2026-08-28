@@ -97,6 +97,12 @@ class Filters extends _$Filters {
     state = state.copyWith(categories: updated);
   }
 
+  void selectCategory(String? category) {
+    state = state.copyWith(
+      categories: category == null ? <String>{} : {category},
+    );
+  }
+
   void setFreeDeliveryOnly(bool value) {
     state = state.copyWith(freeDeliveryOnly: value);
   }

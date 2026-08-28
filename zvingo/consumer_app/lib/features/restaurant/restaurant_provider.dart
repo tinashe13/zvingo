@@ -88,6 +88,8 @@ class Restaurant {
   final int? customerPhotosCount;
   final double? freeDeliveryThreshold;
   final bool isZvingoPlus;
+  final double? latitude;
+  final double? longitude;
 
   Restaurant({
     required this.id,
@@ -109,11 +111,21 @@ class Restaurant {
     this.customerPhotosCount,
     this.freeDeliveryThreshold,
     this.isZvingoPlus = false,
+    this.latitude,
+    this.longitude,
   });
 
   String get deliveryTime => '$deliveryTimeMin-$deliveryTimeMax min';
 
   factory Restaurant.fromJson(Map<String, dynamic> json) {
+    final location = json['location'];
+    final coordinates = location is Map ? location['coordinates'] : null;
+    final longitude = coordinates is List && coordinates.length >= 2
+        ? (coordinates[0] as num?)?.toDouble()
+        : (json['lng'] as num?)?.toDouble();
+    final latitude = coordinates is List && coordinates.length >= 2
+        ? (coordinates[1] as num?)?.toDouble()
+        : (json['lat'] as num?)?.toDouble();
     return Restaurant(
       id: json['_id'] ?? json['id'] ?? '',
       name: json['name'] ?? '',
@@ -142,6 +154,8 @@ class Restaurant {
       freeDeliveryThreshold:
           (json['free_delivery_threshold'] as num?)?.toDouble(),
       isZvingoPlus: json['is_zvingo_plus'] ?? false,
+      latitude: latitude,
+      longitude: longitude,
     );
   }
 }
@@ -153,6 +167,22 @@ Future<List<Restaurant>> restaurantList(Ref ref) async {
 
   return (response.data as List).map((e) => Restaurant.fromJson(e)).toList();
 }
+
+final nearbyRestaurantsProvider = FutureProvider.autoDispose
+    .family<List<Restaurant>, ({double lat, double lng})>((ref, point) async {
+  final dio = ref.watch(apiClientProvider);
+  final response = await dio.get(
+    '/catalog/restaurants',
+    queryParameters: {
+      'lat': point.lat,
+      'lon': point.lng,
+      'radius_km': 25,
+    },
+  );
+  return (response.data as List)
+      .map((item) => Restaurant.fromJson(item))
+      .toList();
+});
 
 @riverpod
 Future<Restaurant> restaurantDetail(Ref ref, String id) async {

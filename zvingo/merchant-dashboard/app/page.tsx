@@ -16,10 +16,11 @@ export default function Home() {
   }, [router]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center bg-neutral-900">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div>
-        <p className="mt-4 text-gray-500 text-sm">Loading...</p>
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#d7f654] text-xl font-black text-neutral-900">Z</div>
+        <div className="mx-auto mt-5 h-1 w-20 overflow-hidden rounded-full bg-white/10"><div className="h-full w-1/2 animate-pulse rounded-full bg-[#d7f654]" /></div>
+        <p className="mt-4 text-sm font-semibold text-neutral-400">Opening Zvingo Partner…</p>
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+import 'package:consumer_app/common/widgets/floating_app_dock.dart';
 import 'package:consumer_app/features/address/address_provider.dart';
 import 'package:consumer_app/features/order/active_order_provider.dart';
 import 'package:consumer_app/features/order/order_status_bottom_sheet.dart';
@@ -29,6 +30,7 @@ class _MainShellState extends ConsumerState<MainShell> {
     final activeOrderId = ref.watch(activeOrderProvider);
 
     return Scaffold(
+      extendBody: true,
       body: Stack(
         children: [
           widget.child,
@@ -36,7 +38,7 @@ class _MainShellState extends ConsumerState<MainShell> {
           Positioned(
             left: 0,
             right: 0,
-            bottom: 0,
+            bottom: 98 + MediaQuery.paddingOf(context).bottom,
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 400),
               switchInCurve: Curves.easeOutBack,
@@ -56,37 +58,14 @@ class _MainShellState extends ConsumerState<MainShell> {
                   : const SizedBox.shrink(),
             ),
           ),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: widget.currentIndex,
-        onDestinationSelected: widget.onTabChanged,
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.shopping_bag_outlined),
-            selectedIcon: Icon(Icons.shopping_bag_rounded),
-            label: 'Pickup',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.local_offer_outlined),
-            selectedIcon: Icon(Icons.local_offer_rounded),
-            label: 'Offers',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long_rounded),
-            label: 'Orders',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline_rounded),
-            selectedIcon: Icon(Icons.person_rounded),
-            label: 'Account',
+          Positioned(
+            left: 14,
+            right: 14,
+            bottom: 8 + MediaQuery.paddingOf(context).bottom,
+            child: FloatingAppDock(
+              currentIndex: widget.currentIndex,
+              onSelected: widget.onTabChanged,
+            ),
           ),
         ],
       ),

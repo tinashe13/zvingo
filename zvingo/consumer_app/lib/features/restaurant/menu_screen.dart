@@ -181,7 +181,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                 ),
               ),
 
-              // ── Restaurant Info (DoorDash style) ──────────
+              // ── Restaurant details ────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
@@ -230,7 +230,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                                 Text(restaurant.name,
                                     style: AppTextStyles.headlineMedium),
                                 const SizedBox(height: 2),
-                                // DoorDash-style subtitle: "Zvingo+ · Category · X.X mi"
+                                // Compact marketplace metadata.
                                 Text.rich(
                                   TextSpan(
                                     style: AppTextStyles.bodySmall.copyWith(
@@ -258,13 +258,13 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                       ),
                       const SizedBox(height: 12),
 
-                      // DoorDash-style info chips (horizontally scrollable)
+                      // Scannable store facts.
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: Row(
                           children: [
                             // Rating chip
-                            _DoorDashInfoChip(
+                            _StoreInfoChip(
                               topLine:
                                   '${restaurant.rating} \u2605 (${_formatCount(restaurant.reviewCount)})',
                               bottomLine: 'See reviews',
@@ -274,14 +274,14 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                             if (restaurant.neighborsLiked != null)
                               Padding(
                                 padding: const EdgeInsets.only(right: 8),
-                                child: _DoorDashInfoChip(
+                                child: _StoreInfoChip(
                                   topLine:
                                       '${restaurant.neighborsLiked} neighbors liked',
                                   bottomLine: 'Learn more',
                                 ),
                               ),
                             // Customer photos
-                            const _DoorDashInfoChip(
+                            const _StoreInfoChip(
                               topLine: 'Customer photos',
                               bottomLine: 'See all',
                             ),
@@ -453,7 +453,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                       ],
 
                       // Featured Items section header
-                      const Text('Featured Items', style: AppTextStyles.titleLarge),
+                      const Text('Featured Items',
+                          style: AppTextStyles.titleLarge),
                       const SizedBox(height: 4),
                     ],
                   ),
@@ -524,7 +525,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
 
               const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-              // ── Menu Items (2-column grid) ─────────────────
+              // ── Menu Items ─────────────────────────────────
               filteredItems.isEmpty
                   ? const SliverToBoxAdapter(
                       child: Padding(
@@ -534,48 +535,39 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                       ),
                     )
                   : SliverPadding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      sliver: SliverGrid(
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          mainAxisSpacing: 10,
-                          crossAxisSpacing: 10,
-                          childAspectRatio: 0.62,
-                        ),
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) {
-                            final item = filteredItems[index];
-                            return _MenuGridCard(
-                              item: item,
-                              onAdd: () {
-                                ref.read(cartProvider.notifier).addItem(
-                                      item.id,
-                                      item.name,
-                                      item.price,
-                                      imageUrl: item.imageUrl,
-                                      restaurantId: restaurant.id,
-                                      restaurantName: restaurant.name,
-                                      restaurantImage: restaurant.imageUrl,
-                                    );
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('${item.name} added to cart'),
-                                    duration: const Duration(seconds: 1),
-                                    behavior: SnackBarBehavior.floating,
-                                    backgroundColor: AppColors.primary,
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(10)),
-                                  ),
-                                );
-                              },
-                              onTap: () =>
-                                  _showItemDetail(context, item, restaurant),
-                            );
-                          },
-                          childCount: filteredItems.length,
-                        ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      sliver: SliverList.separated(
+                        itemBuilder: (context, index) {
+                          final item = filteredItems[index];
+                          return _MenuItemRow(
+                            item: item,
+                            onAdd: () {
+                              ref.read(cartProvider.notifier).addItem(
+                                    item.id,
+                                    item.name,
+                                    item.price,
+                                    imageUrl: item.imageUrl,
+                                    restaurantId: restaurant.id,
+                                    restaurantName: restaurant.name,
+                                    restaurantImage: restaurant.imageUrl,
+                                  );
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('${item.name} added to cart'),
+                                  duration: const Duration(seconds: 1),
+                                  behavior: SnackBarBehavior.floating,
+                                  backgroundColor: AppColors.primary,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10)),
+                                ),
+                              );
+                            },
+                            onTap: () =>
+                                _showItemDetail(context, item, restaurant),
+                          );
+                        },
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemCount: filteredItems.length,
                       ),
                     ),
 
@@ -708,12 +700,12 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   }
 }
 
-// ── DoorDash-style Info Chip ─────────────────────────────────
-class _DoorDashInfoChip extends StatelessWidget {
+// ── Store Info Chip ──────────────────────────────────────────
+class _StoreInfoChip extends StatelessWidget {
   final String topLine;
   final String bottomLine;
 
-  const _DoorDashInfoChip({required this.topLine, required this.bottomLine});
+  const _StoreInfoChip({required this.topLine, required this.bottomLine});
 
   @override
   Widget build(BuildContext context) {
@@ -964,7 +956,8 @@ class _ItemDetailSheetState extends State<_ItemDetailSheet> {
                   const SizedBox(height: 20),
 
                   // Special Instructions
-                  const Text('Special Instructions', style: AppTextStyles.titleSmall),
+                  const Text('Special Instructions',
+                      style: AppTextStyles.titleSmall),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _specialInstructionsController,
@@ -1020,13 +1013,13 @@ class _ItemDetailSheetState extends State<_ItemDetailSheet> {
   }
 }
 
-// ── Menu Grid Card Widget (DoorDash 2-col style) ─────────
-class _MenuGridCard extends StatelessWidget {
+// ── High-scannability menu row ───────────────────────────
+class _MenuItemRow extends StatelessWidget {
   final MenuItem item;
   final VoidCallback onAdd;
   final VoidCallback onTap;
 
-  const _MenuGridCard({
+  const _MenuItemRow({
     required this.item,
     required this.onAdd,
     required this.onTap,
@@ -1037,142 +1030,109 @@ class _MenuGridCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
+        constraints: const BoxConstraints(minHeight: 136),
         decoration: BoxDecoration(
           color: AppColors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.grey.shade100),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.divider),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Image with "+" button overlay
-            Stack(
-              children: [
-                ClipRRect(
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(14)),
-                  child: item.imageUrl.isNotEmpty
-                      ? CachedNetworkImage(
-                          imageUrl: item.imageUrl,
-                          width: double.infinity,
-                          height: 120,
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) => Container(
-                            height: 120,
-                            color: AppColors.primarySurface,
-                          ),
-                          errorWidget: (context, url, error) => Container(
-                            height: 120,
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item.name,
+                        style: AppTextStyles.titleMedium,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 6),
+                    Text(
+                      item.description.isNotEmpty
+                          ? item.description
+                          : 'Freshly prepared and made to order.',
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.textSecondary),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const Spacer(),
+                    Row(
+                      children: [
+                        Text('\$${item.price.toStringAsFixed(2)}',
+                            style: AppTextStyles.titleSmall),
+                        if (item.approvalPercent != null) ...[
+                          const SizedBox(width: 10),
+                          const Icon(Icons.thumb_up_alt_outlined,
+                              size: 13, color: AppColors.textSecondary),
+                          const SizedBox(width: 3),
+                          Text('${item.approvalPercent}%',
+                              style: AppTextStyles.approvalRating),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 128,
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.horizontal(
+                        right: Radius.circular(18)),
+                    child: item.imageUrl.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: item.imageUrl,
+                            width: 128,
+                            height: double.infinity,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              color: AppColors.primarySurface,
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              color: AppColors.primarySurface,
+                              child: const Icon(Icons.fastfood,
+                                  color: AppColors.primary, size: 36),
+                            ),
+                          )
+                        : Container(
+                            width: 128,
                             color: AppColors.primarySurface,
                             child: const Icon(Icons.fastfood,
                                 color: AppColors.primary, size: 36),
                           ),
-                        )
-                      : Container(
-                          height: 120,
-                          width: double.infinity,
-                          color: AppColors.primarySurface,
-                          child: const Icon(Icons.fastfood,
-                              color: AppColors.primary, size: 36),
-                        ),
-                ),
-                // "+" quick-add button
-                Positioned(
-                  bottom: 8,
-                  right: 8,
-                  child: GestureDetector(
-                    onTap: onAdd,
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: AppColors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.15),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(Icons.add,
-                          size: 20, color: AppColors.textPrimary),
-                    ),
                   ),
-                ),
-              ],
-            ),
-            // Item details
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.name,
-                      style: AppTextStyles.titleSmall.copyWith(fontSize: 13),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '\$${item.price.toStringAsFixed(2)}+',
-                      style: AppTextStyles.bodySmall.copyWith(
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.textPrimary),
-                    ),
-                    // Approval rating
-                    if (item.approvalPercent != null) ...[
-                      const SizedBox(height: 3),
-                      Row(
-                        children: [
-                          const Icon(Icons.thumb_up,
-                              size: 11, color: AppColors.textSecondary),
-                          const SizedBox(width: 3),
-                          Text(
-                            '${item.approvalPercent}% (${item.approvalCount ?? 0})',
-                            style: AppTextStyles.approvalRating,
-                          ),
-                        ],
-                      ),
-                    ],
-                    const Spacer(),
-                    // "Great price" badge
-                    if (item.isGreatPrice)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
+                  // "+" quick-add button
+                  Positioned(
+                    bottom: 10,
+                    right: 10,
+                    child: GestureDetector(
+                      onTap: onAdd,
+                      child: Container(
+                        width: 38,
+                        height: 38,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFE8F5E9),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.attach_money,
-                                size: 11, color: Color(0xFF2E7D32)),
-                            Text(
-                              'Great price',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                fontSize: 10,
-                                color: const Color(0xFF2E7D32),
-                                fontWeight: FontWeight.w600,
-                              ),
+                          color: AppColors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.16),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
                             ),
                           ],
                         ),
+                        child: const Icon(Icons.add,
+                            size: 22, color: AppColors.textPrimary),
                       ),
-                  ],
-                ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

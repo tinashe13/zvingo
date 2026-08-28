@@ -21,11 +21,11 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
                 ref={ref}
                 className={cn(
                     // Base styles
-                    "inline-flex items-center justify-center rounded-full font-semibold transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98]",
+                    "inline-flex items-center justify-center rounded-xl font-bold transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98]",
 
                     // Variants
                     variant === "primary" &&
-                    "bg-primary text-white hover:bg-primary-hover shadow-button hover:shadow-button-hover active:translate-y-0",
+                    "bg-neutral-900 text-white hover:bg-neutral-800 shadow-lg shadow-black/10 active:translate-y-0",
                     variant === "secondary" &&
                     "bg-neutral-100 text-neutral-900 hover:bg-neutral-200",
                     variant === "outline" &&
@@ -33,7 +33,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
                     variant === "ghost" &&
                     "hover:bg-neutral-100 text-neutral-600 hover:text-neutral-900",
                     variant === "danger" &&
-                    "bg-red-500 text-white hover:bg-red-600 shadow-sm",
+                    "bg-red-600 text-white hover:bg-red-700 shadow-sm",
 
                     // Sizes
                     size === "sm" && "h-9 px-4 text-xs",
