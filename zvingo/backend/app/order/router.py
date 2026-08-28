@@ -1,7 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional
-from app.order.schemas import OrderCreate, OrderResponse, OrderUpdateState, OrderItem
+from app.order.schemas import (
+    CheckoutCreate,
+    CheckoutResponse,
+    OrderCreate,
+    OrderItem,
+    OrderResponse,
+    OrderUpdateState,
+)
 from app.order.service import OrderService
+from app.order.access import can_access_order
 from app.order.models import Order
 from app.order.state_machine import InvalidStateTransition, OrderState
 from app.auth.router import get_current_user
@@ -30,6 +38,38 @@ def _lng(location) -> Optional[float]:
     return coords[0] if coords else None
 
 
+def _item(raw) -> OrderItem:
+    """Normalize an order item, which may be a model or a raw Mongo dict."""
+    get = raw.get if isinstance(raw, dict) else lambda key, default=None: getattr(raw, key, default)
+    return OrderItem(
+        name=get("name", ""),
+        quantity=get("quantity", 1),
+        price=get("price", 0),
+        special_instructions=get("special_instructions"),
+    )
+
+
+def _to_response(order: Order, driver_name: Optional[str] = None) -> OrderResponse:
+    """Build the wire representation of an order."""
+    return OrderResponse(
+        id=str(order.id),
+        state=order.state,
+        total_amount=order.total_amount,
+        created_at=order.created_at,
+        driver_id=order.driver_id,
+        driver_name=driver_name,
+        merchant_id=order.merchant_id,
+        consumer_id=order.consumer_id,
+        items=[_item(i) for i in (order.items or [])],
+        pickup_lat=_lat(order.pickup_location),
+        pickup_lng=_lng(order.pickup_location),
+        delivery_lat=_lat(order.dropoff_location),
+        delivery_lng=_lng(order.dropoff_location),
+        delivery_instructions=order.delivery_instructions,
+        group_id=order.group_id,
+    )
+
+
 async def _get_driver_name(driver_id: Optional[str]) -> Optional[str]:
     """Helper to fetch driver's full name from User model."""
     if not driver_id:
@@ -43,18 +83,8 @@ async def _get_driver_name(driver_id: Optional[str]) -> Optional[str]:
 
 async def _assert_order_access(order: Order, user: User):
     """403 unless the user is the order's consumer, driver, or owning merchant."""
-    uid = str(user.id)
-    if uid in (order.consumer_id, order.driver_id):
-        return
-    # Merchant check: Order.merchant_id is a Restaurant id owned by a merchant user
-    try:
-        from app.catalog.models import Restaurant
-        restaurant = await Restaurant.get(order.merchant_id)
-        if restaurant and restaurant.merchant_id == uid:
-            return
-    except Exception:
-        pass
-    raise HTTPException(status_code=403, detail="Not authorized to view this order")
+    if not await can_access_order(order, user):
+        raise HTTPException(status_code=403, detail="Not authorized to view this order")
 
 
 @router.get("/{order_id}")
@@ -158,22 +188,48 @@ async def create_order(
         order = await OrderService.create_order(order_in)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return OrderResponse(
-        id=str(order.id),
-        state=order.state,
-        total_amount=order.total_amount,
-        created_at=order.created_at,
-        merchant_id=order.merchant_id,
-        consumer_id=order.consumer_id,
-        items=[{"name": i.name if hasattr(i, 'name') else i.get("name", ""), 
-                "quantity": i.quantity if hasattr(i, 'quantity') else i.get("quantity", 1), 
-                "price": i.price if hasattr(i, 'price') else i.get("price", 0)} 
-               for i in order.items],
-        pickup_lat=_lat(order.pickup_location),
-        pickup_lng=_lng(order.pickup_location),
-        delivery_lat=_lat(order.dropoff_location),
-        delivery_lng=_lng(order.dropoff_location),
+    return _to_response(order)
+
+
+@router.post("/checkout", response_model=CheckoutResponse)
+async def checkout(
+    checkout_in: CheckoutCreate, current_user: User = Depends(get_current_user)
+):
+    """Check out a cart that spans one or more restaurants.
+
+    Each restaurant's basket becomes its own order — separate merchant, driver,
+    and lifecycle — but all of them share a `group_id` so the consumer app can
+    still show a single basket and one live tracking screen. A promo code is
+    validated against the combined subtotal, split across the baskets in
+    proportion to their value, and redeemed once.
+    """
+    try:
+        group_id, orders, discount_total = await OrderService.create_checkout(
+            checkout_in, str(current_user.id)
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return CheckoutResponse(
+        group_id=group_id,
+        promo_code=checkout_in.promo_code,
+        discount_total=discount_total,
+        subtotal=checkout_in.subtotal,
+        orders=[_to_response(o) for o in orders],
     )
+
+
+@router.get("/group/{group_id}", response_model=List[OrderResponse])
+async def get_order_group(
+    group_id: str, current_user: User = Depends(get_current_user)
+):
+    """All orders placed together in one multi-restaurant checkout."""
+    orders = await Order.find(Order.group_id == group_id).sort(-Order.created_at).to_list()
+    if not orders:
+        raise HTTPException(status_code=404, detail="Order group not found")
+    for order in orders:
+        await _assert_order_access(order, current_user)
+    return [_to_response(o) for o in orders]
 
 
 @router.post("/{order_id}/reorder", response_model=OrderResponse)
@@ -187,22 +243,7 @@ async def reorder(
         raise HTTPException(status_code=400, detail=str(e))
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    return OrderResponse(
-        id=str(order.id),
-        state=order.state,
-        total_amount=order.total_amount,
-        created_at=order.created_at,
-        merchant_id=order.merchant_id,
-        consumer_id=order.consumer_id,
-        items=[{"name": i.name if hasattr(i, 'name') else i.get("name", ""), 
-                "quantity": i.quantity if hasattr(i, 'quantity') else i.get("quantity", 1), 
-                "price": i.price if hasattr(i, 'price') else i.get("price", 0)} 
-               for i in order.items],
-        pickup_lat=_lat(order.pickup_location),
-        pickup_lng=_lng(order.pickup_location),
-        delivery_lat=_lat(order.dropoff_location),
-        delivery_lng=_lng(order.dropoff_location),
-    )
+    return _to_response(order)
 
 @router.put("/{order_id}/state", response_model=OrderResponse)
 async def update_order_state(
@@ -232,32 +273,7 @@ async def update_order_state(
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
 
-        # Format items properly (they're stored as dicts in MongoDB)
-        formatted_items = []
-        for i in order.items:
-            if isinstance(i, dict):
-                formatted_items.append(OrderItem(
-                    name=i.get("name", ""),
-                    quantity=i.get("quantity", 1),
-                    price=i.get("price", 0)
-                ))
-            else:
-                formatted_items.append(i)
-
-        return OrderResponse(
-            id=str(order.id),
-            state=order.state,
-            total_amount=order.total_amount,
-            created_at=order.created_at,
-            driver_id=order.driver_id,
-            merchant_id=order.merchant_id,
-            consumer_id=order.consumer_id,
-            items=formatted_items,
-            pickup_lat=_lat(order.pickup_location),
-            pickup_lng=_lng(order.pickup_location),
-            delivery_lat=_lat(order.dropoff_location),
-            delivery_lng=_lng(order.dropoff_location),
-        )
+        return _to_response(order)
     except InvalidStateTransition as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -267,26 +283,7 @@ async def get_consumer_orders(consumer_id: str, current_user: User = Depends(get
     if consumer_id != str(current_user.id):
         raise HTTPException(status_code=403, detail="Not authorized to view these orders")
     orders = await Order.find(Order.consumer_id == consumer_id).sort(-Order.created_at).to_list()
-    return [
-        OrderResponse(
-            id=str(o.id),
-            state=o.state,
-            total_amount=o.total_amount,
-            created_at=o.created_at,
-            driver_id=o.driver_id,
-            merchant_id=o.merchant_id,
-            consumer_id=o.consumer_id,
-            items=[{"name": i.name if hasattr(i, 'name') else i.get("name", ""), 
-                    "quantity": i.quantity if hasattr(i, 'quantity') else i.get("quantity", 1), 
-                    "price": i.price if hasattr(i, 'price') else i.get("price", 0)} 
-                   for i in o.items],
-            pickup_lat=_lat(o.pickup_location),
-            pickup_lng=_lng(o.pickup_location),
-            delivery_lat=_lat(o.dropoff_location),
-            delivery_lng=_lng(o.dropoff_location),
-        )
-        for o in orders
-    ]
+    return [_to_response(o) for o in orders]
 
 @router.get("/merchant/{merchant_id}", response_model=List[OrderResponse])
 async def get_merchant_orders(merchant_id: str, current_user: User = Depends(get_current_user)):
@@ -307,26 +304,7 @@ async def get_merchant_orders(merchant_id: str, current_user: User = Depends(get
     # Query orders for any of the merchant's restaurants
     orders = await Order.find({"merchant_id": {"$in": restaurant_ids}}).sort(-Order.created_at).to_list()
     
-    return [
-        OrderResponse(
-            id=str(o.id),
-            state=o.state,
-            total_amount=o.total_amount,
-            created_at=o.created_at,
-            driver_id=o.driver_id,
-            merchant_id=o.merchant_id,
-            consumer_id=o.consumer_id,
-            items=[{"name": i.name if hasattr(i, 'name') else i.get("name", ""), 
-                    "quantity": i.quantity if hasattr(i, 'quantity') else i.get("quantity", 1), 
-                    "price": i.price if hasattr(i, 'price') else i.get("price", 0)} 
-                   for i in o.items],
-            pickup_lat=_lat(o.pickup_location),
-            pickup_lng=_lng(o.pickup_location),
-            delivery_lat=_lat(o.dropoff_location),
-            delivery_lng=_lng(o.dropoff_location),
-        )
-        for o in orders
-    ]
+    return [_to_response(o) for o in orders]
 
 @router.post("/{order_id}/confirm-delivery")
 async def consumer_confirm_delivery(
@@ -382,23 +360,4 @@ async def get_driver_active_orders(current_user: User = Depends(get_current_user
         }
     ).sort(-Order.created_at).to_list()
     
-    return [
-        OrderResponse(
-            id=str(o.id),
-            state=o.state,
-            total_amount=o.total_amount,
-            created_at=o.created_at,
-            driver_id=o.driver_id,
-            merchant_id=o.merchant_id,
-            consumer_id=o.consumer_id,
-            items=[{"name": i.name if hasattr(i, 'name') else i.get("name", ""), 
-                    "quantity": i.quantity if hasattr(i, 'quantity') else i.get("quantity", 1), 
-                    "price": i.price if hasattr(i, 'price') else i.get("price", 0)} 
-                   for i in o.items],
-            pickup_lat=_lat(o.pickup_location),
-            pickup_lng=_lng(o.pickup_location),
-            delivery_lat=_lat(o.dropoff_location),
-            delivery_lng=_lng(o.dropoff_location),
-        )
-        for o in orders
-    ]
+    return [_to_response(o) for o in orders]

@@ -1,17 +1,30 @@
 import asyncio
+import uuid
 from datetime import datetime
 from app.time_utils import utc_now
-from typing import Optional
+from typing import List, Optional, Tuple
 from app.order.models import Order, OrderEvent
-from app.order.schemas import OrderCreate
+from app.order.schemas import CheckoutCreate, OrderCreate
 from app.order.state_machine import OrderState, validate_transition
+from app.observability import metrics
 import structlog
 
 logger = structlog.get_logger()
 
 class OrderService:
     @staticmethod
-    async def create_order(order_in: OrderCreate) -> Order:
+    async def create_order(
+        order_in: OrderCreate,
+        group_id: Optional[str] = None,
+        promo_override: Optional[Tuple[float, bool]] = None,
+    ) -> Order:
+        """Create a single order.
+
+        `group_id` links sibling orders from one multi-restaurant checkout.
+        `promo_override` supplies an already-validated (discount, free_delivery)
+        pair — the checkout flow uses it so a promo is validated, split, and
+        redeemed exactly once across the whole basket instead of per order.
+        """
         # Idempotency: if a key is provided, check for existing order
         if order_in.idempotency_key:
             existing = await Order.find_one(Order.idempotency_key == order_in.idempotency_key)
@@ -66,14 +79,19 @@ class OrderService:
         # ── Promo discount ──────────────────────────────
         discount = 0.0
         free_delivery = False
-        if order_in.promo_code:
+        if promo_override is not None:
+            discount, free_delivery = promo_override
+        elif order_in.promo_code:
             from app.catalog.promotion_service import (
                 validate_and_compute,
                 PromotionError,
             )
             try:
                 discount, free_delivery = await validate_and_compute(
-                    order_in.promo_code, order_in.consumer_id, order_in.total_amount
+                    order_in.promo_code,
+                    order_in.consumer_id,
+                    order_in.total_amount,
+                    order_in.items,
                 )
             except PromotionError as e:
                 raise ValueError(str(e))
@@ -86,6 +104,7 @@ class OrderService:
             pickup_location=pickup,
             dropoff_location=dropoff,
             idempotency_key=order_in.idempotency_key,
+            group_id=group_id,
             tip_amount=order_in.tip_amount or 0.0,
             is_pickup=order_in.is_pickup,
             scheduled_at=order_in.scheduled_at,
@@ -109,8 +128,17 @@ class OrderService:
 
         await order.insert()
 
-        # Record promo usage after the order is durably stored.
-        if order_in.promo_code:
+        if order_in.is_pickup:
+            kind = "pickup"
+        elif order_in.scheduled_at is not None:
+            kind = "scheduled"
+        else:
+            kind = "delivery"
+        metrics.orders_total.inc(kind=kind)
+
+        # Record promo usage after the order is durably stored. With an
+        # override the caller owns redemption, so it is recorded once there.
+        if order_in.promo_code and promo_override is None:
             from app.catalog.promotion_service import record_redemption
             await record_redemption(order_in.promo_code, order_in.consumer_id)
 
@@ -122,7 +150,7 @@ class OrderService:
         await notification_service.notify_merchant(order.merchant_id, str(order.id))
 
         # Skip immediate dispatch for self-pickup (no driver) and scheduled
-        # orders (the retry service dispatches them once scheduled_at is due).
+        # orders (ScheduledOrderService releases those as their slot nears).
         if order_in.is_pickup or (
             order_in.scheduled_at is not None and order_in.scheduled_at > utc_now()
         ):
@@ -136,6 +164,124 @@ class OrderService:
         ))
 
         return order
+
+    @staticmethod
+    def split_discount(discount: float, weights: List[float]) -> List[float]:
+        """Split a discount across baskets in proportion to their subtotals.
+
+        Cent-rounding remainders land on the largest basket so the parts always
+        sum back to the original discount.
+        """
+        if discount <= 0 or not weights:
+            return [0.0] * len(weights)
+
+        total = sum(weights)
+        if total <= 0:
+            # Degenerate case (all-zero baskets) — split evenly.
+            share = round(discount / len(weights), 2)
+            parts = [share] * len(weights)
+        else:
+            parts = [round(discount * (w / total), 2) for w in weights]
+
+        remainder = round(discount - sum(parts), 2)
+        if remainder:
+            largest = max(range(len(parts)), key=lambda i: weights[i])
+            parts[largest] = round(parts[largest] + remainder, 2)
+        return parts
+
+    @staticmethod
+    async def create_checkout(
+        checkout: CheckoutCreate, consumer_id: str
+    ) -> Tuple[str, List[Order], float]:
+        """Create one order per restaurant from a multi-restaurant cart.
+
+        Returns (group_id, orders, discount_total). Any promo code is validated
+        once against the combined subtotal, split across the baskets in
+        proportion to their value, and redeemed once. A free-delivery promo
+        waives the fee on the first basket only — one promo, one waived fee.
+
+        Note that creation is not atomic: if a later basket is rejected (an
+        unresolvable pickup location, say) the earlier baskets are already
+        created and the caller sees the error. Passing `idempotency_key` makes a
+        retry safe — each basket derives its own key, so the orders that already
+        exist are returned rather than duplicated.
+        """
+        group_id = uuid.uuid4().hex
+
+        discount_total = 0.0
+        free_delivery = False
+        if checkout.promo_code:
+            from app.catalog.promotion_service import (
+                validate_and_compute,
+                PromotionError,
+            )
+            all_items = [item for basket in checkout.baskets for item in basket.items]
+            try:
+                discount_total, free_delivery = await validate_and_compute(
+                    checkout.promo_code, consumer_id, checkout.subtotal, all_items
+                )
+            except PromotionError as e:
+                raise ValueError(str(e))
+
+        shares = OrderService.split_discount(
+            discount_total, [b.subtotal for b in checkout.baskets]
+        )
+
+        # Build every OrderCreate up front so schema-level problems surface
+        # before any order is written.
+        payloads = []
+        for index, basket in enumerate(checkout.baskets):
+            basket_key = (
+                f"{checkout.idempotency_key}:{basket.merchant_id}"
+                if checkout.idempotency_key
+                else None
+            )
+            payloads.append(
+                (
+                    OrderCreate(
+                        merchant_id=basket.merchant_id,
+                        consumer_id=consumer_id,
+                        items=basket.items,
+                        total_amount=basket.subtotal,
+                        pickup=basket.pickup,
+                        dropoff=checkout.dropoff,
+                        delivery_instructions=checkout.delivery_instructions,
+                        # The tip is for the whole basket; attach it to the
+                        # first order so it is not multiplied per restaurant.
+                        tip_amount=checkout.tip_amount if index == 0 else 0.0,
+                        delivery_fee=basket.delivery_fee or 0.0,
+                        service_fee=basket.service_fee or 0.0,
+                        tax_amount=basket.tax_amount or 0.0,
+                        idempotency_key=basket_key,
+                        is_pickup=basket.is_pickup,
+                        scheduled_at=checkout.scheduled_at,
+                        promo_code=checkout.promo_code,
+                    ),
+                    (shares[index], free_delivery and index == 0),
+                )
+            )
+
+        orders = []
+        for order_in, override in payloads:
+            orders.append(
+                await OrderService.create_order(
+                    order_in, group_id=group_id, promo_override=override
+                )
+            )
+
+        logger.info(
+            "Multi-restaurant checkout created",
+            group_id=group_id,
+            consumer_id=consumer_id,
+            basket_count=len(orders),
+            discount_total=discount_total,
+        )
+
+        if checkout.promo_code:
+            from app.catalog.promotion_service import record_redemption
+            await record_redemption(checkout.promo_code, consumer_id)
+
+        return group_id, orders, discount_total
 
     @staticmethod
     async def reorder(order_id: str, consumer_id: str) -> Optional[Order]:
@@ -163,6 +309,7 @@ class OrderService:
             events=[OrderEvent(state=OrderState.CREATED)],
         )
         await new_order.insert()
+        metrics.orders_total.inc(kind="reorder")
 
         from app.notification.service import notification_service
         await notification_service.notify_merchant(new_order.merchant_id, str(new_order.id))
@@ -207,6 +354,7 @@ class OrderService:
 
         order.events.append(OrderEvent(state=new_state, actor_id=actor_id))
         await order.save()
+        metrics.order_transitions_total.inc(state=new_state.value)
 
         logger.info("Order state changed successfully", order_id=order_id, state=new_state, actor=actor_id)
 

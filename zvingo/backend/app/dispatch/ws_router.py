@@ -25,9 +25,9 @@ from app.time_utils import utc_now
 
 import redis.asyncio as aioredis
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from jose import JWTError, jwt
 from starlette.websockets import WebSocketState
 
+from app.auth.ws import authenticate_ws
 from app.config import settings
 from app.dispatch.schemas import DriverLocationUpdate
 from app.dispatch.service import dispatch_service
@@ -46,18 +46,7 @@ def _authenticate_ws(websocket: WebSocket) -> str | None:
     `Authorization: Bearer` header. Returns the authenticated user id,
     or None if the token is missing/invalid.
     """
-    token = websocket.query_params.get("token")
-    if not token:
-        auth_header = websocket.headers.get("authorization", "")
-        if auth_header.lower().startswith("bearer "):
-            token = auth_header[7:]
-    if not token:
-        return None
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        return payload.get("sub")
-    except JWTError:
-        return None
+    return authenticate_ws(websocket)
 
 
 @router.websocket("/ws/driver/{driver_id}")

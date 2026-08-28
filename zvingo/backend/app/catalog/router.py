@@ -4,6 +4,7 @@ from app.catalog.models import Restaurant, MenuItem, Location
 from app.catalog.maintenance import get_default_restaurant_coords, backfill_restaurant_locations
 from app.config import settings
 from app.catalog.promotion_models import Promotion
+from app.catalog.promotion_service import SUPPORTED_PROMO_TYPES
 from app.auth.router import get_current_user, User
 from pydantic import BaseModel
 import re
@@ -344,6 +345,8 @@ class PromotionCreate(BaseModel):
     discount_value: float = 0.0
     min_order_usd: float = 0.0
     max_discount_usd: Optional[float] = None
+    free_item_id: Optional[str] = None
+    free_item_name: Optional[str] = None
     starts_at: Optional[datetime] = None
     ends_at: Optional[datetime] = None
     max_uses: Optional[int] = None
@@ -361,6 +364,8 @@ class PromotionUpdate(BaseModel):
     discount_value: Optional[float] = None
     min_order_usd: Optional[float] = None
     max_discount_usd: Optional[float] = None
+    free_item_id: Optional[str] = None
+    free_item_name: Optional[str] = None
     starts_at: Optional[datetime] = None
     ends_at: Optional[datetime] = None
     is_active: Optional[bool] = None
@@ -401,6 +406,9 @@ async def list_active_promotions(restaurant_id: Optional[str] = None):
 class PromoValidateRequest(BaseModel):
     code: str
     order_subtotal_usd: float
+    # Cart lines ({"id"?, "name", "price", "quantity"}) — required to preview a
+    # `free_item` promo, ignored by every other promo type.
+    items: List[dict] = []
 
 
 @router.post("/promotions/validate")
@@ -418,7 +426,7 @@ async def validate_promo_code(
     )
     try:
         discount, free_delivery = await validate_and_compute(
-            req.code, str(current_user.id), req.order_subtotal_usd
+            req.code, str(current_user.id), req.order_subtotal_usd, req.items
         )
     except PromotionError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -446,6 +454,19 @@ async def create_promotion(promo_in: PromotionCreate, current_user: User = Depen
     if current_user.role != "merchant":
         raise HTTPException(status_code=403, detail="Only merchants can create promotions")
 
+    if promo_in.promo_type not in SUPPORTED_PROMO_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"promo_type must be one of {', '.join(SUPPORTED_PROMO_TYPES)}",
+        )
+    if promo_in.promo_type == "free_item" and not (
+        promo_in.free_item_id or promo_in.free_item_name
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="free_item promotions require free_item_id or free_item_name",
+        )
+
     promo = Promotion(
         merchant_id=str(current_user.id),
         restaurant_id=promo_in.restaurant_id,
@@ -457,6 +478,8 @@ async def create_promotion(promo_in: PromotionCreate, current_user: User = Depen
         discount_value=promo_in.discount_value,
         min_order_usd=promo_in.min_order_usd,
         max_discount_usd=promo_in.max_discount_usd,
+        free_item_id=promo_in.free_item_id,
+        free_item_name=promo_in.free_item_name,
         starts_at=promo_in.starts_at or utc_now(),
         ends_at=promo_in.ends_at,
         max_uses=promo_in.max_uses,
@@ -487,6 +510,12 @@ async def update_promotion(promo_id: str, promo_in: PromotionUpdate, current_use
         raise HTTPException(status_code=403, detail="Not authorized to edit this promotion")
 
     update_data = promo_in.model_dump(exclude_unset=True)
+    new_type = update_data.get("promo_type")
+    if new_type is not None and new_type not in SUPPORTED_PROMO_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"promo_type must be one of {', '.join(SUPPORTED_PROMO_TYPES)}",
+        )
     for field, value in update_data.items():
         setattr(promo, field, value)
     promo.updated_at = utc_now()

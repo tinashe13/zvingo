@@ -117,6 +117,8 @@ def order(**overrides):
         "items": [OrderItem(name="Meal", quantity=2, price=5.0)],
         "pickup_location": Location.from_lat_lng(-17.8, 31.0),
         "dropoff_location": Location.from_lat_lng(-17.9, 31.1),
+        "delivery_instructions": None,
+        "group_id": None,
         "events": [],
         "save": AsyncMock(),
     }

@@ -74,3 +74,64 @@ class OrderResponse(BaseModel):
     delivery_lat: Optional[float] = None
     delivery_lng: Optional[float] = None
     delivery_instructions: Optional[str] = None
+    # Set when the order came from a multi-restaurant checkout.
+    group_id: Optional[str] = None
+
+
+class CheckoutBasket(BaseModel):
+    """One restaurant's slice of a multi-restaurant cart."""
+
+    merchant_id: str
+    items: List[OrderItem]
+    # Basket subtotal *before* fees, tip, and any promo discount.
+    subtotal: float
+
+    # Optional per-basket overrides; pickup falls back to the restaurant record.
+    pickup: Optional[Location] = None
+    delivery_fee: Optional[float] = None
+    service_fee: Optional[float] = 0.0
+    tax_amount: Optional[float] = 0.0
+    is_pickup: bool = False
+
+
+class CheckoutCreate(BaseModel):
+    """A single checkout that may span several restaurants.
+
+    The consumer's cart is grouped by restaurant on the client; each group
+    becomes its own Order (each has its own merchant, driver, and lifecycle)
+    but all of them share a `group_id` so the app can present one basket.
+    """
+
+    baskets: List[CheckoutBasket]
+    dropoff: Location
+
+    delivery_instructions: Optional[str] = None
+    tip_amount: float = 0.0
+    scheduled_at: Optional[datetime] = None
+    # Applied once across the whole checkout and split across the baskets.
+    promo_code: Optional[str] = None
+    idempotency_key: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _validate_baskets(self) -> "CheckoutCreate":
+        if not self.baskets:
+            raise ValueError("At least one basket is required")
+        merchant_ids = [b.merchant_id for b in self.baskets]
+        if len(set(merchant_ids)) != len(merchant_ids):
+            raise ValueError("Each basket must be for a different restaurant")
+        for basket in self.baskets:
+            if not basket.items:
+                raise ValueError("Each basket must contain at least one item")
+        return self
+
+    @property
+    def subtotal(self) -> float:
+        return round(sum(b.subtotal for b in self.baskets), 2)
+
+
+class CheckoutResponse(BaseModel):
+    group_id: str
+    promo_code: Optional[str] = None
+    discount_total: float = 0.0
+    subtotal: float = 0.0
+    orders: List["OrderResponse"] = []

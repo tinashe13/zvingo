@@ -36,6 +36,11 @@ class User(Document):
     # Driver vehicle — {"make", "model", "color", "plate"}
     vehicle: Optional[dict] = None
 
+    # Driver rating aggregate, maintained when consumers review a delivery.
+    # `driver_rating` is None until the driver has been rated at least once.
+    driver_rating: Optional[float] = None
+    driver_review_count: int = 0
+
     class Settings:
         name = "users"
         indexes = [

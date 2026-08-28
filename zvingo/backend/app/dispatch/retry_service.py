@@ -11,6 +11,7 @@ from app.order.models import Order
 from app.order.state_machine import OrderState
 from app.dispatch.service import dispatch_service
 from app.location.models import Location
+from app.observability import metrics
 import structlog
 
 logger = structlog.get_logger()
@@ -61,21 +62,24 @@ class OrderRetryService:
     async def _process_stuck_orders(cls):
         """Find and re-dispatch orders stuck in OFFERED state."""
         try:
-            # Find orders stuck in OFFERED state (driver never accepted)
-            # OR orders stuck in CREATED state (no drivers found on initial dispatch)
-            # CREATED orders older than RETRY_INTERVAL_SECONDS are eligible for retry.
-            # Scheduled orders become dispatchable once their scheduled_at is due.
+            # Retry-eligible orders are:
+            #   1. stuck in OFFERED (offered, but no driver accepted), or
+            #   2. stuck in CREATED past the retry cutoff (no driver was found
+            #      on the initial dispatch).
+            # Self-pickup orders never have a driver, so they are excluded.
+            # Scheduled orders belong to ScheduledOrderService until it releases
+            # them (`scheduled_dispatched`), after which they retry normally.
             cutoff = utc_now() - timedelta(seconds=RETRY_INTERVAL_SECONDS)
-            now = utc_now()
+            created_stuck = {
+                "state": OrderState.CREATED,
+                "created_at": {"$lt": cutoff},
+                "is_pickup": {"$ne": True},
+            }
             stuck_orders = await Order.find(
                 {"$or": [
                     {"state": OrderState.OFFERED},
-                    {"state": OrderState.CREATED, "created_at": {"$lt": cutoff}},
-                    {
-                        "state": OrderState.CREATED,
-                        "scheduled_at": {"$ne": None, "$lte": now},
-                        "is_pickup": {"$ne": True},
-                    },
+                    {**created_stuck, "scheduled_at": None},
+                    {**created_stuck, "scheduled_dispatched": True},
                 ]}
             ).to_list()
 
@@ -95,6 +99,7 @@ class OrderRetryService:
                             order_id=str(order.id),
                             retry_count=retry_count
                         )
+                        metrics.dispatch_retry_exhausted_total.inc()
                         continue
 
                     # Check if enough time has passed since last retry

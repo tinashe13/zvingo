@@ -48,6 +48,8 @@ def order(**overrides):
         "items": [SimpleNamespace(name="Meal", quantity=2, price=5.0), {"name": "Drink"}],
         "pickup_location": {"coordinates": [31.0, -17.0]},
         "dropoff_location": {"coordinates": [31.1, -17.1]},
+        "delivery_instructions": None,
+        "group_id": None,
     }
     values.update(overrides)
     return SimpleNamespace(**values)

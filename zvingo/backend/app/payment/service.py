@@ -8,6 +8,7 @@ import redis.asyncio as aioredis
 from app.config import settings
 from app.payment.models import Payment, PaymentMethod, PaymentStatus
 from app.payment.paynow_client import paynow_client
+from app.observability import metrics
 
 logger = structlog.get_logger()
 
@@ -20,6 +21,15 @@ METHOD_PROVIDER_MAP = {
 
 
 class PaymentService:
+    @staticmethod
+    async def _set_status(payment: Payment, status: PaymentStatus) -> Payment:
+        """Persist a payment status change and record it for metrics."""
+        payment.status = status
+        payment.updated_at = utc_now()
+        await payment.save()
+        metrics.payments_total.inc(status=status.value)
+        return payment
+
     @staticmethod
     async def get_exchange_rate(currency: str) -> float:
         r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
@@ -73,15 +83,13 @@ class PaymentService:
         if response.success:
             payment.poll_url = response.poll_url
             payment.paynow_reference = response.reference
-            payment.status = PaymentStatus.AWAITING_DELIVERY
-            await payment.save()
+            await PaymentService._set_status(payment, PaymentStatus.AWAITING_DELIVERY)
 
             # Start background auto-complete — ONLY when mock mode is explicitly on
             if settings.PAYMENT_MOCK_MODE and response.poll_url.startswith("mock://"):
                 asyncio.create_task(PaymentService._mock_auto_complete(str(payment.id)))
         else:
-            payment.status = PaymentStatus.FAILED
-            await payment.save()
+            await PaymentService._set_status(payment, PaymentStatus.FAILED)
             logger.error("Payment initiation failed", order_id=order_id, error=response.error)
 
         return payment
@@ -92,9 +100,7 @@ class PaymentService:
         await asyncio.sleep(3)
         payment = await Payment.get(payment_id)
         if payment and payment.status == PaymentStatus.AWAITING_DELIVERY:
-            payment.status = PaymentStatus.PAID
-            payment.updated_at = utc_now()
-            await payment.save()
+            await PaymentService._set_status(payment, PaymentStatus.PAID)
             logger.info("Mock payment auto-completed", payment_id=payment_id)
 
             # Trigger order dispatch
@@ -112,14 +118,10 @@ class PaymentService:
         # Poll Paynow
         status = await paynow_client.check_status(payment.poll_url)
         if status.paid:
-            payment.status = PaymentStatus.PAID
-            payment.updated_at = utc_now()
-            await payment.save()
+            await PaymentService._set_status(payment, PaymentStatus.PAID)
             await PaymentService._on_payment_success(payment)
         elif status.status.lower() in ("cancelled", "failed", "disputed"):
-            payment.status = PaymentStatus.FAILED
-            payment.updated_at = utc_now()
-            await payment.save()
+            await PaymentService._set_status(payment, PaymentStatus.FAILED)
 
         return payment
 
@@ -145,14 +147,10 @@ class PaymentService:
 
         status_lower = status.lower()
         if status_lower in ("paid", "delivered"):
-            payment.status = PaymentStatus.PAID
-            payment.updated_at = utc_now()
-            await payment.save()
+            await PaymentService._set_status(payment, PaymentStatus.PAID)
             await PaymentService._on_payment_success(payment)
         elif status_lower in ("cancelled", "failed", "disputed"):
-            payment.status = PaymentStatus.FAILED
-            payment.updated_at = utc_now()
-            await payment.save()
+            await PaymentService._set_status(payment, PaymentStatus.FAILED)
 
         return payment
 
@@ -180,8 +178,6 @@ class PaymentService:
             )
             return payment  # leave status unchanged; caller sees it is still PAID
 
-        payment.status = PaymentStatus.REFUNDED
-        payment.updated_at = utc_now()
-        await payment.save()
+        await PaymentService._set_status(payment, PaymentStatus.REFUNDED)
         logger.info("Payment refunded", payment_id=payment_id, order_id=payment.order_id)
         return payment

@@ -73,6 +73,8 @@ def order(**overrides):
         "items": [SimpleNamespace(name="Burger", quantity=2, price=10)],
         "pickup_location": Location.from_lat_lng(-17.8, 31.0),
         "dropoff_location": Location.from_lat_lng(-17.9, 31.1),
+        "delivery_instructions": None,
+        "group_id": None,
         "events": [],
         "save": AsyncMock(),
     }

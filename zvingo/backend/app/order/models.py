@@ -40,6 +40,12 @@ class Order(Document):
     is_pickup: bool = False
     # Scheduled: dispatch deferred until this time (UTC).
     scheduled_at: Optional[datetime] = None
+    # Set once the scheduler has released a scheduled order for dispatch, so it
+    # is handed over to the ordinary retry loop and never double-dispatched.
+    scheduled_dispatched: bool = False
+    # Multi-restaurant checkout: sibling orders placed in the same basket share
+    # this id. None for a single-restaurant order.
+    group_id: Optional[str] = None
     # Promo discount applied at checkout (dollars).
     promo_code: Optional[str] = None
     discount_amount: float = 0.0
@@ -60,4 +66,6 @@ class Order(Document):
         indexes = [
             [("pickup_location", "2dsphere")],
             [("idempotency_key", 1)],
+            [("group_id", 1)],
+            [("state", 1), ("scheduled_at", 1)],
         ]
