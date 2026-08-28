@@ -26,6 +26,13 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
     NEXT_PUBLIC_DEFAULT_RESTAURANT_LNG=$NEXT_PUBLIC_DEFAULT_RESTAURANT_LNG \
     NEXT_TELEMETRY_DISABLED=1
 
+# Cap the V8 heap for `next build`. Left uncapped, Node sizes its heap from
+# total host RAM and a small droplet gets OOM-killed mid-build (the build
+# dies with "signal: killed" rather than a JS error). Capping makes Node
+# collect garbage instead. Raise it on a bigger box for a faster build.
+ARG NODE_BUILD_MEMORY_MB=1536
+ENV NODE_OPTIONS=--max-old-space-size=$NODE_BUILD_MEMORY_MB
+
 RUN npm run build
 
 # ---- Stage 3: production runner ----

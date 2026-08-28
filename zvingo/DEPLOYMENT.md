@@ -209,6 +209,87 @@ docker compose -f docker-compose.prod.yml up -d --build backend  # deploy new co
 docker compose -f docker-compose.prod.yml down               # stop (volumes kept)
 ```
 
+## Split deployment (backend and dashboard on separate hosts)
+
+`docker-compose.prod.yml` runs everything on one host. To separate them, use
+the two split files instead — each host builds only its own image, so the
+backend host never builds Node at all.
+
+| Host | Compose file | Runs | Domain |
+|------|--------------|------|--------|
+| A | `docker-compose.backend.yml` | backend, mongo, redis, nginx | `api.<domain>` |
+| B | `docker-compose.dashboard.yml` | dashboard, nginx | `app.<domain>` |
+
+**Host A — backend**
+
+```bash
+cp .env.backend.example .env && nano .env && chmod 600 .env
+sed -i 's/api\.zvingo\.example\.com/api.your-domain.com/g' nginx/nginx.api.conf
+sudo certbot certonly --standalone -d api.your-domain.com
+mkdir -p nginx/certs && sudo cp /etc/letsencrypt/live/api.your-domain.com/{fullchain,privkey}.pem nginx/certs/
+docker compose -f docker-compose.backend.yml up -d --build
+```
+
+**Host B — dashboard**
+
+```bash
+cp .env.dashboard.example .env && nano .env && chmod 600 .env
+sed -i 's/app\.zvingo\.example\.com/app.your-domain.com/g' nginx/nginx.dashboard.conf
+sudo certbot certonly --standalone -d app.your-domain.com
+mkdir -p nginx/certs && sudo cp /etc/letsencrypt/live/app.your-domain.com/{fullchain,privkey}.pem nginx/certs/
+docker compose -f docker-compose.dashboard.yml up -d --build
+```
+
+Four things differ from the single-host setup:
+
+1. **CORS becomes load-bearing.** Combined, the dashboard and API share an
+   origin and the browser never preflights. Split, they do not — set
+   `CORS_ORIGINS=https://app.your-domain.com` on host A. The backend sends
+   credentials, so `"*"` is not a legal value; it must be an explicit list.
+2. **Uploads follow the API host.** `UPLOAD_BASE_URL` must be
+   `https://api.your-domain.com`, which is the host actually serving
+   `/static/uploads/`.
+3. **The dashboard calls the API directly.** `nginx.dashboard.conf`
+   deliberately does not proxy `/api`; the browser uses the
+   `NEXT_PUBLIC_API_URL` baked into the bundle.
+4. **BinProto stays on host A.** The driver app keeps using
+   `api.your-domain.com:9090/udp` and `:9091` — those bypass nginx by design.
+
+The `/api` prefix is kept on the API host even though it is a dedicated
+subdomain, so existing mobile builds (which target `https://api.<domain>/api`)
+need no change.
+
+## Build runs out of memory
+
+A build that dies with `failed to execute bake: signal: killed` was terminated
+by the kernel's OOM reaper, not by a code error. The Next.js dashboard build
+needs roughly 1.5 GB on its own, and compose builds services in parallel, so
+building the backend and dashboard together on a small droplet exceeds RAM.
+
+Any one of these fixes it:
+
+```bash
+# 1. Add swap (do this regardless — it is the cheapest insurance)
+sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+free -h
+
+# 2. Build one service at a time instead of in parallel
+docker compose -f docker-compose.prod.yml build backend
+docker compose -f docker-compose.prod.yml build merchant-dashboard
+docker compose -f docker-compose.prod.yml up -d
+
+# 3. Lower the V8 heap cap for the dashboard build
+NODE_BUILD_MEMORY_MB=1024 docker compose -f docker-compose.prod.yml build merchant-dashboard
+```
+
+Splitting the hosts (above) sidesteps it entirely: the backend host never runs
+a Node build. Resizing the droplet to 4 GB also works.
+
+If a killed build left partial layers behind, `docker builder prune -f`
+reclaims the space before you retry.
+
 ## Routing reference
 
 | Public path                        | Destination                       | Notes                            |
