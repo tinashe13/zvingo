@@ -47,41 +47,121 @@ are provided. Do **not** mark them "done" without a live test.
     real domain; obtain Let's Encrypt certs per `DEPLOYMENT.md`.
   - Provision the production server and run the prod compose stack.
 
+- [ ] **First admin account**
+  - The admin API (`/admin/*`) requires `role == "admin"`, but nothing can mint
+    the first admin — `POST /auth/register` will not grant that role. Promote a
+    user directly in Mongo once, then manage the rest through
+    `PATCH /admin/users/{id}`:
+    `db.users.updateOne({phone: "+263..."}, {$set: {role: "admin"}})`.
+
+- [ ] **Alert delivery sink**
+  - `AlertService` raises alerts as structured logs, publishes them to the Redis
+    `alerts` channel, and serves them at `GET /admin/alerts`. Nothing yet
+    *delivers* them. Pick a destination (email, SMS to an ops number, Slack,
+    PagerDuty) and add a subscriber; needs an account/credentials.
+
+- [ ] **Metrics scraping**
+  - `GET /metrics` exposes Prometheus text exposition. Stand up Prometheus (or a
+    hosted agent), point it at the backend, and decide whether to protect the
+    endpoint with `METRICS_TOKEN` or to block `/metrics` at nginx so it is only
+    reachable on the internal network. See the note in §3 about worker counts.
+
 ---
 
 ## 2. Product backlog (code can be done, not yet started)
 
-- [ ] **Scheduled order dispatch refinement**
-  - Orders with `scheduled_at` are currently dispatched by the retry loop once
-    due. Consider a dedicated scheduler or tighter latency guarantees.
-- [ ] **Ratings — driver aggregate**
-  - Restaurant rating aggregation is implemented. Add a `driver_rating` /
-    `review_count` aggregate on the `User` document so driver ratings surface
-    on the driver profile/ratings screen.
-- [ ] **In-app chat — real-time stream**
-  - Chat currently persists messages and publishes to Redis, but there is no
-    SSE/WebSocket chat subscription endpoint yet. Add
-    `GET /chat/orders/{order_id}/stream` mirroring the notification SSE.
-- [ ] **Promotions — `free_item` type**
-  - `promo_type="free_item"` is declared in docs but `promotion_service.py`
-    rejects unknown types. Implement free-item redemption if needed.
-- [ ] **Admin panel**
-  - `get_current_admin` (role `admin`) and the admin-only refund/rates paths are
-    in place. There is no admin dashboard or user/order management API yet.
-- [ ] **Multi-restaurant cart**
-  - The consumer cart groups items by restaurant, but the checkout/order flow
-    needs end-to-end verification across multiple restaurants.
-- [ ] **Realtime driver location over WebSocket**
-  - Consumer tracking currently uses SSE/polling. Consolidate onto the existing
-    WebSocket channel if desired.
+- [ ] **Multi-restaurant cart — cancellation & fee policy**
+  - `POST /orders/checkout` creates one order per restaurant sharing a
+    `group_id`. Two product decisions remain: (a) cancelling one order in a
+    group currently leaves its siblings live — decide whether cancelling should
+    cascade; (b) each basket is charged its own delivery fee since each has its
+    own driver — decide whether to bundle or discount grouped deliveries.
+
+- [ ] **Multi-restaurant checkout is not atomic**
+  - `create_checkout` writes each basket in turn. If a later basket is rejected
+    (unresolvable pickup location, for instance) the earlier ones are already
+    persisted. `idempotency_key` makes a client retry safe, but a checkout that
+    is never retried leaves a partial group. Either pre-resolve every basket's
+    pickup before writing anything, or roll the group back on failure.
+
+- [ ] **Chat — read receipts / unread counts**
+  - Messages persist and stream (`GET /chat/orders/{id}/stream`), but there is
+    no read state, so clients cannot show an unread badge. Add `read_at` per
+    participant and an endpoint to mark a conversation read.
+
+- [ ] **Driver rating backfill**
+  - `User.driver_rating` / `driver_review_count` are maintained from now on, but
+    reviews written before the aggregate existed are not reflected. Add a
+    one-off script that recomputes both from the `reviews` collection.
+
+- [ ] **Free-item promos — bind to menu item ids**
+  - `free_item` promos match `free_item_id` first and fall back to a
+    case-insensitive `free_item_name`. The name fallback silently stops matching
+    when a merchant renames a dish. Have the merchant dashboard always send
+    `free_item_id`, then make the name a display label only.
+
+- [ ] **Promotions — per-restaurant scoping at redemption**
+  - `Promotion.restaurant_id` scopes which promos are *listed*, but
+    `compute_discount` does not check it, so a code shown for one restaurant can
+    be redeemed against another. Enforce the scope at redemption.
+
+- [ ] **Realtime — retire the per-purpose SSE streams**
+  - `GET /ws/orders/{id}/track` now carries order events, driver location, and
+    chat on one socket. `GET /location/driver/{id}/track` and
+    `GET /notification/events/{channel}` are still there for the existing
+    clients. Once the consumer app moves over, remove them.
+
+- [ ] **Platform docs are stale**
+  - `zvingo/SYSTEM_DOCUMENTATION.md` (module architecture, startup lifecycle,
+    collections, real-time channels) and `zvingo/DEPLOYMENT.md` (env vars,
+    routing reference) predate the admin API, observability stack, tracking
+    WebSocket, checkout groups, and the new `User` / `Order` / `Promotion`
+    fields. Update them — they are repo-level docs, outside the backend tree.
 
 ---
 
-## 3. Ops / observability (nice-to-have, not blocking)
+## 3. Ops / observability
 
-- [ ] Structured request/error tracing (request IDs, latency logging).
-- [ ] Metrics (Prometheus endpoint or similar) for orders, dispatch, payments.
-- [ ] Alerting on stuck orders, failed payments, and dispatch retry exhaustion.
+- [x] Structured request/error tracing — `RequestContextMiddleware` binds a
+      correlation id (honouring an inbound `X-Request-ID`) to the structlog
+      context, logs method/route/status/latency, and echoes `X-Request-ID` and
+      `X-Response-Time-Ms` on every response.
+- [x] Metrics — `GET /metrics` in Prometheus text format, covering HTTP traffic,
+      order creation and transitions, dispatch offers / no-driver / retry
+      exhaustion, payment outcomes, and alerts.
+- [x] Alerting — `AlertService` polls for stuck orders, failed-payment spikes,
+      and dispatch retry exhaustion; alerts are deduped per window, logged,
+      published to Redis, and served at `GET /admin/alerts`.
+
+Open follow-ups:
+
+- [ ] **Production runs 4 uvicorn workers, and the app is single-worker by design**
+  - `backend/Dockerfile` deliberately uses one worker: the lifespan binds the
+    BinProto UDP/TCP ports and starts singleton background loops. But
+    `zvingo/docker-compose.prod.yml` overrides `command:` with `--workers 4`.
+    Four workers means four processes racing to bind ports 9090/9091 and four
+    copies of every background loop — the dispatch retry loop, the scheduled
+    order poller, and the alert monitor would all run four times over,
+    duplicating offers and alerts.
+  - Fix by dropping `--workers 4` from `docker-compose.prod.yml` and scaling with
+    more backend containers behind nginx (which is what the Dockerfile note
+    already prescribes), or by gating the background loops and BinProto servers
+    behind a leader lock so only one worker runs them.
+  - The file is at the repo root, outside the backend tree, so it is left
+    unchanged here — it is a deployment-topology decision.
+
+- [ ] **Metrics are per-process**
+  - The registry lives in memory, so with more than one uvicorn worker a scrape
+    only sees the worker that answered it. One worker per container (scraping
+    each) is the intended shape — see the item above.
+
+- [ ] **Log shipping / retention**
+  - Production emits one JSON object per line to stdout. Nothing collects it —
+    pick a destination (Loki, CloudWatch, an ELK stack) and set retention.
+
+- [ ] **Alert thresholds are guesses**
+  - `ALERT_STUCK_ORDER_MINUTES=30` and `ALERT_FAILED_PAYMENT_THRESHOLD=5` were
+    chosen without traffic data. Re-tune once there is real order volume.
 
 ---
 
@@ -98,3 +178,44 @@ are provided. Do **not** mark them "done" without a live test.
 - [x] Scheduled orders (deferred dispatch via retry loop).
 - [x] Promo code validation + redemption + free-delivery.
 - [x] Real refund provider call (mock + explicit live failure).
+- [x] **Scheduled order dispatch** — `ScheduledOrderService` polls every
+      `SCHEDULED_POLL_INTERVAL_SECONDS` (15s) and releases an order
+      `SCHEDULED_DISPATCH_LEAD_MINUTES` before its slot, so the driver arrives
+      for the slot instead of setting off at it. Released orders are marked
+      `scheduled_dispatched` and handed to the ordinary retry loop.
+- [x] **Dispatch retry scoping** — the retry loop no longer re-dispatches
+      self-pickup orders, and no longer grabs scheduled orders before the
+      scheduler has released them.
+- [x] **Driver rating aggregate** — `User.driver_rating` /
+      `driver_review_count`, folded in on review submission, exposed on
+      `/auth/me` and `GET /rating/drivers/{id}/summary` (with a star breakdown).
+- [x] **Chat real-time stream** — `GET /chat/orders/{order_id}/stream` (SSE),
+      participant-gated, accepting the JWT as a header or `?token=`.
+- [x] **`free_item` promotions** — redeemable, matched by menu item id or name,
+      discounting the cheapest matching cart line; unsupported `promo_type`
+      values are now rejected at creation instead of at redemption.
+- [x] **Per-user promo limits** — `max_uses_per_user` is actually enforced via
+      `Promotion.redemptions_by_user` (legacy `redeemed_by` still counts as one
+      use), and a discount can never exceed the order subtotal.
+- [x] **Admin API** — `/admin/stats`, `/admin/users` (+ detail, role/status
+      patch with self-lockout guards), `/admin/orders` (+ detail with the event
+      trail, force-cancel, re-dispatch), `/admin/payments`,
+      `/admin/restaurants` (+ suspend/reinstate), `/admin/alerts`.
+- [x] **Deactivated accounts are enforced** — `User.is_active` was previously
+      never checked; login and every authenticated request now reject an
+      inactive user (403), so an admin deactivation takes effect immediately
+      even for tokens minted earlier.
+- [x] **Multi-restaurant checkout** — `POST /orders/checkout` creates one order
+      per restaurant sharing a `group_id`, splits a promo across the baskets in
+      proportion to their value, redeems it once, applies free delivery to a
+      single basket, and keeps the tip on one order.
+      `GET /orders/group/{group_id}` returns the whole group.
+- [x] **Realtime tracking over WebSocket** — `GET /ws/orders/{order_id}/track`
+      carries the order snapshot, lifecycle events, driver location, and chat on
+      one socket, and starts following the driver's location channel as soon as
+      dispatch assigns one.
+- [x] **Shared order access check** — `app/order/access.py::can_access_order` is
+      the single rule used by order detail, chat, and tracking.
+- [x] **Test bootstrap** — `tests/conftest.py` supplies default `MONGODB_URL` /
+      `REDIS_URL` so `pytest` runs with no environment setup. The suite is at
+      100% line coverage (`fail_under = 100` in `pyproject.toml`).

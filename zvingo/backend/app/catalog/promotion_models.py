@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Dict, Optional, List
 from beanie import Document, Indexed
 from pydantic import BaseModel, Field
 from datetime import datetime
@@ -24,6 +24,11 @@ class Promotion(Document):
     min_order_usd: float = 0.0  # Minimum order amount to qualify
     max_discount_usd: Optional[float] = None  # Cap on discount amount
 
+    # free_item promos: the qualifying item must be in the cart. Match by menu
+    # item id when set, otherwise by (case-insensitive) name.
+    free_item_id: Optional[str] = None
+    free_item_name: Optional[str] = None
+
     # Scheduling
     starts_at: datetime = Field(default_factory=utc_now)
     ends_at: Optional[datetime] = None  # None = no expiry
@@ -33,7 +38,10 @@ class Promotion(Document):
     max_uses: Optional[int] = None  # Total uses across all consumers
     max_uses_per_user: int = 1  # Per-consumer usage limit
     current_uses: int = 0
-    redeemed_by: List[str] = []  # consumer ids who have redeemed (per-user tracking)
+    redeemed_by: List[str] = []  # consumer ids who have redeemed (at least once)
+    # Per-consumer redemption counts, which is what `max_uses_per_user` gates on.
+    # `redeemed_by` is retained for documents written before this field existed.
+    redemptions_by_user: Dict[str, int] = {}
 
     # Promo code (optional — for code-based promos)
     code: Optional[str] = None

@@ -2,6 +2,7 @@ import asyncio
 import redis.asyncio as redis
 from app.config import settings
 from app.dispatch.schemas import DriverLocationUpdate
+from app.observability import metrics
 import structlog
 import math
 
@@ -109,10 +110,12 @@ class DispatchService:
                 logger.warn("Failed to transition order to OFFERED", order_id=order_id, error=str(e))
         else:
             logger.warn("No drivers found for order", order_id=order_id)
+            metrics.dispatch_no_driver_total.inc()
             return
 
         for driver_id, dist_km in driver_results:
             await notification_service.send_offer(driver_id, order_id, driver_dist_km=dist_km)
+            metrics.dispatch_offers_total.inc()
 
         # Wait for acceptance (handled by state machine + timeout task separately)
 

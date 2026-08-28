@@ -4,8 +4,11 @@ from fastapi import FastAPI
 from fastapi.middleware.gzip import GZipMiddleware
 from app.config import settings
 from app.db.session import init_db
+from app.observability.logging import configure_logging
+from app.observability.middleware import RequestContextMiddleware
 import structlog
 
+configure_logging()
 logger = structlog.get_logger()
 
 @asynccontextmanager
@@ -43,6 +46,14 @@ async def lifespan(app: FastAPI):
     await retry_service.start()
     logger.info("Order retry service started")
 
+    # Release scheduled orders into dispatch as their slot approaches
+    from app.dispatch.scheduler_service import scheduled_order_service
+    await scheduled_order_service.start()
+
+    # Watch for stuck orders, failed payments, and dispatch exhaustion
+    from app.observability.alerts import alert_service
+    await alert_service.start()
+
     # Backfill restaurant locations for existing data
     from app.catalog.maintenance import backfill_restaurant_locations
     await backfill_restaurant_locations(force_all=False)
@@ -55,6 +66,8 @@ async def lifespan(app: FastAPI):
         udp_transport.close()
     tcp_task.cancel()
     await retry_service.stop()
+    await scheduled_order_service.stop()
+    await alert_service.stop()
     try:
         await tcp_task
     except asyncio.CancelledError:
@@ -68,6 +81,9 @@ app = FastAPI(
 )
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+# Outermost middleware: every request gets a correlation id, latency log,
+# and an entry in the HTTP metrics — including ones that error out.
+app.add_middleware(RequestContextMiddleware)
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -91,6 +107,9 @@ app.add_middleware(
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
+
+from app.observability import router as observability_router
+app.include_router(observability_router.router, tags=["observability"])
 
 # Include routers
 from app.auth import router as auth_router
@@ -134,6 +153,12 @@ app.include_router(rating_router.router, prefix="/rating", tags=["rating"])
 
 from app.chat import router as chat_router
 app.include_router(chat_router.router, prefix="/chat", tags=["chat"])
+
+from app.tracking import ws_router as tracking_ws_router
+app.include_router(tracking_ws_router.router, tags=["tracking-ws"])
+
+from app.admin import router as admin_router
+app.include_router(admin_router.router, prefix="/admin", tags=["admin"])
 
 from app.upload import router as upload_router
 from fastapi.staticfiles import StaticFiles

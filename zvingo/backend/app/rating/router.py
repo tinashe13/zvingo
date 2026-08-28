@@ -4,6 +4,7 @@ from app.rating.models import Review
 from app.rating.schemas import ReviewCreate, ReviewResponse
 from app.order.models import Order
 from app.order.state_machine import OrderState
+from app.rating.service import apply_driver_rating, apply_restaurant_rating
 from app.auth.router import get_current_user
 from app.auth.models import User
 
@@ -56,23 +57,10 @@ async def create_review(
     )
     await review.insert()
 
-    # Update restaurant aggregate rating / review count.
-    try:
-        from app.catalog.models import Restaurant
-        restaurant = await Restaurant.get(order.merchant_id)
-        if restaurant:
-            if restaurant.review_count:
-                total = restaurant.rating * restaurant.review_count
-                restaurant.review_count += 1
-                restaurant.rating = round(
-                    (total + review.restaurant_rating) / restaurant.review_count, 2
-                )
-            else:
-                restaurant.review_count = 1
-                restaurant.rating = float(review.restaurant_rating)
-            await restaurant.save()
-    except Exception:
-        pass
+    # Fold the new stars into the restaurant and driver aggregates.
+    await apply_restaurant_rating(order.merchant_id, review.restaurant_rating)
+    if review.driver_id and review.driver_rating is not None:
+        await apply_driver_rating(review.driver_id, review.driver_rating)
 
     return _to_response(review)
 
@@ -91,3 +79,26 @@ async def list_driver_reviews(driver_id: str):
         "-created_at"
     ).to_list()
     return [_to_response(r) for r in reviews]
+
+
+@router.get("/drivers/{driver_id}/summary")
+async def driver_rating_summary(driver_id: str):
+    """Aggregate rating for a driver, for the driver profile / ratings screen."""
+    driver = await User.get(driver_id)
+    if not driver:
+        raise HTTPException(status_code=404, detail="Driver not found")
+
+    reviews = await Review.find(Review.driver_id == driver_id).to_list()
+    rated = [r.driver_rating for r in reviews if r.driver_rating is not None]
+
+    breakdown = {str(star): 0 for star in range(1, 6)}
+    for stars in rated:
+        breakdown[str(stars)] += 1
+
+    return {
+        "driver_id": driver_id,
+        "driver_rating": driver.driver_rating,
+        "driver_review_count": driver.driver_review_count,
+        "rated_reviews": len(rated),
+        "breakdown": breakdown,
+    }

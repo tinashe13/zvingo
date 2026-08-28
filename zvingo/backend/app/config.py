@@ -61,6 +61,27 @@ class Settings(BaseSettings):
     DISPATCH_RETRY_INTERVAL_SECONDS: int = 120
     DISPATCH_MAX_RETRY_ATTEMPTS: int = 10
 
+    # Scheduled orders — a dedicated poller dispatches them ahead of time so
+    # the driver arrives for the requested slot instead of starting then.
+    SCHEDULED_POLL_INTERVAL_SECONDS: int = 15
+    SCHEDULED_DISPATCH_LEAD_MINUTES: int = 15
+
+    # Observability
+    LOG_LEVEL: str = "INFO"
+    LOG_JSON: bool = False  # force JSON logs (always on in production)
+    METRICS_ENABLED: bool = True
+    # When set, GET /metrics requires `Authorization: Bearer <token>`.
+    METRICS_TOKEN: Optional[str] = None
+
+    # Alerting — a background monitor emits `alert` log events and publishes
+    # them to the Redis `alerts` channel.
+    ALERTS_ENABLED: bool = True
+    ALERT_POLL_INTERVAL_SECONDS: int = 300
+    ALERT_STUCK_ORDER_MINUTES: int = 30
+    ALERT_FAILED_PAYMENT_THRESHOLD: int = 5
+    ALERT_WINDOW_MINUTES: int = 60
+    ALERT_HISTORY_SIZE: int = 100
+
     # Finance
     DRIVER_SHARE_RATIO: float = 0.85  # driver keeps 85% of delivery fee
 

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from app.auth.schemas import Token, UserCreate, UserLogin, OTPRequest, OTPVerify
 from app.auth.service import AuthService
@@ -11,25 +11,60 @@ from typing import Optional
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
+INACTIVE_ACCOUNT_DETAIL = "Account is deactivated"
 
-# --- Helper to get current user from JWT ---
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
-    credentials_exception = HTTPException(
+
+def _credentials_exception() -> HTTPException:
+    return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+async def resolve_user_from_token(token: str) -> User:
+    """Decode a JWT and load the active user it identifies.
+
+    Raises 401 for a bad/expired token or an unknown subject, and 403 for a
+    user an admin has deactivated — a deactivated account must not be able to
+    keep using tokens minted before the deactivation.
+    """
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id: str = payload.get("sub")
         if user_id is None:
-            raise credentials_exception
+            raise _credentials_exception()
     except JWTError:
-        raise credentials_exception
+        raise _credentials_exception()
     user = await User.get(user_id)
     if user is None:
-        raise credentials_exception
+        raise _credentials_exception()
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=INACTIVE_ACCOUNT_DETAIL
+        )
     return user
+
+
+# --- Helper to get current user from JWT ---
+async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
+    return await resolve_user_from_token(token)
+
+
+async def get_current_user_flexible(request: Request) -> User:
+    """Authenticate from the Authorization header *or* a `token` query param.
+
+    Browser `EventSource` and `WebSocket` clients cannot set headers, so
+    streaming endpoints accept the JWT as a query parameter as well.
+    """
+    token = request.query_params.get("token")
+    if not token:
+        header = request.headers.get("authorization", "")
+        if header.lower().startswith("bearer "):
+            token = header[7:]
+    if not token:
+        raise _credentials_exception()
+    return await resolve_user_from_token(token)
 
 
 async def get_current_admin(user: User = Depends(get_current_user)) -> User:
@@ -48,6 +83,23 @@ class UserProfile(BaseModel):
     phone: str
     full_name: str
     role: str
+    is_active: bool = True
+    # Driver rating aggregate — None until the driver has been rated.
+    driver_rating: Optional[float] = None
+    driver_review_count: int = 0
+
+
+def _profile(user: User) -> UserProfile:
+    return UserProfile(
+        id=str(user.id),
+        email=user.email,
+        phone=user.phone,
+        full_name=user.full_name,
+        role=user.role,
+        is_active=user.is_active,
+        driver_rating=user.driver_rating,
+        driver_review_count=user.driver_review_count,
+    )
 
 
 class UserUpdate(BaseModel):
@@ -94,18 +146,16 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=INACTIVE_ACCOUNT_DETAIL
+        )
     access_token = AuthService.create_access_token(data={"sub": str(user.id)})
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.get("/me", response_model=UserProfile)
 async def get_me(current_user: User = Depends(get_current_user)):
-    return UserProfile(
-        id=str(current_user.id),
-        email=current_user.email,
-        phone=current_user.phone,
-        full_name=current_user.full_name,
-        role=current_user.role,
-    )
+    return _profile(current_user)
 
 @router.patch("/me", response_model=UserProfile)
 async def update_me(update: UserUpdate, current_user: User = Depends(get_current_user)):
@@ -114,13 +164,7 @@ async def update_me(update: UserUpdate, current_user: User = Depends(get_current
     if update.email is not None:
         current_user.email = update.email
     await current_user.save()
-    return UserProfile(
-        id=str(current_user.id),
-        email=current_user.email,
-        phone=current_user.phone,
-        full_name=current_user.full_name,
-        role=current_user.role,
-    )
+    return _profile(current_user)
 
 
 # --- OTP Endpoints ---
