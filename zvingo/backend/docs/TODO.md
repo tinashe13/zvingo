@@ -61,10 +61,11 @@ are provided. Do **not** mark them "done" without a live test.
     PagerDuty) and add a subscriber; needs an account/credentials.
 
 - [ ] **Metrics scraping**
-  - `GET /metrics` exposes Prometheus text exposition. Stand up Prometheus (or a
-    hosted agent), point it at the backend, and decide whether to protect the
-    endpoint with `METRICS_TOKEN` or to block `/metrics` at nginx so it is only
-    reachable on the internal network. See the note in §3 about worker counts.
+  - `GET /metrics` exposes Prometheus text exposition. nginx already denies
+    `/api/metrics` from the public internet, so stand up Prometheus (or a hosted
+    agent) inside the compose network and point it at
+    `http://backend:8000/metrics`. Set `METRICS_TOKEN` if you also want bearer
+    auth on the endpoint itself.
 
 ---
 
@@ -135,25 +136,11 @@ are provided. Do **not** mark them "done" without a live test.
 
 Open follow-ups:
 
-- [ ] **Production runs 4 uvicorn workers, and the app is single-worker by design**
-  - `backend/Dockerfile` deliberately uses one worker: the lifespan binds the
-    BinProto UDP/TCP ports and starts singleton background loops. But
-    `zvingo/docker-compose.prod.yml` overrides `command:` with `--workers 4`.
-    Four workers means four processes racing to bind ports 9090/9091 and four
-    copies of every background loop — the dispatch retry loop, the scheduled
-    order poller, and the alert monitor would all run four times over,
-    duplicating offers and alerts.
-  - Fix by dropping `--workers 4` from `docker-compose.prod.yml` and scaling with
-    more backend containers behind nginx (which is what the Dockerfile note
-    already prescribes), or by gating the background loops and BinProto servers
-    behind a leader lock so only one worker runs them.
-  - The file is at the repo root, outside the backend tree, so it is left
-    unchanged here — it is a deployment-topology decision.
-
 - [ ] **Metrics are per-process**
-  - The registry lives in memory, so with more than one uvicorn worker a scrape
-    only sees the worker that answered it. One worker per container (scraping
-    each) is the intended shape — see the item above.
+  - The registry lives in memory, so a scrape only sees the process that
+    answered it. The stack now runs one uvicorn worker per container, so this
+    is correct as deployed; if you scale to several backend containers,
+    scrape each one rather than load-balancing the scrape.
 
 - [ ] **Log shipping / retention**
   - Production emits one JSON object per line to stdout. Nothing collects it —
@@ -219,3 +206,21 @@ Open follow-ups:
 - [x] **Test bootstrap** — `tests/conftest.py` supplies default `MONGODB_URL` /
       `REDIS_URL` so `pytest` runs with no environment setup. The suite is at
       100% line coverage (`fail_under = 100` in `pyproject.toml`).
+- [x] **Production stack could not boot** — `PAYMENT_MOCK_MODE` and
+      `SMS_MOCK_MODE` default to true in `app/config.py`, and the production
+      validator refuses to start while either is on, but
+      `docker-compose.prod.yml` never set them. Both are now pinned false there.
+- [x] **Single-worker production command** — the prod compose file no longer
+      overrides the Dockerfile with `--workers 4`, which would have raced four
+      processes onto the BinProto ports and quadrupled every background loop.
+- [x] **nginx knows about the new endpoints** — the chat SSE stream gets a
+      buffering-off location (it would otherwise have appeared frozen behind
+      the generic `/api/` block) and `/api/metrics` is denied publicly. The
+      tracking WebSocket is already covered by the existing `/ws/` block.
+- [x] **Dashboard build args** — `docker-compose.prod.yml` now passes
+      `NEXT_PUBLIC_API_URL` / `API_PROXY_URL` at build time. Without them the
+      dashboard shipped with an empty API base and pointed uploads at
+      `http://localhost:8000`, i.e. the visitor's own machine.
+- [x] **`backend/.dockerignore`** — the Dockerfile does `COPY . .`, so a local
+      `.env` (with a live `SECRET_KEY`) was being baked into an image layer.
+      Secrets, `.git`, and caches are now excluded.

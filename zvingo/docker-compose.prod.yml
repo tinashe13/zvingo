@@ -7,8 +7,7 @@
 # See DEPLOYMENT.md for the full deployment guide (TLS certs, DNS, backups).
 #
 # Differences from the dev docker-compose.yml:
-#   - no source-code volume mounts, no --reload (uses the backend Dockerfile's CMD
-#     overridden with a multi-worker uvicorn command)
+#   - no source-code volume mounts, no --reload
 #   - Mongo auth enabled, Redis password required
 #   - Mongo/Redis ports are NOT published to the host (internal network only)
 #   - no sms-mock service (real Africa's Talking credentials required)
@@ -19,8 +18,19 @@ services:
   backend:
     build: ./backend
     restart: unless-stopped
-    # Multi-worker uvicorn for production (the Dockerfile CMD is single-worker).
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --proxy-headers --forwarded-allow-ips "*"
+    # SINGLE worker, deliberately. The FastAPI lifespan binds the BinProto
+    # UDP/TCP listeners on fixed ports and starts singleton background loops
+    # (dispatch retry, scheduled-order release, alert monitor). A second worker
+    # would fail to bind those ports and would run every loop a second time,
+    # duplicating driver offers. Scale out with more backend containers behind
+    # nginx, not with --workers.
+    #
+    # This mirrors the Dockerfile CMD but adds --forwarded-allow-ips: nginx
+    # reaches the backend from a compose-network address, not 127.0.0.1, so
+    # without it uvicorn ignores X-Forwarded-Proto and thinks every request is
+    # plain HTTP. Port 8000 is never published to the host, so only nginx can
+    # reach it and trusting any peer here is safe.
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips "*"
     environment:
       - ENVIRONMENT=production
       # ${VAR:?...} makes compose fail fast if a required secret is missing —
@@ -29,6 +39,11 @@ services:
       - MONGODB_URL=mongodb://${MONGO_INITDB_ROOT_USERNAME:?}:${MONGO_INITDB_ROOT_PASSWORD:?}@mongo:27017/${MONGODB_DB_NAME:-zvingo}?authSource=admin
       - MONGODB_DB_NAME=${MONGODB_DB_NAME:-zvingo}
       - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/0
+      # Mock modes default to TRUE in app/config.py for local development, and
+      # the production validator refuses to start while either is on. They must
+      # be pinned false here or the container exits at boot.
+      - PAYMENT_MOCK_MODE=${PAYMENT_MOCK_MODE:-false}
+      - SMS_MOCK_MODE=${SMS_MOCK_MODE:-false}
       # SMS — Africa's Talking (live credentials; SMS_GATEWAY_URL is dev-mock only
       # and intentionally not set in production)
       - AFRICASTALKING_USERNAME=${AFRICASTALKING_USERNAME:?}
@@ -43,8 +58,20 @@ services:
       # Push notifications — path inside the container (file is baked in by the
       # backend Dockerfile COPY, or mount your own below)
       - FIREBASE_CREDENTIALS_PATH=${FIREBASE_CREDENTIALS_PATH:-firebase-credentials.json}
-      # Reserved for when the backend reads CORS origins from the environment
-      - CORS_ORIGINS=${CORS_ORIGINS:-}
+      # Allowed browser origins. In production an empty value means NO origin
+      # is allowed, so the dashboard would fail CORS on every request.
+      - CORS_ORIGINS=${CORS_ORIGINS:?e.g. https://your-domain}
+      # Observability — all optional, defaults match app/config.py
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - METRICS_ENABLED=${METRICS_ENABLED:-true}
+      - METRICS_TOKEN=${METRICS_TOKEN:-}
+      - ALERTS_ENABLED=${ALERTS_ENABLED:-true}
+      - ALERT_POLL_INTERVAL_SECONDS=${ALERT_POLL_INTERVAL_SECONDS:-300}
+      - ALERT_STUCK_ORDER_MINUTES=${ALERT_STUCK_ORDER_MINUTES:-30}
+      - ALERT_FAILED_PAYMENT_THRESHOLD=${ALERT_FAILED_PAYMENT_THRESHOLD:-5}
+      # Scheduled order release
+      - SCHEDULED_POLL_INTERVAL_SECONDS=${SCHEDULED_POLL_INTERVAL_SECONDS:-15}
+      - SCHEDULED_DISPATCH_LEAD_MINUTES=${SCHEDULED_DISPATCH_LEAD_MINUTES:-15}
     ports:
       # BinProto telemetry listeners used directly by the driver app
       # (nginx only proxies HTTP; these bypass it by design)
@@ -66,7 +93,20 @@ services:
         condition: service_healthy
 
   merchant-dashboard:
-    build: ./merchant-dashboard
+    build:
+      context: ./merchant-dashboard
+      # Next.js inlines NEXT_PUBLIC_* into the client bundle and resolves the
+      # /api/* rewrite at BUILD time, so these must be passed as build args —
+      # setting them at runtime has no effect. Without NEXT_PUBLIC_API_URL the
+      # dashboard falls back to http://localhost:8000 for uploads, which in a
+      # browser means the user's own machine.
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?e.g. https://your-domain/api}
+        # Server-side rewrite target: nginx on the compose network, never
+        # localhost (that would be the dashboard container itself).
+        API_PROXY_URL: ${API_PROXY_URL:-http://nginx:80}
+        NEXT_PUBLIC_DEFAULT_RESTAURANT_LAT: ${NEXT_PUBLIC_DEFAULT_RESTAURANT_LAT:-}
+        NEXT_PUBLIC_DEFAULT_RESTAURANT_LNG: ${NEXT_PUBLIC_DEFAULT_RESTAURANT_LNG:-}
     restart: unless-stopped
     environment:
       - NODE_ENV=production

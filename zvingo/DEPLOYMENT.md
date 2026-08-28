@@ -8,19 +8,75 @@ unchanged and still mounts source with `--reload`.
 
 ## 1. Provision a server
 
-- Any Linux host (Ubuntu 22.04+ recommended) with Docker Engine + the
-  Docker Compose plugin installed.
-- Open inbound ports in your firewall/security group:
+Any Linux host (Ubuntu 24.04 LTS recommended) with Docker Engine and the
+Docker Compose plugin. **2 GB RAM minimum** — the Next.js dashboard build runs
+out of memory on 1 GB.
+
+Open inbound ports in your firewall/security group:
+
   - `80` (HTTP → HTTPS redirect + Let's Encrypt renewals)
   - `443` (HTTPS)
   - `9090/udp` and `9091/tcp` (BinProto telemetry — the driver app connects
     to these directly; they bypass nginx by design)
-- Do **not** open 27017 (Mongo) or 6379 (Redis) — the prod compose file does
-  not publish them to the host at all.
+
+Do **not** open 27017 (Mongo) or 6379 (Redis) — the prod compose file does not
+publish them to the host at all.
+
+### DigitalOcean droplet (SSH-key auth)
+
+Create the droplet with **Ubuntu 24.04**, Basic / 2 vCPU / 2 GB, and choose
+**SSH Key** for authentication. Generate one first if you need to:
 
 ```bash
-git clone <your-repo-url>
-cd Doordash/zvingo
+ssh-keygen -t ed25519 -C "zvingo-deploy"   # then paste ~/.ssh/id_ed25519.pub into DO
+ssh -i ~/.ssh/id_ed25519 root@<DROPLET_IP>
+```
+
+Create an unprivileged user and copy the key to it:
+
+```bash
+adduser --disabled-password --gecos "" deploy
+usermod -aG sudo deploy
+rsync --archive --chown=deploy:deploy ~/.ssh /home/deploy
+```
+
+Verify `ssh -i ~/.ssh/id_ed25519 deploy@<DROPLET_IP>` works **in a second
+terminal** before disabling root/password login — a bad sshd config otherwise
+locks you out:
+
+```bash
+sudo sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/'  /etc/ssh/sshd_config
+sudo sed -i 's/^#*PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
+sudo systemctl restart ssh
+```
+
+Firewall, Docker, and the clone:
+
+```bash
+sudo ufw allow OpenSSH && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp
+sudo ufw allow 9090/udp && sudo ufw allow 9091/tcp
+sudo ufw --force enable
+
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker deploy && newgrp docker
+
+git clone <your-repo-url> && cd zvingo/zvingo
+```
+
+> `ufw` does not filter Docker-published ports — Docker inserts its own
+> iptables rules ahead of it. Add a DigitalOcean **Cloud Firewall** with the
+> same five rules for protection that actually applies to the containers.
+
+For a private repo use a read-only **deploy key** on the droplet rather than
+forwarding your personal key:
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/gh_deploy -N ""
+cat ~/.ssh/gh_deploy.pub   # GitHub → repo → Settings → Deploy keys
+printf 'Host github.com
+  IdentityFile ~/.ssh/gh_deploy
+  IdentitiesOnly yes
+' >> ~/.ssh/config
 ```
 
 ## 2. DNS
@@ -48,7 +104,13 @@ openssl rand -hex 24   # REDIS_PASSWORD
 
 The compose file uses `${VAR:?}` for all secrets, so startup fails
 immediately with a clear message if anything required is missing.
-Never commit the filled-in `.env`.
+Never commit the filled-in `.env` (`chmod 600 .env`).
+
+`NEXT_PUBLIC_API_URL` and `API_PROXY_URL` are **build-time** values: Next.js
+inlines them into the client bundle and resolves the `/api/*` rewrite when the
+image is built. Changing either needs
+`docker compose -f docker-compose.prod.yml up -d --build merchant-dashboard`,
+not just a restart.
 
 Also place your Firebase service-account JSON at
 `backend/firebase-credentials.json` (it is baked into the backend image).
@@ -90,7 +152,18 @@ docker compose -f docker-compose.prod.yml ps        # all services healthy?
 curl -s https://zvingo.example.com/api/health        # backend health via nginx
 ```
 
-## 6. Database migrations
+## 6. Create the first admin
+
+Nothing can mint an admin through the API — `/auth/register` will not grant the
+role. Register normally in the app, then promote that account once:
+
+```bash
+docker compose -f docker-compose.prod.yml exec mongo mongosh   -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD"   --authenticationDatabase admin zvingo   --eval 'db.users.updateOne({phone:"+263..."},{$set:{role:"admin"}})'
+```
+
+Manage every later role change through `PATCH /api/admin/users/{id}`.
+
+## 7. Database migrations
 
 There are **no migrations to run**: the backend uses MongoDB (schemaless) and
 initializes its own collections/state at startup (`app/db/session.py:init_db`,
@@ -102,7 +175,7 @@ are added later, run them with:
 docker compose -f docker-compose.prod.yml exec backend alembic upgrade head
 ```
 
-## 7. Backups (Mongo volume)
+## 8. Backups (Mongo volume)
 
 Data lives in the named volumes `mongo_data` (database), `redis_data`, and
 `backend_uploads` (uploaded images). Dump Mongo with authentication:
@@ -125,7 +198,7 @@ Schedule the dump via cron and copy archives off the server. Back up the
 `backend_uploads` volume too (`docker run --rm -v zvingo_backend_uploads:/data
 -v $(pwd):/backup alpine tar czf /backup/uploads.tgz /data`).
 
-## 8. Logs and operations
+## 9. Logs and operations
 
 ```bash
 docker compose -f docker-compose.prod.yml logs -f            # everything
@@ -138,12 +211,28 @@ docker compose -f docker-compose.prod.yml down               # stop (volumes kep
 
 ## Routing reference
 
-| Public path            | Destination                       | Notes                          |
-|------------------------|-----------------------------------|--------------------------------|
-| `/api/*`               | backend:8000 (prefix stripped)    | REST API                       |
-| `/api/notification/*`  | backend:8000 (prefix stripped)    | SSE — proxy buffering off      |
-| `/api/location/driver/*` | backend:8000 (prefix stripped)  | SSE — proxy buffering off      |
-| `/ws/*`                | backend:8000                      | WebSocket (driver dispatch)    |
-| `/static/*`            | backend:8000                      | Uploaded images                |
-| `/*` (everything else) | merchant-dashboard:3000           | Dashboard UI                   |
-| `:9090/udp`, `:9091`   | backend directly (host-published) | BinProto telemetry, no nginx   |
+| Public path                        | Destination                       | Notes                            |
+|------------------------------------|-----------------------------------|----------------------------------|
+| `/api/*`                           | backend:8000 (prefix stripped)    | REST API, including `/api/admin/*` |
+| `/api/notification/*`              | backend:8000 (prefix stripped)    | SSE — proxy buffering off        |
+| `/api/location/driver/*`           | backend:8000 (prefix stripped)    | SSE — proxy buffering off        |
+| `/api/chat/orders/{id}/stream`     | backend:8000 (prefix stripped)    | SSE — proxy buffering off        |
+| `/api/metrics`                     | **denied**                        | Prometheus; scrape internally    |
+| `/ws/driver/{id}`                  | backend:8000                      | WebSocket — driver dispatch      |
+| `/ws/orders/{id}/track`            | backend:8000                      | WebSocket — consumer tracking    |
+| `/static/*`                        | backend:8000                      | Uploaded images                  |
+| `/*` (everything else)             | merchant-dashboard:3000           | Dashboard UI                     |
+| `:9090/udp`, `:9091`               | backend directly (host-published) | BinProto telemetry, no nginx     |
+
+`/api/metrics` returns 403 from the public internet on purpose — it reports
+order, payment, and dispatch volumes. Scrape it from inside the compose
+network at `http://backend:8000/metrics`, and set `METRICS_TOKEN` in `.env` if
+you want bearer auth on top.
+
+### Why the backend runs a single uvicorn worker
+
+The FastAPI lifespan binds the BinProto UDP/TCP listeners on fixed ports and
+starts singleton background loops (dispatch retry, scheduled-order release,
+alert monitor). A second worker cannot bind those ports and would run every
+loop again, duplicating driver offers. Scale out with additional backend
+containers behind nginx — never with `--workers`.

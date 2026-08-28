@@ -1,0 +1,35 @@
+# Keeps build context out of the image. The Dockerfile does `COPY . .`, so
+# anything not listed here ends up in a layer — including secrets.
+
+# Secrets. .env holds a live SECRET_KEY; baking it into an image layer would
+# ship it to anyone who can pull the image. Runtime config comes from compose.
+.env
+.env.*
+!.env.example
+
+# VCS and CI
+.git
+.gitignore
+.github
+
+# Python bytecode and virtualenvs
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Test and coverage artifacts
+.pytest_cache/
+.test-cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Editor / OS noise
+.idea/
+.vscode/
+.DS_Store
+
+# Local scratch
+_check_enum.py
