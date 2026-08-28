@@ -159,11 +159,11 @@ async def test_order_cancel_create_and_state_update(monkeypatch):
     )
     transition.side_effect = None
     monkeypatch.setattr(module.OrderService, "create_order", AsyncMock(return_value=order(driver_id=None)))
-    created = await module.create_order(payload)
+    created = await module.create_order(payload, user())
     assert created.id == "order-1"
     module.OrderService.create_order.side_effect = ValueError("bad order")
     with pytest.raises(HTTPException) as exc:
-        await module.create_order(payload)
+        await module.create_order(payload, user())
     assert exc.value.detail == "bad order"
 
     module.OrderService.transition_state = AsyncMock(return_value=order(items=[

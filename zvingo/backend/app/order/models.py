@@ -36,6 +36,14 @@ class Order(Document):
     service_fee: float = 0.0
     tax_amount: float = 0.0
 
+    # Self-pickup: no driver, no delivery fee.
+    is_pickup: bool = False
+    # Scheduled: dispatch deferred until this time (UTC).
+    scheduled_at: Optional[datetime] = None
+    # Promo discount applied at checkout (dollars).
+    promo_code: Optional[str] = None
+    discount_amount: float = 0.0
+
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 

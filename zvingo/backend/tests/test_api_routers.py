@@ -278,11 +278,21 @@ async def test_payment_router_all_paths(monkeypatch):
     module.PaymentService.get_payment_for_order.return_value = created
     assert (await module.get_payment_for_order("o", current)).id == "payment-1"
 
-    monkeypatch.setattr(module.PaymentService, "refund_payment", AsyncMock(return_value=None))
+    # Refund: now requires ownership (or admin) and fetches the payment first.
+    class FakePayment:
+        get = AsyncMock(return_value=None)
+
+    monkeypatch.setattr(module, "Payment", FakePayment)
     with pytest.raises(HTTPException, match="Payment not found"):
         await module.refund_payment("p", current)
-    module.PaymentService.refund_payment.return_value = created
+    FakePayment.get.return_value = created
+    monkeypatch.setattr(module.PaymentService, "refund_payment", AsyncMock(return_value=created))
     assert (await module.refund_payment("p", current)).status == PaymentStatus.PENDING
+    # A non-owner (and non-admin) cannot refund someone else's payment.
+    with pytest.raises(HTTPException, match="Not authorized to refund"):
+        await module.refund_payment("p", user(id="stranger"))
+    # An admin can refund any payment.
+    assert (await module.refund_payment("p", user(id="admin", role="admin"))).status == PaymentStatus.PENDING
 
 
 @pytest.mark.asyncio

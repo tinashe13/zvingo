@@ -34,6 +34,13 @@ class OrderCreate(BaseModel):
     tax_amount: Optional[float] = 0.0
     idempotency_key: Optional[str] = None
 
+    # Self-pickup: no driver, no delivery fee.
+    is_pickup: bool = False
+    # Scheduled: dispatch deferred until this time (UTC).
+    scheduled_at: Optional[datetime] = None
+    # Promo code to redeem at checkout (discount is computed server-side).
+    promo_code: Optional[str] = None
+
     @model_validator(mode="after")
     def _normalize_locations(self) -> "OrderCreate":
         """Fold legacy flat lat/lng fields into nested Location objects."""

@@ -238,8 +238,13 @@ async def test_record_earning_all_paths(monkeypatch):
 
     monkeypatch.setattr(models, "DriverEarning", FakeEarning)
     FakeEarning.existing = earning()
-    duplicate = await module.record_earning("order-1", "driver-1", "token")
+    duplicate = await module.record_earning("order-1", "driver-1", user("driver-1"))
     assert duplicate["status"] == "already_recorded"
+
+    # Ownership check: cannot record for another driver.
+    with pytest.raises(HTTPException) as exc:
+        await module.record_earning("order-1", "driver-1", user("other"))
+    assert exc.value.status_code == 403
 
     FakeEarning.existing = None
 
@@ -247,7 +252,7 @@ async def test_record_earning_all_paths(monkeypatch):
         get = AsyncMock(return_value=None)
 
     monkeypatch.setattr(module, "Order", FakeOrder)
-    assert (await module.record_earning("missing", "driver-1", "token"))["status"] == "error"
+    assert (await module.record_earning("missing", "driver-1", user("driver-1")))["status"] == "error"
 
     current_order = SimpleNamespace(
         merchant_id="merchant-1", pickup_location=Location.from_lat_lng(-17.0, 31.0),
@@ -268,7 +273,7 @@ async def test_record_earning_all_paths(monkeypatch):
     monkeypatch.setattr(catalog_models, "Restaurant", FakeRestaurant)
     monkeypatch.setattr(payment_models, "Payment", FakePayment)
     FakeEarning.created = []
-    recorded = await module.record_earning("order-1", "driver-1", "token")
+    recorded = await module.record_earning("order-1", "driver-1", user("driver-1"))
     assert recorded["status"] == "recorded"
     assert FakeEarning.created[-1].merchant_name == "Restaurant"
     assert FakeEarning.created[-1].pickup_area == "** Market Street"
@@ -279,13 +284,13 @@ async def test_record_earning_all_paths(monkeypatch):
     current_order.delivery_instructions = ""
     FakeRestaurant.find_one.return_value = SimpleNamespace(name="Direct", address="")
     FakePayment.find_one.return_value = None
-    recorded = await module.record_earning("order-2", "driver-1", "token")
+    recorded = await module.record_earning("order-2", "driver-1", user("driver-1"))
     assert recorded["tip_cents"] == 0
     assert FakeEarning.created[-1].payment_method == "cash"
 
     FakeRestaurant.find_one.side_effect = RuntimeError("restaurant db")
     FakePayment.find_one.side_effect = RuntimeError("payment db")
-    recorded = await module.record_earning("order-3", "driver-1", "token")
+    recorded = await module.record_earning("order-3", "driver-1", user("driver-1"))
     assert recorded["status"] == "recorded"
     assert FakeEarning.created[-1].merchant_name == "Unknown"
 

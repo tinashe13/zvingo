@@ -63,12 +63,19 @@ class OrderRetryService:
         try:
             # Find orders stuck in OFFERED state (driver never accepted)
             # OR orders stuck in CREATED state (no drivers found on initial dispatch)
-            # CREATED orders older than RETRY_INTERVAL_SECONDS are eligible for retry
+            # CREATED orders older than RETRY_INTERVAL_SECONDS are eligible for retry.
+            # Scheduled orders become dispatchable once their scheduled_at is due.
             cutoff = utc_now() - timedelta(seconds=RETRY_INTERVAL_SECONDS)
+            now = utc_now()
             stuck_orders = await Order.find(
                 {"$or": [
                     {"state": OrderState.OFFERED},
-                    {"state": OrderState.CREATED, "created_at": {"$lt": cutoff}}
+                    {"state": OrderState.CREATED, "created_at": {"$lt": cutoff}},
+                    {
+                        "state": OrderState.CREATED,
+                        "scheduled_at": {"$ne": None, "$lte": now},
+                        "is_pickup": {"$ne": True},
+                    },
                 ]}
             ).to_list()
 

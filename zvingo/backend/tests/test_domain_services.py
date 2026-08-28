@@ -363,6 +363,7 @@ async def test_payment_status_webhooks_and_refunds(monkeypatch):
         order_id="o1",
         poll_url="poll",
         paynow_reference="ref",
+        amount_usd=10.0,
         status=PaymentStatus.AWAITING_DELIVERY,
         updated_at=None,
         save=AsyncMock(),

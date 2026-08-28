@@ -89,8 +89,21 @@ async def get_payment_for_order(order_id: str, current_user: User = Depends(get_
 
 
 @router.post("/refund/{payment_id}", response_model=PaymentResponse)
-async def refund_payment(payment_id: str, current_user: User = Depends(get_current_user)):
-    payment = await PaymentService.refund_payment(payment_id)
+async def refund_payment(
+    payment_id: str, current_user: User = Depends(get_current_user)
+):
+    """Refund a paid payment.
+
+    Only an admin or the paying consumer may refund. The actual money movement
+    is delegated to the payment provider (see PaymentService.refund_payment).
+    """
+    payment = await Payment.get(payment_id)
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
-    return _payment_to_response(payment)
+    if current_user.role != "admin" and payment.consumer_id != str(current_user.id):
+        raise HTTPException(status_code=403, detail="Not authorized to refund this payment")
+
+    refunded = await PaymentService.refund_payment(payment_id)
+    if not refunded:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    return _payment_to_response(refunded)

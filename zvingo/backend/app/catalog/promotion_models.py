@@ -33,6 +33,7 @@ class Promotion(Document):
     max_uses: Optional[int] = None  # Total uses across all consumers
     max_uses_per_user: int = 1  # Per-consumer usage limit
     current_uses: int = 0
+    redeemed_by: List[str] = []  # consumer ids who have redeemed (per-user tracking)
 
     # Promo code (optional — for code-based promos)
     code: Optional[str] = None

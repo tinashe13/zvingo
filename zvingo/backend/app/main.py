@@ -129,6 +129,12 @@ app.include_router(location_router.router, prefix="/location", tags=["location"]
 from app.driver import router as driver_router
 app.include_router(driver_router.router, prefix="/driver", tags=["driver"])
 
+from app.rating import router as rating_router
+app.include_router(rating_router.router, prefix="/rating", tags=["rating"])
+
+from app.chat import router as chat_router
+app.include_router(chat_router.router, prefix="/chat", tags=["chat"])
+
 from app.upload import router as upload_router
 from fastapi.staticfiles import StaticFiles
 import os

@@ -77,11 +77,32 @@ to inject one — that hole is now closed.
 
 ## 4. Verification
 
-- Local: `pytest` — **110 passed**, `--cov` gate **100.00%** reached.
-- Docker (`python:3.12-slim` + `poetry install --with dev`): **110 passed**,
+- Local: `pytest` — **127 passed**, `--cov` gate **100.00%** reached.
+- Docker (`python:3.12-slim` + `poetry install --with dev`): **127 passed**,
   **100.00%** coverage.
 
-## 5. Other observations (not changed)
+## 5. Feature build-out (post-refactor)
+
+Beyond the Location refactor and the auth fix, the following code-completable
+features were implemented (see `docs/TODO.md` for what remains external/human):
+
+- **Self-pickup orders** — `is_pickup` on `Order`; zero delivery fee; no dispatch.
+- **Scheduled orders** — `scheduled_at`; dispatch deferred until due via the
+  retry loop.
+- **Promo code redemption** — `app/catalog/promotion_service.py` (percentage /
+  flat / free_delivery), validation endpoint, per-user usage tracking, discount
+  applied at order creation.
+- **Ratings & reviews** — `Review` model + create/list endpoints; restaurant
+  aggregate rating/review count updated.
+- **In-app chat** — `ChatMessage` model + send/list endpoints + Redis publish.
+- **Order reorder** — `POST /orders/{id}/reorder`.
+- **Refund provider call** — `refund_payment` asks Paynow before marking
+  REFUNDED (mock success; explicit live failure).
+- **Remaining auth gaps closed** — `create_order` (consumer from JWT),
+  `finance/record_earning` (ownership), `finance/update_exchange_rate`
+  (admin-only), `payment/refund` (owner or admin).
+
+## 6. Other observations (not changed)
 
 - `app/dispatch/service.py:update_location` imports `notification_service` and
   `json` inside the method but does not use `notification_service` (dead import).

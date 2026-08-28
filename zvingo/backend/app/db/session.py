@@ -9,6 +9,8 @@ from app.catalog.models import Restaurant
 from app.catalog.promotion_models import Promotion
 from app.payment.models import Payment
 from app.finance.models import DriverEarning
+from app.rating.models import Review
+from app.chat.models import ChatMessage
 
 async def init_db():
     client = AsyncIOMotorClient(settings.MONGODB_URL)
@@ -22,5 +24,7 @@ async def init_db():
             Promotion,
             Payment,
             DriverEarning,
+            Review,
+            ChatMessage,
         ]
     )

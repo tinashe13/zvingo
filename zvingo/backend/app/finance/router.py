@@ -11,7 +11,7 @@ from app.config import settings
 from app.order.models import Order
 from app.order.state_machine import OrderState
 from app.catalog.models import Restaurant
-from app.auth.router import get_current_user, oauth2_scheme
+from app.auth.router import get_current_user, get_current_admin
 from app.auth.models import User
 
 router = APIRouter()
@@ -37,7 +37,9 @@ async def get_exchange_rates():
 
 
 @router.post("/rates")
-async def update_exchange_rate(currency: str, rate: float, token: str = Depends(oauth2_scheme)):
+async def update_exchange_rate(
+    currency: str, rate: float, current_user: User = Depends(get_current_admin)
+):
     r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
     try:
         cached = await r.get("exchange_rates")
@@ -159,12 +161,22 @@ async def get_driver_earnings(driver_id: str, current_user: User = Depends(get_c
 
 
 @router.post("/earnings/record")
-async def record_earning(order_id: str, driver_id: str, token: str = Depends(oauth2_scheme)):
+async def record_earning(
+    order_id: str,
+    driver_id: str,
+    current_user: User = Depends(get_current_user),
+):
     """
     Record a driver earning when a delivery is completed.
     Looks up the Order, calculates the driver's share, masks addresses,
     and creates a DriverEarning document.
     """
+    # Ownership: a driver may only record their own earnings.
+    if driver_id != str(current_user.id):
+        raise HTTPException(
+            status_code=403, detail="Cannot record earnings for another driver"
+        )
+
     from app.finance.models import DriverEarning, mask_address
     from app.finance.fee_calculator import (
         calculate_delivery_fee_from_coords,

@@ -506,7 +506,7 @@ async def test_db_initialization(monkeypatch):
     monkeypatch.setattr(module, "init_beanie", init)
     await module.init_db()
     assert init.await_args.kwargs["database"] is database
-    assert len(init.await_args.kwargs["document_models"]) == 7
+    assert len(init.await_args.kwargs["document_models"]) == 9
 
 
 @pytest.mark.asyncio

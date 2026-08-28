@@ -117,5 +117,37 @@ class PaynowClient:
             logger.error("Paynow status check failed", error=str(e))
             return PaynowStatusResponse(paid=False, status="Error")
 
+    async def refund(self, reference: str, amount: float) -> PaynowResponse:
+        """Refund a previously collected payment via Paynow.
+
+        In mock mode the refund is simulated as successful. In live mode the
+        ``paynow`` SDK does not expose a first-class refund helper, so we
+        surface an explicit failure rather than silently pretending to refund
+        real money. Wiring a live refund requires Paynow's refund endpoint
+        (see docs/TODO.md).
+        """
+        if self.mock_mode:
+            logger.info("Mock refund issued", reference=reference, amount=amount)
+            return PaynowResponse(success=True, reference=reference)
+
+        if not self._paynow:
+            return PaynowResponse(
+                success=False,
+                reference=reference,
+                error="Paynow client unavailable for refund",
+            )
+
+        # The `paynow` package currently has no public refund method; this
+        # returns an explicit error so the DB state is never falsely marked
+        # REFUNDED when real money has not moved.
+        logger.error(
+            "Live Paynow refund not implemented", reference=reference, amount=amount
+        )
+        return PaynowResponse(
+            success=False,
+            reference=reference,
+            error="Live refund requires Paynow refund endpoint integration",
+        )
+
 
 paynow_client = PaynowClient()

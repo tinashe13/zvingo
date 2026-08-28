@@ -146,11 +146,47 @@ async def cancel_order(
     return {"status": "cancelled", "order_id": order_id, "message": "Order cancelled successfully"}
 
 @router.post("/", response_model=OrderResponse)
-async def create_order(order_in: OrderCreate):
+async def create_order(
+    order_in: OrderCreate, current_user: User = Depends(get_current_user)
+):
+    """Create an order on behalf of the authenticated consumer.
+
+    The consumer is derived from the JWT, never from the request body.
+    """
+    order_in.consumer_id = str(current_user.id)
     try:
         order = await OrderService.create_order(order_in)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    return OrderResponse(
+        id=str(order.id),
+        state=order.state,
+        total_amount=order.total_amount,
+        created_at=order.created_at,
+        merchant_id=order.merchant_id,
+        consumer_id=order.consumer_id,
+        items=[{"name": i.name if hasattr(i, 'name') else i.get("name", ""), 
+                "quantity": i.quantity if hasattr(i, 'quantity') else i.get("quantity", 1), 
+                "price": i.price if hasattr(i, 'price') else i.get("price", 0)} 
+               for i in order.items],
+        pickup_lat=_lat(order.pickup_location),
+        pickup_lng=_lng(order.pickup_location),
+        delivery_lat=_lat(order.dropoff_location),
+        delivery_lng=_lng(order.dropoff_location),
+    )
+
+
+@router.post("/{order_id}/reorder", response_model=OrderResponse)
+async def reorder(
+    order_id: str, current_user: User = Depends(get_current_user)
+):
+    """Place a new order from a previous order's items (one-tap reorder)."""
+    try:
+        order = await OrderService.reorder(order_id, str(current_user.id))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
     return OrderResponse(
         id=str(order.id),
         state=order.state,

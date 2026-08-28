@@ -398,6 +398,37 @@ async def list_active_promotions(restaurant_id: Optional[str] = None):
     return [p for p in promotions if p.max_uses is None or p.current_uses < p.max_uses]
 
 
+class PromoValidateRequest(BaseModel):
+    code: str
+    order_subtotal_usd: float
+
+
+@router.post("/promotions/validate")
+async def validate_promo_code(
+    req: PromoValidateRequest, current_user: User = Depends(get_current_user)
+):
+    """Validate a promo code and return the discount the consumer would get.
+
+    This is a read-only preview; redemption is recorded when an order using the
+    code is actually created.
+    """
+    from app.catalog.promotion_service import (
+        validate_and_compute,
+        PromotionError,
+    )
+    try:
+        discount, free_delivery = await validate_and_compute(
+            req.code, str(current_user.id), req.order_subtotal_usd
+        )
+    except PromotionError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {
+        "code": req.code,
+        "discount_usd": discount,
+        "free_delivery": free_delivery,
+    }
+
+
 # ── Merchant: CRUD for own promotions ──────────────────────────────
 
 @router.get("/promotions/merchant", response_model=List[Promotion])

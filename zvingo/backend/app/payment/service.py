@@ -168,6 +168,18 @@ class PaymentService:
         if payment.status != PaymentStatus.PAID:
             return payment
 
+        # Ask the provider to actually move the money back before marking refunded.
+        response = await paynow_client.refund(
+            payment.paynow_reference or payment_id, payment.amount_usd
+        )
+        if not response.success:
+            logger.error(
+                "Refund failed at provider",
+                payment_id=payment_id,
+                error=response.error,
+            )
+            return payment  # leave status unchanged; caller sees it is still PAID
+
         payment.status = PaymentStatus.REFUNDED
         payment.updated_at = utc_now()
         await payment.save()
