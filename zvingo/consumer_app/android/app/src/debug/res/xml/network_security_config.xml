@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- DEBUG-ONLY override. Replaces @xml/network_security_config from src/main
+     for debug builds so we can test against the cleartext staging backend at
+     api.pindira.com (it serves no HTTPS: port 443 is closed).
+
+     Release builds still use src/main/res/xml/network_security_config.xml,
+     which permits cleartext for local dev hosts only. AppConfig.validate()
+     independently rejects a non-HTTPS API_BASE_URL in release builds.
+
+     Remove the api.pindira.com entry once that host terminates TLS. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <domain includeSubdomains="false">10.0.3.2</domain>
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">api.pindira.com</domain>
+    </domain-config>
+</network-security-config>
