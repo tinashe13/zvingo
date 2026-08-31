@@ -24,6 +24,28 @@ async def _find_promo(code: str) -> Optional[Promotion]:
     return await Promotion.find_one(Promotion.code == code)
 
 
+async def resolve_restaurant_id(merchant_id: Optional[str]) -> Optional[str]:
+    """Resolve a client-supplied merchant_id to the restaurant's document id.
+
+    Orders and checkout baskets carry `merchant_id`, which callers may set to
+    either a Restaurant document id or a Restaurant.merchant_id — resolve both
+    the same way order creation does, so it compares like ids against
+    `Promotion.restaurant_id`. Returns None (not raises) on a bad id or a
+    lookup failure, so a scoped promo fails closed rather than crashing.
+    """
+    if not merchant_id:
+        return None
+    from app.catalog.models import Restaurant
+
+    try:
+        restaurant = await Restaurant.get(merchant_id)
+        if restaurant is None:
+            restaurant = await Restaurant.find_one(Restaurant.merchant_id == merchant_id)
+        return str(restaurant.id) if restaurant else None
+    except Exception:
+        return None
+
+
 def _item_field(item: Any, field: str, default=None):
     """Read a field from an order item that may be a model or a plain dict."""
     if isinstance(item, dict):
@@ -74,12 +96,18 @@ async def compute_discount(
     consumer_id: str,
     order_subtotal_usd: float,
     items: Optional[Iterable[Any]] = None,
+    restaurant_id: Optional[str] = None,
 ) -> float:
     """Validate a promo code and return the discount in USD.
 
     Raises PromotionError with a user-facing message when the code cannot be
     applied. Does NOT mutate state; call ``record_redemption`` after the order
     is successfully created.
+
+    `restaurant_id` is the resolved Restaurant document id the order is
+    actually being placed against (see `resolve_restaurant_id`). When the
+    promo is scoped to a specific restaurant, redemption against any other
+    restaurant — or with no restaurant id available at all — is rejected.
     """
     if not code:
         raise PromotionError("Promo code is required")
@@ -89,6 +117,8 @@ async def compute_discount(
         raise PromotionError("Invalid promo code")
     if not promo.is_active:
         raise PromotionError("This promo code is no longer active")
+    if promo.restaurant_id and promo.restaurant_id != restaurant_id:
+        raise PromotionError("This promo code is not valid for this restaurant")
 
     now = utc_now()
     if promo.starts_at and now < promo.starts_at:
@@ -161,8 +191,11 @@ async def validate_and_compute(
     consumer_id: str,
     order_subtotal_usd: float,
     items: Optional[Iterable[Any]] = None,
+    restaurant_id: Optional[str] = None,
 ) -> Tuple[float, bool]:
     """Convenience wrapper returning (discount_usd, free_delivery)."""
-    discount = await compute_discount(code, consumer_id, order_subtotal_usd, items)
+    discount = await compute_discount(
+        code, consumer_id, order_subtotal_usd, items, restaurant_id
+    )
     free_delivery = await is_free_delivery(code)
     return discount, free_delivery

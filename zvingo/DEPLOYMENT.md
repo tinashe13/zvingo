@@ -85,10 +85,10 @@ printf 'Host github.com
 ## 2. DNS
 
 Point an A record (and AAAA if you have IPv6) for your domain, e.g.
-`zvingo.example.com`, at the server's public IP. Wait for it to resolve
+`pindira.com`, at the server's public IP. Wait for it to resolve
 before requesting certificates.
 
-Then replace both `server_name zvingo.example.com;` lines in
+Then replace both `server_name pindira.com;` lines in
 `nginx/nginx.prod.conf` with your domain.
 
 ## 3. Configure environment
@@ -125,10 +125,10 @@ nginx expects `fullchain.pem` and `privkey.pem` in `nginx/certs/`.
 Initial issuance (before the stack is running, port 80 must be free):
 
 ```bash
-sudo certbot certonly --standalone -d zvingo.example.com
+sudo certbot certonly --standalone -d pindira.com
 mkdir -p nginx/certs
-sudo cp /etc/letsencrypt/live/zvingo.example.com/fullchain.pem nginx/certs/
-sudo cp /etc/letsencrypt/live/zvingo.example.com/privkey.pem  nginx/certs/
+sudo cp /etc/letsencrypt/live/pindira.com/fullchain.pem nginx/certs/
+sudo cp /etc/letsencrypt/live/pindira.com/privkey.pem  nginx/certs/
 ```
 
 Renewals while the stack is running: nginx serves
@@ -152,7 +152,7 @@ docker compose -f docker-compose.prod.yml exec nginx nginx -s reload
 ```bash
 docker compose -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.prod.yml ps        # all services healthy?
-curl -s https://zvingo.example.com/api/health        # backend health via nginx
+curl -s https://pindira.com/api/health        # backend health via nginx
 ```
 
 ## 6. Create the first admin

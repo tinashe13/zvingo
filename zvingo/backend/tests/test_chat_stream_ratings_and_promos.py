@@ -310,6 +310,7 @@ def promo(**overrides):
         "redemptions_by_user": {},
         "redeemed_by": [],
         "max_uses_per_user": 1,
+        "restaurant_id": None,
     }
     values.update(overrides)
     return SimpleNamespace(**values)

@@ -58,6 +58,7 @@ def promo(**overrides):
         "id": "promo-1",
         "promo_id": "p1",
         "merchant_id": "merchant-1",
+        "restaurant_id": None,
         "title": "Deal",
         "subtitle": "Save",
         "code": "SAVE10",
@@ -143,6 +144,71 @@ async def test_promotion_service_validation_errors(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_promotion_service_restaurant_scoping(monkeypatch):
+    import app.catalog.promotion_service as module
+
+    unscoped = promo(code="ANY")
+    scoped = promo(code="SCOPED", restaurant_id="restaurant-1")
+
+    async def find(code):
+        return {"ANY": unscoped, "SCOPED": scoped}.get(code)
+
+    monkeypatch.setattr(module, "_find_promo", find)
+
+    # Unscoped promo redeems fine with or without a known restaurant.
+    assert await module.compute_discount("ANY", "u1", 100.0) == 10.0
+    assert await module.compute_discount("ANY", "u1", 100.0, restaurant_id="restaurant-1") == 10.0
+
+    # Scoped promo redeems only against its own restaurant.
+    assert (
+        await module.compute_discount(
+            "SCOPED", "u1", 100.0, restaurant_id="restaurant-1"
+        )
+        == 10.0
+    )
+    with pytest.raises(module.PromotionError):
+        await module.compute_discount("SCOPED", "u1", 100.0, restaurant_id="restaurant-2")
+    # No resolvable restaurant at all fails closed, not open.
+    with pytest.raises(module.PromotionError):
+        await module.compute_discount("SCOPED", "u1", 100.0)
+
+
+@pytest.mark.asyncio
+async def test_resolve_restaurant_id(monkeypatch):
+    import app.catalog.promotion_service as module
+    import app.catalog.models as catalog_models
+
+    restaurant = SimpleNamespace(id="restaurant-doc-1", merchant_id="merchant-9")
+
+    class FakeRestaurant:
+        merchant_id = Field()
+        get = AsyncMock(return_value=restaurant)
+        find_one = AsyncMock(return_value=None)
+
+    monkeypatch.setattr(catalog_models, "Restaurant", FakeRestaurant)
+
+    # Falsy input short-circuits without touching the DB.
+    assert await module.resolve_restaurant_id(None) is None
+    assert await module.resolve_restaurant_id("") is None
+
+    # Direct hit by document id.
+    assert await module.resolve_restaurant_id("restaurant-doc-1") == "restaurant-doc-1"
+
+    # Falls back to matching by Restaurant.merchant_id when the id lookup misses.
+    FakeRestaurant.get = AsyncMock(return_value=None)
+    FakeRestaurant.find_one = AsyncMock(return_value=restaurant)
+    assert await module.resolve_restaurant_id("merchant-9") == "restaurant-doc-1"
+
+    # No match at all.
+    FakeRestaurant.find_one = AsyncMock(return_value=None)
+    assert await module.resolve_restaurant_id("nothing") is None
+
+    # A lookup failure (e.g. a malformed id) fails closed, not with a crash.
+    FakeRestaurant.get = AsyncMock(side_effect=ValueError("bad id"))
+    assert await module.resolve_restaurant_id("garbage") is None
+
+
+@pytest.mark.asyncio
 async def test_promotion_service_record_redemption(monkeypatch):
     import app.catalog.promotion_service as module
 
@@ -166,12 +232,18 @@ async def test_validate_promo_endpoint(monkeypatch):
     import app.catalog.promotion_service as promo_service
     import app.catalog.router as module
 
+    validate = AsyncMock(return_value=(5.0, True))
+    monkeypatch.setattr(promo_service, "validate_and_compute", validate)
     monkeypatch.setattr(
-        promo_service, "validate_and_compute", AsyncMock(return_value=(5.0, True))
+        promo_service, "resolve_restaurant_id", AsyncMock(return_value="restaurant-1")
     )
-    req = module.PromoValidateRequest(code="SAVE10", order_subtotal_usd=50.0)
+    req = module.PromoValidateRequest(
+        code="SAVE10", order_subtotal_usd=50.0, restaurant_id="merchant-1"
+    )
     result = await module.validate_promo_code(req, user())
     assert result == {"code": "SAVE10", "discount_usd": 5.0, "free_delivery": True}
+    # The client-supplied merchant_id is resolved before being passed through.
+    assert validate.await_args.kwargs["restaurant_id"] == "restaurant-1"
 
     monkeypatch.setattr(
         promo_service,

@@ -307,6 +307,38 @@ async def test_create_checkout_rejects_an_invalid_promo(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_create_checkout_promo_restaurant_scoping(monkeypatch):
+    import app.catalog.promotion_service as promo_module
+    import app.order.service as module
+
+    async def create_order(order_in, group_id=None, promo_override=None):
+        return SimpleNamespace(id="order-x")
+
+    monkeypatch.setattr(module.OrderService, "create_order", create_order)
+    monkeypatch.setattr(promo_module, "record_redemption", AsyncMock())
+    validate = AsyncMock(return_value=(5.0, False))
+    monkeypatch.setattr(promo_module, "validate_and_compute", validate)
+
+    # A single-basket checkout resolves to that basket's restaurant.
+    monkeypatch.setattr(
+        promo_module, "resolve_restaurant_id", AsyncMock(return_value="restaurant-doc-1")
+    )
+    await module.OrderService.create_checkout(
+        checkout(baskets=[basket("restaurant-1", 10.0)], promo_code="SAVE10"),
+        "consumer-1",
+    )
+    assert validate.await_args.kwargs["restaurant_id"] == "restaurant-doc-1"
+
+    # A multi-restaurant checkout (baskets are always different restaurants,
+    # enforced by CheckoutCreate) is ambiguous for a scoped promo — fails
+    # closed to None rather than picking one basket's restaurant.
+    resolve = AsyncMock(side_effect=["restaurant-a", "restaurant-b"])
+    monkeypatch.setattr(promo_module, "resolve_restaurant_id", resolve)
+    await module.OrderService.create_checkout(checkout(promo_code="SAVE10"), "consumer-1")
+    assert validate.await_args.kwargs["restaurant_id"] is None
+
+
+@pytest.mark.asyncio
 async def test_create_order_honours_group_and_promo_override(monkeypatch):
     import app.order.service as module
     from app.order.schemas import OrderCreate

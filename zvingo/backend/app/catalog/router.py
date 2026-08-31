@@ -409,6 +409,11 @@ class PromoValidateRequest(BaseModel):
     # Cart lines ({"id"?, "name", "price", "quantity"}) — required to preview a
     # `free_item` promo, ignored by every other promo type.
     items: List[dict] = []
+    # Restaurant the cart is for — either a Restaurant document id or a
+    # Restaurant.merchant_id. Required to preview a restaurant-scoped promo;
+    # omitting it previews as if no restaurant were known, so a scoped promo
+    # is (correctly) rejected.
+    restaurant_id: Optional[str] = None
 
 
 @router.post("/promotions/validate")
@@ -422,11 +427,16 @@ async def validate_promo_code(
     """
     from app.catalog.promotion_service import (
         validate_and_compute,
+        resolve_restaurant_id,
         PromotionError,
     )
     try:
         discount, free_delivery = await validate_and_compute(
-            req.code, str(current_user.id), req.order_subtotal_usd, req.items
+            req.code,
+            str(current_user.id),
+            req.order_subtotal_usd,
+            req.items,
+            restaurant_id=await resolve_restaurant_id(req.restaurant_id),
         )
     except PromotionError as e:
         raise HTTPException(status_code=400, detail=str(e))

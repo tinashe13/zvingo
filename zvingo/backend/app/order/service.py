@@ -84,6 +84,7 @@ class OrderService:
         elif order_in.promo_code:
             from app.catalog.promotion_service import (
                 validate_and_compute,
+                resolve_restaurant_id,
                 PromotionError,
             )
             try:
@@ -92,6 +93,7 @@ class OrderService:
                     order_in.consumer_id,
                     order_in.total_amount,
                     order_in.items,
+                    restaurant_id=await resolve_restaurant_id(order_in.merchant_id),
                 )
             except PromotionError as e:
                 raise ValueError(str(e))
@@ -213,12 +215,28 @@ class OrderService:
         if checkout.promo_code:
             from app.catalog.promotion_service import (
                 validate_and_compute,
+                resolve_restaurant_id,
                 PromotionError,
             )
             all_items = [item for basket in checkout.baskets for item in basket.items]
+            # A restaurant-scoped promo only applies when every basket in the
+            # checkout resolves to that same restaurant — mixed baskets pass
+            # None through, which compute_discount rejects for a scoped promo.
+            basket_restaurant_ids = {
+                await resolve_restaurant_id(b.merchant_id) for b in checkout.baskets
+            }
+            restaurant_id = (
+                next(iter(basket_restaurant_ids))
+                if len(basket_restaurant_ids) == 1
+                else None
+            )
             try:
                 discount_total, free_delivery = await validate_and_compute(
-                    checkout.promo_code, consumer_id, checkout.subtotal, all_items
+                    checkout.promo_code,
+                    consumer_id,
+                    checkout.subtotal,
+                    all_items,
+                    restaurant_id=restaurant_id,
                 )
             except PromotionError as e:
                 raise ValueError(str(e))

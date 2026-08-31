@@ -43,8 +43,8 @@ are provided. Do **not** mark them "done" without a live test.
     the `initiate`/`check_status`/`refund` paths for cards.
 
 - [ ] **Domain / TLS / deployment**
-  - Replace `zvingo.example.com` in `nginx/nginx.prod.conf` and `.env` with the
-    real domain; obtain Let's Encrypt certs per `DEPLOYMENT.md`.
+  - Domain is set: `api.pindira.com` (backend), `app.pindira.com` (dashboard).
+    Still need to obtain Let's Encrypt certs per `DEPLOYMENT.md`.
   - Provision the production server and run the prod compose stack.
 
 - [ ] **First admin account**
@@ -100,11 +100,6 @@ are provided. Do **not** mark them "done" without a live test.
     case-insensitive `free_item_name`. The name fallback silently stops matching
     when a merchant renames a dish. Have the merchant dashboard always send
     `free_item_id`, then make the name a display label only.
-
-- [ ] **Promotions — per-restaurant scoping at redemption**
-  - `Promotion.restaurant_id` scopes which promos are *listed*, but
-    `compute_discount` does not check it, so a code shown for one restaurant can
-    be redeemed against another. Enforce the scope at redemption.
 
 - [ ] **Realtime — retire the per-purpose SSE streams**
   - `GET /ws/orders/{id}/track` now carries order events, driver location, and
@@ -224,3 +219,15 @@ Open follow-ups:
 - [x] **`backend/.dockerignore`** — the Dockerfile does `COPY . .`, so a local
       `.env` (with a live `SECRET_KEY`) was being baked into an image layer.
       Secrets, `.git`, and caches are now excluded.
+- [x] **Promotions — per-restaurant scoping at redemption** — `compute_discount`
+      / `validate_and_compute` now take a resolved `restaurant_id` and reject a
+      restaurant-scoped promo redeemed against any other restaurant (or with no
+      restaurant resolvable at all). `resolve_restaurant_id` (in
+      `promotion_service.py`) maps the client-supplied `merchant_id` — which may
+      be a Restaurant document id or a `Restaurant.merchant_id` — to the
+      restaurant's document id the same way order creation resolves pickup, so
+      it compares like ids against `Promotion.restaurant_id`. Wired into
+      `create_order`, `create_checkout` (only when every basket resolves to the
+      same restaurant — a mixed-restaurant cart can't redeem a scoped promo),
+      and the `POST /catalog/promotions/validate` preview endpoint (now takes
+      an optional `restaurant_id`).
