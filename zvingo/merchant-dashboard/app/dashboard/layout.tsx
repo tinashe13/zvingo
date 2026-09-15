@@ -7,7 +7,7 @@ import { NewOrderAlert, useOrderAlertSound } from "@/components/ui";
 import {
   docId,
   endpoints,
-  eventStreamUrl,
+  openEventStream,
   normaliseOrderState,
   type Order,
   type Restaurant,
@@ -126,16 +126,22 @@ function useOrderStream(channels: string[], onMessage: (payload: unknown) => voi
         source = null;
         const delay = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** attempt) + Math.random() * 400;
         attempt += 1;
-        retryTimer = window.setTimeout(open, delay);
+        retryTimer = window.setTimeout(() => void open(), delay);
       }
 
-      function open() {
+      async function open() {
         if (cancelled) return;
         let created: EventSource;
         try {
-          created = new EventSource(eventStreamUrl(channel));
+          // A fresh ticket per attempt: they are single-use, so a reconnect
+          // cannot replay the URL it used last time.
+          created = await openEventStream(channel);
         } catch {
           reconnect();
+          return;
+        }
+        if (cancelled) {
+          created.close();
           return;
         }
         source = created;
@@ -169,7 +175,7 @@ function useOrderStream(channels: string[], onMessage: (payload: unknown) => voi
         };
       }
 
-      open();
+      void open();
       cleanups.push(() => {
         window.clearTimeout(retryTimer);
         window.clearTimeout(watchdog);

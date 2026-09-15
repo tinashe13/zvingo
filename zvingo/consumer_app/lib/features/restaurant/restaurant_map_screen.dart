@@ -347,14 +347,12 @@ class _ClusteredStoreLayer extends StatelessWidget {
           group,
         );
       }
-      final lat = group
-              .map((s) => s.restaurant.latitude!)
-              .reduce((a, b) => a + b) /
-          group.length;
-      final lng = group
-              .map((s) => s.restaurant.longitude!)
-              .reduce((a, b) => a + b) /
-          group.length;
+      final lat =
+          group.map((s) => s.restaurant.latitude!).reduce((a, b) => a + b) /
+              group.length;
+      final lng =
+          group.map((s) => s.restaurant.longitude!).reduce((a, b) => a + b) /
+              group.length;
       return _MarkerCluster(LatLng(lat, lng), group);
     }).toList();
   }

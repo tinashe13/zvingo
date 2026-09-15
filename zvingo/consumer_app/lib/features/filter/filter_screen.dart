@@ -138,8 +138,8 @@ class FilterScreen extends ConsumerWidget {
                   icon: Icons.star_rounded,
                   iconTint: AppColors.rating,
                   selected: filters.minRating == rating,
-                  onTap: () => notifier
-                      .setMinRating(filters.minRating == rating ? null : rating),
+                  onTap: () => notifier.setMinRating(
+                      filters.minRating == rating ? null : rating),
                 ),
             ],
           ),

@@ -70,8 +70,8 @@ void main() {
     expect(unknown.isKnownClosed, isFalse);
 
     // Legacy boolean shape.
-    final legacy =
-        StoreAvailability.fromRestaurantJson(const {'is_currently_open': false});
+    final legacy = StoreAvailability.fromRestaurantJson(
+        const {'is_currently_open': false});
     expect(legacy.isKnownClosed, isTrue);
   });
 
@@ -80,7 +80,10 @@ void main() {
       '_id': 'r1',
       'name': 'Kudya Kitchen',
       'promotions': <String>[],
-      'discovery': {'distance_km': 0.4, 'matched_menu_items': ['Sadza']},
+      'discovery': {
+        'distance_km': 0.4,
+        'matched_menu_items': ['Sadza']
+      },
     });
     expect(store.headlinePromotion, isNull);
     expect(store.hasPromotion, isFalse);
@@ -90,7 +93,8 @@ void main() {
 
   test('filter state can clear a nullable facet', () {
     var state = const FilterState();
-    state = state.copyWith(minRating: 4.5, priceBand: 2, maxDeliveryMinutes: 30);
+    state =
+        state.copyWith(minRating: 4.5, priceBand: 2, maxDeliveryMinutes: 30);
     expect(state.activeCount, 3);
     state = state.copyWith(minRating: null);
     expect(state.minRating, isNull);

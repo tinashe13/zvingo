@@ -97,7 +97,8 @@ class OffersScreen extends ConsumerWidget {
               promo: list[index],
               onOpenRestaurant: list[index].restaurantId == null
                   ? null
-                  : () => context.push('/restaurant/${list[index].restaurantId}'),
+                  : () =>
+                      context.push('/restaurant/${list[index].restaurantId}'),
             ),
           ),
         ];

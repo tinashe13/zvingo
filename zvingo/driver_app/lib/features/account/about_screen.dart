@@ -280,9 +280,17 @@ class _LegalRow extends StatelessWidget {
               ),
             ),
             if (!document.isConfigured)
-              const StatusChip(
-                label: 'Not published',
-                tone: StatusTone.warning,
+              // Shrinks instead of pushing the chevron off a 320px screen at
+              // 200% text scale.
+              const Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: StatusChip(
+                    label: 'Not published',
+                    tone: StatusTone.warning,
+                  ),
+                ),
               ),
             const Icon(Icons.chevron_right_rounded,
                 size: 20, color: AppColors.textTertiary),

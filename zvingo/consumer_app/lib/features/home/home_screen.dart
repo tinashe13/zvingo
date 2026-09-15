@@ -483,8 +483,7 @@ class _ModePill extends StatelessWidget {
             Icon(
               icon,
               size: 18,
-              color:
-                  selected ? AppColors.textPrimary : AppColors.textSecondary,
+              color: selected ? AppColors.textPrimary : AppColors.textSecondary,
             ),
             const SizedBox(width: AppSpacing.xxs + 2),
             Flexible(

@@ -313,8 +313,7 @@ class _PickupChip extends StatelessWidget {
             Text(
               label,
               style: AppTextStyles.caption.copyWith(
-                color:
-                    selected ? AppColors.textOnDark : AppColors.textPrimary,
+                color: selected ? AppColors.textOnDark : AppColors.textPrimary,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
               ),
             ),

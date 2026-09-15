@@ -95,9 +95,8 @@ class _CategoryTile extends StatelessWidget {
               height: AppSpacing.minTapTarget + 8,
               width: AppSpacing.minTapTarget + 8,
               decoration: BoxDecoration(
-                color: selected
-                    ? AppColors.actionDefault
-                    : AppColors.surfaceMuted,
+                color:
+                    selected ? AppColors.actionDefault : AppColors.surfaceMuted,
                 borderRadius: AppRadius.lgAll,
                 border: Border.all(
                   color: selected ? AppColors.actionDefault : AppColors.border,
@@ -106,8 +105,7 @@ class _CategoryTile extends StatelessWidget {
               child: Icon(
                 category.icon,
                 size: 24,
-                color:
-                    selected ? AppColors.textOnDark : AppColors.textPrimary,
+                color: selected ? AppColors.textOnDark : AppColors.textPrimary,
               ),
             ),
             const SizedBox(height: AppSpacing.xs),

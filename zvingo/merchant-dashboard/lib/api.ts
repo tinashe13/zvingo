@@ -28,6 +28,8 @@ export const UPLOAD_API_URL = RAW_BASE || "http://localhost:8000";
 
 export const TOKEN_STORAGE_KEY = "zvingo_token";
 export const USER_STORAGE_KEY = "zvingo_user";
+export const REFRESH_TOKEN_STORAGE_KEY = "zvingo_refresh_token";
+export const TOKEN_EXPIRY_STORAGE_KEY = "zvingo_token_expires_at";
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_RETRIES = 2;
@@ -177,6 +179,11 @@ export function clearAuth() {
   const store = safeStorage();
   store?.removeItem(TOKEN_STORAGE_KEY);
   store?.removeItem(USER_STORAGE_KEY);
+  // A refresh token outlives the access token by a long way. Leaving it behind
+  // means "sign out" on a shared counter tablet leaves a live credential that
+  // can mint new access tokens for weeks.
+  store?.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+  store?.removeItem(TOKEN_EXPIRY_STORAGE_KEY);
 }
 
 export function isAuthenticated(): boolean {
@@ -702,4 +709,28 @@ export const endpoints = {
 /** SSE stream URL for a merchant channel (`GET /notification/events/{channel}`). */
 export function eventStreamUrl(channelId: string): string {
   return `${API_BASE}/notification/events/${encodeURIComponent(channelId)}`;
+}
+
+/**
+ * Open an authenticated SSE connection to one channel.
+ *
+ * The stream used to be reachable with only a channel name, which made it a
+ * public feed of every restaurant's live orders — restaurant ids come from the
+ * public catalog listing. It now needs a ticket minted from the caller's JWT.
+ *
+ * EventSource cannot send an Authorization header, so the ticket rides in the
+ * query string. That is safe here in a way a JWT would not be: it is valid for
+ * one subscription to one channel for about a minute, and is consumed the
+ * moment the stream opens.
+ *
+ * Tickets are single-use, so every reconnect must call this again rather than
+ * reusing a URL.
+ */
+export async function openEventStream(channelId: string): Promise<EventSource> {
+  const { ticket } = await apiJson<{ ticket: string }>(
+    "/notification/stream-ticket",
+    { method: "POST", json: { channel: channelId } },
+  );
+  const url = `${eventStreamUrl(channelId)}?ticket=${encodeURIComponent(ticket)}`;
+  return new EventSource(url);
 }

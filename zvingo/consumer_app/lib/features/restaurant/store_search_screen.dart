@@ -89,7 +89,8 @@ class _StoreSearchScreenState extends ConsumerState<StoreSearchScreen> {
       case StoreSortOption.priceHighToLow:
         out.sort((a, b) => b.price.compareTo(a.price));
       case StoreSortOption.nameAsc:
-        out.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        out.sort(
+            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     }
     return out;
   }

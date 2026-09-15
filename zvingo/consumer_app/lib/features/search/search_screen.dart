@@ -380,7 +380,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           message: filters.hasActiveFilters
               ? 'You have ${filters.activeCount} filters on, which may be hiding results. Try clearing them or searching for something broader.'
               : 'Check the spelling, or try a broader term like the cuisine instead of the dish.',
-          actionLabel: filters.hasActiveFilters ? 'Clear filters' : 'Clear search',
+          actionLabel:
+              filters.hasActiveFilters ? 'Clear filters' : 'Clear search',
           onAction: () {
             if (filters.hasActiveFilters) {
               ref.read(filtersProvider.notifier).reset();

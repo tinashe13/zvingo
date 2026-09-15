@@ -39,9 +39,8 @@ extension PromotionDisplay on Promotion {
   }
 
   /// Ink that meets AA on [gradient].
-  Color get foreground => promoType == 'percentage'
-      ? AppColors.textPrimary
-      : AppColors.textOnDark;
+  Color get foreground =>
+      promoType == 'percentage' ? AppColors.textPrimary : AppColors.textOnDark;
 
   IconData get iconData {
     switch (icon) {

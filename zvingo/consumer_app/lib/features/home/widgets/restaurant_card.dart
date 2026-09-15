@@ -207,7 +207,8 @@ class RestaurantCard extends ConsumerWidget {
                                       icon: Icons.pedal_bike_rounded,
                                     ),
                                   ),
-                                if (restaurant.isZvingoPlus)
+                                if (restaurant.isZvingoPlus &&
+                                    zvTextScale(context) <= 1.3)
                                   const ShrinkToFit(
                                     child: ZvBadge(
                                       label: 'Zvingo+',
@@ -544,7 +545,9 @@ class _AvailabilityChip extends StatelessWidget {
               uppercase: false,
             ),
           ),
-          if (state.acceptsScheduled)
+          // The secondary chip is the first casualty of a very large font —
+          // "Opens 08:00" is the message that must survive.
+          if (state.acceptsScheduled && zvTextScale(context) <= 1.3)
             const ShrinkToFit(
               child: ZvStatusChip(
                 label: 'Pre-order',
@@ -579,9 +582,8 @@ class _RatingPill extends StatelessWidget {
   Widget build(BuildContext context) {
     // At large text sizes the review count is the first thing to go — the
     // rating itself is what the decision hangs on.
-    final showCount = reviewCount != null &&
-        reviewCount! > 0 &&
-        zvTextScale(context) <= 1.3;
+    final showCount =
+        reviewCount != null && reviewCount! > 0 && zvTextScale(context) <= 1.3;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.xs,
@@ -634,7 +636,8 @@ class _PromotionLine extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.local_offer_rounded, size: 13, color: AppColors.deal),
+          const Icon(Icons.local_offer_rounded,
+              size: 13, color: AppColors.deal),
           const SizedBox(width: AppSpacing.xxs + 2),
           Flexible(
             child: Text(
@@ -668,6 +671,9 @@ String _shortPromo(String promotion) {
 
 String _compactCount(int value) {
   if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1)}M';
-  if (value >= 1000) return '${(value / 1000).toStringAsFixed(value >= 10000 ? 0 : 1)}k';
+  if (value >= 1000) {
+    final decimals = value >= 10000 ? 0 : 1;
+    return '${(value / 1000).toStringAsFixed(decimals)}k';
+  }
   return '$value';
 }

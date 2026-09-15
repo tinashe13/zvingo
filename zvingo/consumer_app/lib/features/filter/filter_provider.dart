@@ -132,7 +132,8 @@ class FilterState {
     }
     if (minRating != null) {
       chips.add(
-        FilterChipSummary('${minRating!.toStringAsFixed(1)}+', FilterFacet.rating),
+        FilterChipSummary(
+            '${minRating!.toStringAsFixed(1)}+', FilterFacet.rating),
       );
     }
     if (maxDeliveryMinutes != null) {

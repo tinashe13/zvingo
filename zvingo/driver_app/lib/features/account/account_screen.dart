@@ -445,10 +445,21 @@ class _MenuItem extends StatelessWidget {
                           .copyWith(color: AppColors.textTertiary),
                     ),
                   ],
+                  // The badge sits under the label rather than beside it: at
+                  // 200% text scale on a 320px screen a chip in the row pushes
+                  // the chevron off the edge. `FittedBox` is the belt to that
+                  // braces — a long badge shrinks rather than overflowing.
+                  if (trailing != null) ...[
+                    Gap.xs,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: trailing!,
+                    ),
+                  ],
                 ],
               ),
             ),
-            if (trailing != null) ...[Gap.hSm, trailing!],
             Gap.hXs,
             const Icon(Icons.chevron_right_rounded,
                 size: 20, color: AppColors.textTertiary),

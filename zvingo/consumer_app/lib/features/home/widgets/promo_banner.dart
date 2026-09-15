@@ -262,7 +262,8 @@ class _PromoTile extends StatelessWidget {
                           Flexible(
                             child: Text(
                               promo.code!,
-                              style: AppTextStyles.overline.copyWith(color: ink),
+                              style:
+                                  AppTextStyles.overline.copyWith(color: ink),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
