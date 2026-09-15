@@ -346,9 +346,8 @@ class _FulfilmentToggle extends StatelessWidget {
               Text(
                 label,
                 style: AppTextStyles.button.copyWith(
-                  color: selected
-                      ? AppColors.textOnDark
-                      : AppColors.textSecondary,
+                  color:
+                      selected ? AppColors.textOnDark : AppColors.textSecondary,
                 ),
               ),
             ],
@@ -389,8 +388,9 @@ class _DeliveryAddressCard extends StatelessWidget {
                 Text(
                   hasAddress ? 'Delivering to' : 'No delivery address yet',
                   style: AppTextStyles.caption.copyWith(
-                    color:
-                        hasAddress ? AppColors.textSecondary : AppColors.warning,
+                    color: hasAddress
+                        ? AppColors.textSecondary
+                        : AppColors.warning,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -629,7 +629,9 @@ class _PreviewBreakdown extends StatelessWidget {
           _row('Subtotal', quote.subtotal),
           const SizedBox(height: AppSpacing.xs),
           _row(
-            mode == FulfilmentMode.pickup ? 'Delivery (pickup)' : 'Delivery fee',
+            mode == FulfilmentMode.pickup
+                ? 'Delivery (pickup)'
+                : 'Delivery fee',
             quote.deliveryFee,
           ),
           const SizedBox(height: AppSpacing.xs),
@@ -664,8 +666,7 @@ class _PreviewBreakdown extends StatelessWidget {
     return Row(
       children: [
         Text(label,
-            style:
-                AppTextStyles.body.copyWith(color: AppColors.textSecondary)),
+            style: AppTextStyles.body.copyWith(color: AppColors.textSecondary)),
         const Spacer(),
         Text(amount.isZero ? 'Free' : amount.format(),
             style: AppTextStyles.money),

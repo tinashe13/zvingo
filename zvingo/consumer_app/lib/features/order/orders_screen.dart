@@ -169,6 +169,10 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
               child: _ActiveOrderCard(
                 order: orders[i],
                 selected: orders[i].id == selectedId,
+                // Only the order on the map runs a live tracker: every tracker
+                // opens its own event stream, so watching all of them would
+                // mean N duplicate connections for one screen.
+                live: orders[i].id == selectedId,
                 onTap: () {
                   if (orders[i].id == selectedId) {
                     context.push('/order/${orders[i].id}');
@@ -354,9 +358,8 @@ class _SegmentedTabs extends StatelessWidget {
             child: Text(
               label,
               style: AppTextStyles.button.copyWith(
-                color: selected
-                    ? AppColors.textOnDark
-                    : AppColors.textSecondary,
+                color:
+                    selected ? AppColors.textOnDark : AppColors.textSecondary,
               ),
             ),
           ),
@@ -374,24 +377,32 @@ class _ActiveOrderCard extends ConsumerWidget {
   const _ActiveOrderCard({
     required this.order,
     required this.selected,
+    required this.live,
     required this.onTap,
     required this.onTrack,
   });
 
   final TrackedOrder order;
   final bool selected;
+
+  /// Whether this card subscribes to the live tracker. Only the card whose
+  /// order is on the map does; the rest render the last list snapshot, which
+  /// pull-to-refresh updates.
+  final bool live;
+
   final VoidCallback onTap;
   final VoidCallback onTrack;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final live = ref.watch(orderTrackingProvider(order.id)).valueOrNull;
-    final current = live?.order ?? order;
+    final tracked =
+        live ? ref.watch(orderTrackingProvider(order.id)).valueOrNull : null;
+    final current = tracked?.order ?? order;
     final headline = orderHeadline(
       current.state,
       driverFirstName: current.driver?.firstName,
     );
-    final eta = live?.eta;
+    final eta = tracked?.eta;
     final restaurant = current.merchantId == null
         ? null
         : ref.watch(orderRestaurantProvider(current.merchantId!)).valueOrNull;
@@ -458,9 +469,7 @@ class _ActiveOrderCard extends ConsumerWidget {
               ),
               const SizedBox(height: AppSpacing.xs),
               ZvIconButton(
-                icon: selected
-                    ? Icons.north_east_rounded
-                    : Icons.map_outlined,
+                icon: selected ? Icons.north_east_rounded : Icons.map_outlined,
                 tooltip: selected ? 'Open live tracking' : 'Show on the map',
                 onPressed: selected ? onTrack : onTap,
               ),

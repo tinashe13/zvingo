@@ -130,8 +130,7 @@ class ZvOtpFieldState extends State<ZvOtpField> {
   @override
   void initState() {
     super.initState();
-    _controllers =
-        List.generate(widget.length, (_) => TextEditingController());
+    _controllers = List.generate(widget.length, (_) => TextEditingController());
     _nodes = List.generate(widget.length, (_) => FocusNode());
   }
 
@@ -262,9 +261,8 @@ class ZvOtpFieldState extends State<ZvOtpField> {
                     inputFormatters: [
                       FilteringTextInputFormatter.digitsOnly,
                     ],
-                    autofillHints: index == 0
-                        ? const [AutofillHints.oneTimeCode]
-                        : null,
+                    autofillHints:
+                        index == 0 ? const [AutofillHints.oneTimeCode] : null,
                     decoration: const InputDecoration(
                       counterText: '',
                       border: InputBorder.none,

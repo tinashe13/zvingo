@@ -24,8 +24,7 @@ class PaymentMethodsScreen extends ConsumerStatefulWidget {
       _PaymentMethodsScreenState();
 }
 
-class _PaymentMethodsScreenState
-    extends ConsumerState<PaymentMethodsScreen> {
+class _PaymentMethodsScreenState extends ConsumerState<PaymentMethodsScreen> {
   final _formKey = GlobalKey<FormState>();
   final _phoneController = TextEditingController();
 
@@ -52,8 +51,7 @@ class _PaymentMethodsScreenState
 
   Future<void> _save(String accountPhone) async {
     FocusManager.instance.primaryFocus?.unfocus();
-    if (!_useAccountNumber &&
-        !(_formKey.currentState?.validate() ?? false)) {
+    if (!_useAccountNumber && !(_formKey.currentState?.validate() ?? false)) {
       return;
     }
 
@@ -162,7 +160,8 @@ class _PaymentMethodsScreenState
               ZvPhoneField(
                 controller: _phoneController,
                 label: 'Wallet number',
-                helper: 'The wallet holder approves the payment on their phone.',
+                helper:
+                    'The wallet holder approves the payment on their phone.',
                 validator: ZvPhone.validate,
               ),
             ],
@@ -230,8 +229,8 @@ class _HowPaymentWorksCard extends StatelessWidget {
             'order, Paynow sends a prompt to your phone and you approve it '
             'there with your own PIN. No card numbers and no PINs are ever '
             'typed into, or kept by, this app.',
-            style: AppTextStyles.caption
-                .copyWith(color: AppColors.brandGreenDark),
+            style:
+                AppTextStyles.caption.copyWith(color: AppColors.brandGreenDark),
           ),
         ],
       ),

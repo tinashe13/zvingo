@@ -417,7 +417,7 @@ class _PresetChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.bolt_rounded,
+              const Icon(Icons.bolt_rounded,
                   size: 16, color: AppColors.textSecondary),
               Gap.hSm,
               Text(

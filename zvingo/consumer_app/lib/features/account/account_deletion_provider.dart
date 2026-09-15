@@ -70,9 +70,9 @@ class AccountDeletion extends _$AccountDeletion {
     state = const AsyncValue.loading();
     try {
       await ref.read(apiClientProvider).delete<dynamic>(
-            '/auth/me',
-            data: {if (reason != null && reason.isNotEmpty) 'reason': reason},
-          );
+        '/auth/me',
+        data: {if (reason != null && reason.isNotEmpty) 'reason': reason},
+      );
       state = const AsyncValue.data(null);
       return const AccountDeletionResult(AccountDeletionOutcome.deleted);
     } on DioException catch (error, stack) {

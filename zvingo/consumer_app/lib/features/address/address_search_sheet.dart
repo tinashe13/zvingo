@@ -73,8 +73,9 @@ class _AddressSearchSheetState extends ConsumerState<AddressSearchSheet> {
               controller: _controller,
               autofocus: (widget.initialQuery ?? '').isEmpty,
               hint: 'e.g. 123 Samora Machel Ave, Harare',
-              onChanged: (value) =>
-                  ref.read(geocodeSearchProvider.notifier).onQueryChanged(value),
+              onChanged: (value) => ref
+                  .read(geocodeSearchProvider.notifier)
+                  .onQueryChanged(value),
               onClear: () =>
                   ref.read(geocodeSearchProvider.notifier).onQueryChanged(''),
             ),
@@ -179,7 +180,10 @@ class _AddressSearchSheetState extends ConsumerState<AddressSearchSheet> {
   IconData _iconFor(String type) => switch (type) {
         'house' || 'building' || 'residential' => Icons.home_outlined,
         'road' || 'street' || 'highway' => Icons.signpost_outlined,
-        'suburb' || 'neighbourhood' || 'city' || 'town' =>
+        'suburb' ||
+        'neighbourhood' ||
+        'city' ||
+        'town' =>
           Icons.location_city_outlined,
         'restaurant' || 'cafe' || 'fast_food' => Icons.storefront_outlined,
         _ => Icons.location_on_outlined,

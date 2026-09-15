@@ -610,7 +610,7 @@ class _CashOnHandCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(
+              const Icon(
                 Icons.account_balance_wallet_outlined,
                 size: 20,
                 color: AppColors.textSecondary,
@@ -714,7 +714,7 @@ class _DailyRow extends StatelessWidget {
                   ),
                 ),
                 Gap.xxs,
-                Icon(
+                const Icon(
                   Icons.chevron_right_rounded,
                   size: 20,
                   color: AppColors.textTertiary,
@@ -795,7 +795,7 @@ class _PayExplainer extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.calculate_outlined,
+              const Icon(Icons.calculate_outlined,
                   size: 18, color: AppColors.textSecondary),
               Gap.hSm,
               Text(
@@ -834,16 +834,16 @@ class _EarningsSkeleton extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(AppSpacing.xl),
           decoration: AppSpacing.cardDecoration(context),
-          child: Column(
+          child: const Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SkeletonBox.line(widthFactor: 0.35, height: 12),
+              SkeletonBox.line(widthFactor: 0.35, height: 12),
               Gap.md,
-              const SkeletonBox(height: 44, widthFactor: 0.6),
+              SkeletonBox(height: 44, widthFactor: 0.6),
               Gap.lg,
-              const SkeletonBox.line(widthFactor: 0.8),
+              SkeletonBox.line(widthFactor: 0.8),
               Gap.sm,
-              const SkeletonBox.line(widthFactor: 0.65),
+              SkeletonBox.line(widthFactor: 0.65),
             ],
           ),
         ),

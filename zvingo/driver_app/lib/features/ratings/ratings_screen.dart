@@ -159,9 +159,9 @@ class _RatingsScreenState extends ConsumerState<RatingsScreen> {
           child: _LifetimeCard(ratings: ratings),
         ),
         Gap.section,
-        StaggeredEntrance(
+        const StaggeredEntrance(
           index: 9,
-          child: const _SectionTitle(
+          child: _SectionTitle(
             'What customers wrote',
             subtitle: 'Most recent first',
           ),
@@ -236,11 +236,11 @@ class _ScoreCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.xxl),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         // §1.2: `AppColors.primary` is the near-black action colour now. A
         // rating is a positive, brand moment, so it uses brand green rather
         // than turning into a black slab.
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [AppColors.brandGreen, AppColors.brandGreenDark],
@@ -716,7 +716,7 @@ class _NoFeedbackYet extends StatelessWidget {
       decoration: AppSpacing.cardDecoration(context),
       child: Column(
         children: [
-          Icon(Icons.chat_bubble_outline_rounded,
+          const Icon(Icons.chat_bubble_outline_rounded,
               size: 32, color: AppColors.textTertiary),
           Gap.md,
           Text(
@@ -811,14 +811,14 @@ class _RatingsSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       padding: EdgeInsets.fromLTRB(padding, AppSpacing.lg, padding, padding),
-      children: [
-        const SkeletonBox(height: 180),
+      children: const [
+        SkeletonBox(height: 180),
         Gap.md,
-        const SkeletonBox(height: 72),
+        SkeletonBox(height: 72),
         Gap.section,
-        const SkeletonBox(height: 160),
+        SkeletonBox(height: 160),
         Gap.section,
-        const SkeletonList(count: 3, builder: EarningsRowSkeleton.new),
+        SkeletonList(count: 3, builder: EarningsRowSkeleton.new),
       ],
     );
   }

@@ -119,11 +119,11 @@ class AboutScreen extends StatelessWidget {
                       value: AppInfo.versionLabel,
                     ),
                     if (AppInfo.commit.isNotEmpty)
-                      _DetailRow(
+                      const _DetailRow(
                         label: 'Build',
                         value: AppInfo.commit,
                       ),
-                    _DetailRow(
+                    const _DetailRow(
                       label: 'Connected to',
                       value: AppConfig.baseUrl,
                     ),
@@ -284,7 +284,7 @@ class _LegalRow extends StatelessWidget {
                 label: 'Not published',
                 tone: StatusTone.warning,
               ),
-            Icon(Icons.chevron_right_rounded,
+            const Icon(Icons.chevron_right_rounded,
                 size: 20, color: AppColors.textTertiary),
           ],
         ),

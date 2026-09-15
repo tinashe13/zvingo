@@ -230,7 +230,7 @@ class _NotificationSettingsScreenState
           reason: _pushReason,
         )),
         Gap.section,
-        StaggeredEntrance(
+        const StaggeredEntrance(
           index: 1,
           child: _GroupTitle('Channels'),
         ),
@@ -261,7 +261,7 @@ class _NotificationSettingsScreenState
           ),
         ),
         Gap.section,
-        StaggeredEntrance(index: 3, child: _GroupTitle('What to tell you about')),
+        const StaggeredEntrance(index: 3, child: _GroupTitle('What to tell you about')),
         Gap.md,
         StaggeredEntrance(
           index: 4,
@@ -307,7 +307,7 @@ class _NotificationSettingsScreenState
           ),
         ),
         Gap.section,
-        StaggeredEntrance(index: 5, child: _GroupTitle('Quiet hours')),
+        const StaggeredEntrance(index: 5, child: _GroupTitle('Quiet hours')),
         Gap.md,
         StaggeredEntrance(
           index: 6,
@@ -319,7 +319,7 @@ class _NotificationSettingsScreenState
               children: [
                 Row(
                   children: [
-                    Icon(Icons.bedtime_outlined,
+                    const Icon(Icons.bedtime_outlined,
                         size: 20, color: AppColors.textSecondary),
                     Gap.hSm,
                     Expanded(

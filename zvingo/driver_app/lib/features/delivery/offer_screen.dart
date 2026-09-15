@@ -13,7 +13,6 @@ import '../../core/app_text_styles.dart';
 import '../../core/router.dart';
 import '../../providers/delivery_provider.dart';
 import '../../widgets/widgets.dart';
-import 'map_attribution.dart';
 
 /// The offer takeover: one job, one decision, a few seconds to make it.
 ///

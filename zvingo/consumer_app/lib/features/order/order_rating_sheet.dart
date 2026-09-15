@@ -123,7 +123,8 @@ class _OrderRatingSheetState extends ConsumerState<OrderRatingSheet> {
       await ref.read(orderActionsProvider).submitReview(
             widget.order.id,
             restaurantRating: _restaurantRating,
-            driverRating: _hasDriver && _driverRating > 0 ? _driverRating : null,
+            driverRating:
+                _hasDriver && _driverRating > 0 ? _driverRating : null,
             comment: _comment.text,
             tags: _tags.toList(),
           );
@@ -241,7 +242,6 @@ class _OrderRatingSheetState extends ConsumerState<OrderRatingSheet> {
                     AppTextStyles.body.copyWith(color: AppColors.textSecondary),
               ),
               const SizedBox(height: AppSpacing.xl),
-
               _RatingBlock(
                 title: 'The food',
                 subtitle: 'How was the order from $_restaurantLabel?',
@@ -267,7 +267,6 @@ class _OrderRatingSheetState extends ConsumerState<OrderRatingSheet> {
                   }),
                 ),
               ],
-
               if (_hasDriver) ...[
                 const SizedBox(height: AppSpacing.xxl),
                 _RatingBlock(
@@ -299,7 +298,6 @@ class _OrderRatingSheetState extends ConsumerState<OrderRatingSheet> {
                   ),
                 ],
               ],
-
               const SizedBox(height: AppSpacing.xxl),
               ZvTextField(
                 label: 'Anything else?',
@@ -311,7 +309,6 @@ class _OrderRatingSheetState extends ConsumerState<OrderRatingSheet> {
                 maxLength: 2000,
                 textCapitalization: TextCapitalization.sentences,
               ),
-
               if (_error != null) ...[
                 const SizedBox(height: AppSpacing.md),
                 _InlineError(message: _error!),
@@ -335,9 +332,8 @@ class _OrderRatingSheetState extends ConsumerState<OrderRatingSheet> {
               ZvButton.tertiary(
                 label: 'Not now',
                 fullWidth: true,
-                onPressed: _submitting
-                    ? null
-                    : () => Navigator.of(context).pop(false),
+                onPressed:
+                    _submitting ? null : () => Navigator.of(context).pop(false),
               ),
             ],
           ),
@@ -488,7 +484,8 @@ class _TagWrap extends StatelessWidget {
           child: AnimatedContainer(
             duration: context.motion(AppMotion.fast),
             curve: context.motionCurve(AppMotion.standard),
-            constraints: const BoxConstraints(minHeight: AppSpacing.minTapTarget),
+            constraints:
+                const BoxConstraints(minHeight: AppSpacing.minTapTarget),
             alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
             decoration: BoxDecoration(
@@ -506,8 +503,7 @@ class _TagWrap extends StatelessWidget {
                 Text(
                   tag,
                   style: AppTextStyles.caption.copyWith(
-                    color:
-                        isOn ? AppColors.textOnDark : AppColors.textPrimary,
+                    color: isOn ? AppColors.textOnDark : AppColors.textPrimary,
                     fontWeight: FontWeight.w600,
                   ),
                 ),

@@ -88,8 +88,9 @@ class NotificationPreferences {
 @riverpod
 Future<bool> pushConfigured(Ref ref) async {
   try {
-    final response =
-        await ref.watch(apiClientProvider).get<dynamic>('/notification/push/status');
+    final response = await ref
+        .watch(apiClientProvider)
+        .get<dynamic>('/notification/push/status');
     final data = response.data;
     if (data is Map) {
       // The endpoint reports a small status map; treat any explicit

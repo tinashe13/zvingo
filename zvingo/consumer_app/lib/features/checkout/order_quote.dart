@@ -86,7 +86,8 @@ class OrderQuote {
     Money delivery;
     if (mode == FulfilmentMode.pickup || freeDeliveryFromPromo) {
       delivery = zero;
-    } else if (restaurantDeliveryFee != null && restaurantDeliveryFee.isPositive) {
+    } else if (restaurantDeliveryFee != null &&
+        restaurantDeliveryFee.isPositive) {
       delivery = restaurantDeliveryFee;
     } else {
       delivery = estimatedDeliveryFee(
@@ -194,8 +195,10 @@ class OrderQuote {
       // One block is the backend's floor for an unknown distance.
       return Money.minorUnits(kDeliveryBlockPriceCents, currency: currency);
     }
-    final km = haversineKm(restaurantLat, restaurantLng, dropoffLat, dropoffLng);
-    final blocks = km <= 0 ? 1 : math.max(1, (km / kDeliveryBlockSizeKm).ceil());
+    final km =
+        haversineKm(restaurantLat, restaurantLng, dropoffLat, dropoffLng);
+    final blocks =
+        km <= 0 ? 1 : math.max(1, (km / kDeliveryBlockSizeKm).ceil());
     return Money.minorUnits(kDeliveryBlockPriceCents * blocks,
         currency: currency);
   }

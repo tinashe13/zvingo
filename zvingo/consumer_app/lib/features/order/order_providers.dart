@@ -43,7 +43,8 @@ final currentUserIdProvider = FutureProvider<String?>((ref) async {
 /// the `family` means two widgets watching the same order share one connection.
 final orderTrackerProvider =
     Provider.autoDispose.family<OrderTracker, String>((ref, orderId) {
-  final tracker = OrderTracker(dio: ref.watch(apiClientProvider), orderId: orderId);
+  final tracker =
+      OrderTracker(dio: ref.watch(apiClientProvider), orderId: orderId);
   ref.onDispose(tracker.dispose);
   tracker.start();
   return tracker;
@@ -112,7 +113,8 @@ final driverRatingProvider = FutureProvider.autoDispose
     .family<DriverRatingSummary, String>((ref, driverId) async {
   final dio = ref.watch(apiClientProvider);
   try {
-    final response = await dio.get<dynamic>('/rating/drivers/$driverId/summary');
+    final response =
+        await dio.get<dynamic>('/rating/drivers/$driverId/summary');
     final data = response.data;
     if (data is Map) {
       final rating = data['driver_rating'];
@@ -286,7 +288,8 @@ class OrderChatController extends StateNotifier<OrderChatState> {
       final messages = (data is List)
           ? data
               .whereType<Map>()
-              .map((e) => OrderChatMessage.fromJson(Map<String, dynamic>.from(e)))
+              .map((e) =>
+                  OrderChatMessage.fromJson(Map<String, dynamic>.from(e)))
               .toList()
           : <OrderChatMessage>[];
       state = state.copyWith(
@@ -406,7 +409,8 @@ class OrderChatController extends StateNotifier<OrderChatState> {
 /// One chat controller per order, disposed with its last listener.
 final orderChatProvider = StateNotifierProvider.autoDispose
     .family<OrderChatController, OrderChatState, String>((ref, orderId) {
-  return OrderChatController(dio: ref.watch(apiClientProvider), orderId: orderId);
+  return OrderChatController(
+      dio: ref.watch(apiClientProvider), orderId: orderId);
 });
 
 /// Unread-message count for an order's thread, polled independently of the

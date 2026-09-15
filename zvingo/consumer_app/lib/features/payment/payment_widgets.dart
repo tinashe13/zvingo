@@ -35,9 +35,8 @@ class PaymentMethodPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final visible = methods
-        .where((m) => allowCash || m != PaymentMethodType.cash)
-        .toList();
+    final visible =
+        methods.where((m) => allowCash || m != PaymentMethodType.cash).toList();
     return Column(
       children: [
         for (var i = 0; i < visible.length; i++) ...[
@@ -115,8 +114,7 @@ class _MethodTile extends StatelessWidget {
                 ? Icons.radio_button_checked
                 : Icons.radio_button_unchecked,
             size: 22,
-            color:
-                isSelected ? AppColors.actionDefault : AppColors.neutral400,
+            color: isSelected ? AppColors.actionDefault : AppColors.neutral400,
           ),
         ],
       ),
@@ -406,16 +404,14 @@ class _CurrencyChip extends StatelessWidget {
             Text(
               code,
               style: AppTextStyles.overline.copyWith(
-                color: selected
-                    ? AppColors.textOnDark
-                    : AppColors.textSecondary,
+                color:
+                    selected ? AppColors.textOnDark : AppColors.textSecondary,
               ),
             ),
             Text(
               label,
               style: AppTextStyles.money.copyWith(
-                color:
-                    selected ? AppColors.textOnDark : AppColors.textPrimary,
+                color: selected ? AppColors.textOnDark : AppColors.textPrimary,
               ),
             ),
           ],

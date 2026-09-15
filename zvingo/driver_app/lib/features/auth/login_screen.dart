@@ -369,7 +369,7 @@ class _Brand extends StatelessWidget {
           width: 72,
           height: 72,
           alignment: Alignment.center,
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             // The logo is a brand moment, so it is brand green — §1.2 made
             // `AppColors.primary` near-black, which is for buttons, not marks.
             color: AppColors.brandGreen,

@@ -95,7 +95,9 @@ class Promotion {
       if (firstOrderOnly) 'first order only',
       if (restaurantId != null) 'one restaurant only',
     ];
-    return parts.isEmpty ? 'No minimum spend' : _sentenceCase(parts.join(' · '));
+    return parts.isEmpty
+        ? 'No minimum spend'
+        : _sentenceCase(parts.join(' · '));
   }
 
   /// Null when the promo has no end date.

@@ -23,7 +23,8 @@ class ZvPhone {
   ///
   /// Accepts every shape a person might paste: `+263 77 123 4567`,
   /// `263771234567`, `0771234567`, `077-123-4567`.
-  static String nationalDigits(String raw, {String dialCode = defaultDialCode}) {
+  static String nationalDigits(String raw,
+      {String dialCode = defaultDialCode}) {
     var digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
     final code = dialCode.replaceAll(RegExp(r'[^0-9]'), '');
     if (digits.startsWith(code)) {
@@ -47,7 +48,8 @@ class ZvPhone {
   }
 
   /// `77 123 4567` — what the user sees while typing.
-  static String formatNational(String raw, {String dialCode = defaultDialCode}) {
+  static String formatNational(String raw,
+      {String dialCode = defaultDialCode}) {
     final digits = nationalDigits(raw, dialCode: dialCode);
     if (digits.isEmpty) return '';
     final buffer = StringBuffer();
@@ -59,7 +61,8 @@ class ZvPhone {
   }
 
   /// `+263 77 123 4567` — for display next to a saved account.
-  static String formatDisplay(String? raw, {String dialCode = defaultDialCode}) {
+  static String formatDisplay(String? raw,
+      {String dialCode = defaultDialCode}) {
     if (raw == null || raw.trim().isEmpty) return '';
     final national = formatNational(raw, dialCode: dialCode);
     if (national.isEmpty) return raw.trim();
@@ -89,8 +92,7 @@ class ZvPhone {
       return 'That is $missing digit${missing == 1 ? '' : 's'} short — '
           'Zimbabwe numbers have $nationalLength, like 77 123 4567';
     }
-    if (dialCode == defaultDialCode &&
-        !mobilePrefixes.any(digits.startsWith)) {
+    if (dialCode == defaultDialCode && !mobilePrefixes.any(digits.startsWith)) {
       return 'That does not look like a Zimbabwe mobile number '
           '(${mobilePrefixes.join(', ')}…)';
     }

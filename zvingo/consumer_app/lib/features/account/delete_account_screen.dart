@@ -128,8 +128,9 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
           label: 'Delete my account',
           icon: Icons.delete_forever_rounded,
           loading: _working,
-          onPressed:
-              canDelete ? () => _confirmAndDelete(inFlight.valueOrNull ?? 0) : null,
+          onPressed: canDelete
+              ? () => _confirmAndDelete(inFlight.valueOrNull ?? 0)
+              : null,
           disabledReason: blocked
               ? 'You have an order on the way. We cannot delete an account '
                   'while food or money is still moving.'

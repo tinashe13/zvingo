@@ -289,10 +289,8 @@ class _OrderLiveMapState extends ConsumerState<OrderLiveMap>
 
     final order = state?.order;
     final courier = _courierPosition;
-    final opening = courier ??
-        order?.destination ??
-        order?.pickup ??
-        kHarareCentre;
+    final opening =
+        courier ?? order?.destination ?? order?.pickup ?? kHarareCentre;
 
     return ClipRRect(
       borderRadius: widget.borderRadius,
@@ -340,7 +338,8 @@ class _OrderLiveMapState extends ConsumerState<OrderLiveMap>
                             Polyline(
                               points: [order.pickup!, order.destination!],
                               strokeWidth: 4,
-                              color: AppColors.neutral400.withValues(alpha: 0.7),
+                              color:
+                                  AppColors.neutral400.withValues(alpha: 0.7),
                             ),
                           if (courier != null && order.destination != null)
                             Polyline(
@@ -407,8 +406,7 @@ class _OrderLiveMapState extends ConsumerState<OrderLiveMap>
                 icon: Icons.my_location_rounded,
                 tooltip: 'Recentre the map on your delivery',
                 background: AppColors.surface,
-                onPressed:
-                    state == null ? null : () => _recentre(state),
+                onPressed: state == null ? null : () => _recentre(state),
               ),
             ),
 

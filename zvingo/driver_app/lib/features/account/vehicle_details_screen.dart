@@ -252,8 +252,9 @@ class _VehicleDetailsScreenState extends ConsumerState<VehicleDetailsScreen> {
       canPop: !_isDirty,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
+        final navigator = Navigator.of(context);
         if (await _confirmDiscard() && mounted) {
-          Navigator.of(context).pop();
+          navigator.pop();
         }
       },
       child: Scaffold(
@@ -334,7 +335,7 @@ class _VehicleDetailsScreenState extends ConsumerState<VehicleDetailsScreen> {
             ),
           ),
           Gap.section,
-          StaggeredEntrance(
+          const StaggeredEntrance(
             index: 1,
             child: _Label(
               'Vehicle type',
@@ -360,7 +361,7 @@ class _VehicleDetailsScreenState extends ConsumerState<VehicleDetailsScreen> {
             ),
           ),
           Gap.xl,
-          StaggeredEntrance(
+          const StaggeredEntrance(
             index: 3,
             child: _Label(
               'Number plate',
@@ -389,7 +390,7 @@ class _VehicleDetailsScreenState extends ConsumerState<VehicleDetailsScreen> {
             ),
           ),
           Gap.xl,
-          StaggeredEntrance(index: 5, child: _Label('Make')),
+          const StaggeredEntrance(index: 5, child: _Label('Make')),
           Gap.sm,
           StaggeredEntrance(
             index: 6,
@@ -405,7 +406,7 @@ class _VehicleDetailsScreenState extends ConsumerState<VehicleDetailsScreen> {
             ),
           ),
           Gap.xl,
-          StaggeredEntrance(index: 7, child: _Label('Model')),
+          const StaggeredEntrance(index: 7, child: _Label('Model')),
           Gap.sm,
           StaggeredEntrance(
             index: 8,
@@ -421,7 +422,7 @@ class _VehicleDetailsScreenState extends ConsumerState<VehicleDetailsScreen> {
             ),
           ),
           Gap.xl,
-          StaggeredEntrance(
+          const StaggeredEntrance(
             index: 9,
             child: _Label(
               'Colour',

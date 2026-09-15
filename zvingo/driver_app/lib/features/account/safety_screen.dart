@@ -117,10 +117,8 @@ class _SafetyScreenState extends ConsumerState<SafetyScreen> {
       }
       if (!await Geolocator.isLocationServiceEnabled()) return null;
       return await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 12),
-        ),
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 12),
       );
     } catch (_) {
       return null;
@@ -213,7 +211,7 @@ class _SafetyScreenState extends ConsumerState<SafetyScreen> {
               child: _EmergencyCta(onTap: _openEmergencySheet),
             ),
             Gap.section,
-            StaggeredEntrance(index: 1, child: _Title('Your emergency contact')),
+            const StaggeredEntrance(index: 1, child: _Title('Your emergency contact')),
             Gap.md,
             StaggeredEntrance(
               index: 2,
@@ -226,7 +224,7 @@ class _SafetyScreenState extends ConsumerState<SafetyScreen> {
                     if (_hasContact) ...[
                       Row(
                         children: [
-                          Icon(Icons.contact_emergency_outlined,
+                          const Icon(Icons.contact_emergency_outlined,
                               size: 20, color: AppColors.textSecondary),
                           Gap.hSm,
                           Expanded(
@@ -297,7 +295,7 @@ class _SafetyScreenState extends ConsumerState<SafetyScreen> {
               ),
             ),
             Gap.section,
-            StaggeredEntrance(index: 3, child: _Title('Share where you are')),
+            const StaggeredEntrance(index: 3, child: _Title('Share where you are')),
             Gap.md,
             StaggeredEntrance(
               index: 4,
@@ -326,9 +324,9 @@ class _SafetyScreenState extends ConsumerState<SafetyScreen> {
               ),
             ),
             Gap.section,
-            StaggeredEntrance(index: 5, child: _Title('Staying safe on shift')),
+            const StaggeredEntrance(index: 5, child: _Title('Staying safe on shift')),
             Gap.md,
-            StaggeredEntrance(index: 6, child: const _SafetyTips()),
+            const StaggeredEntrance(index: 6, child: _SafetyTips()),
           ],
         ),
       ),
@@ -439,7 +437,7 @@ class _EmergencySheet extends StatelessWidget {
                   .copyWith(color: AppColors.textSecondary),
             ),
             Gap.xl,
-            CopyableRow(
+            const CopyableRow(
               icon: Icons.local_police_outlined,
               label: 'Emergency services (Zimbabwe)',
               value: SupportContact.emergencyServices,
@@ -456,7 +454,7 @@ class _EmergencySheet extends StatelessWidget {
             ],
             if (SupportContact.phone.isNotEmpty) ...[
               Gap.sm,
-              CopyableRow(
+              const CopyableRow(
                 icon: Icons.support_agent_outlined,
                 label: 'Zvingo driver support',
                 value: SupportContact.phone,

@@ -312,7 +312,7 @@ class CopyableRow extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(Icons.content_copy_rounded,
+            const Icon(Icons.content_copy_rounded,
                 size: 18, color: AppColors.textTertiary),
           ],
         ),

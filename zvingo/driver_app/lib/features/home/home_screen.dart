@@ -15,7 +15,6 @@ import '../../providers/delivery_provider.dart';
 import '../../providers/home_provider.dart';
 import '../../services/location_service.dart';
 import '../../widgets/widgets.dart';
-import '../delivery/map_attribution.dart';
 
 /// The dash: the screen a driver sits on between jobs.
 ///

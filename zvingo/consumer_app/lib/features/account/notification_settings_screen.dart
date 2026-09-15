@@ -308,9 +308,9 @@ class _QuietHoursCard extends ConsumerWidget {
       return;
     }
     await ref.read(notificationSettingsProvider.notifier).apply(
-          (p) => p.copyWith(clearQuietHours: true),
-          {'quiet_hours_start': null, 'quiet_hours_end': null},
-        );
+      (p) => p.copyWith(clearQuietHours: true),
+      {'quiet_hours_start': null, 'quiet_hours_end': null},
+    );
   }
 
   Future<void> _setWindow(
@@ -321,9 +321,9 @@ class _QuietHoursCard extends ConsumerWidget {
   }) async {
     final messenger = ScaffoldMessenger.of(context);
     final ok = await ref.read(notificationSettingsProvider.notifier).apply(
-          (p) => p.copyWith(quietHoursStart: start, quietHoursEnd: end),
-          {'quiet_hours_start': start, 'quiet_hours_end': end},
-        );
+      (p) => p.copyWith(quietHoursStart: start, quietHoursEnd: end),
+      {'quiet_hours_start': start, 'quiet_hours_end': end},
+    );
     if (!ok) {
       messenger.showSnackBar(
         const SnackBar(

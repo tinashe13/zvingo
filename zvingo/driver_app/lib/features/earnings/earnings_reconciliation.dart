@@ -391,7 +391,7 @@ class _CashNote extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.info_outline_rounded,
+          const Icon(Icons.info_outline_rounded,
               size: 18, color: AppColors.textSecondary),
           Gap.hSm,
           Expanded(

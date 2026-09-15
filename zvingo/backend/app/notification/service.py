@@ -17,6 +17,50 @@ AVG_SPEED_KMH = 25.0
 from app.finance.money import to_minor
 
 
+#: Wire codes for the driver app's payment badge. 0 was historically "cash",
+#: which no longer exists as a method; it now means "unsettled, collect at the
+#: door" so an old client still errs toward asking rather than assuming paid.
+PAYMENT_METHOD_CODES = {
+    "ECOCASH": 1,
+    "ONEMONEY": 2,
+    "INNBUCKS": 3,
+    "CARD": 4,
+}
+UNSETTLED_PAYMENT_CODE = 0
+
+
+async def _resolve_payment(order_id) -> tuple[int, str, bool]:
+    """(wire code, display name, is_prepaid) for an order's payment.
+
+    Falls back to "unsettled" when no payment record can be read, so a lookup
+    failure tells the driver to check rather than silently claiming the order
+    is already paid.
+    """
+    try:
+        from app.payment.models import Payment, PaymentStatus
+
+        # Dict query rather than Payment.order_id == ...: the field expression
+        # requires Beanie to be initialised, and a raise here would be caught
+        # below and silently reported as "payment unknown".
+        payment = await Payment.find_one({"order_id": str(order_id)})
+        if payment is None:
+            return UNSETTLED_PAYMENT_CODE, "Unpaid", False
+
+        method = getattr(payment.method, "value", payment.method)
+        method = str(method).upper()
+        status = getattr(payment.status, "value", payment.status)
+        prepaid = str(status).upper() == PaymentStatus.PAID.value
+
+        return (
+            PAYMENT_METHOD_CODES.get(method, UNSETTLED_PAYMENT_CODE),
+            method.title() if prepaid else "Unpaid",
+            prepaid,
+        )
+    except Exception as e:  # pragma: no cover - defensive
+        logger.warning("Could not resolve payment for offer", error=str(e))
+        return UNSETTLED_PAYMENT_CODE, "Unknown", False
+
+
 def _offer_timeout_seconds() -> int:
     """How long a driver has to answer an offer.
 
@@ -193,6 +237,11 @@ class NotificationService:
         tip_cents = breakdown.tip_minor
         order_subtotal_cents = breakdown.subtotal_minor
 
+        # What, if anything, the driver has to collect at the door.
+        payment_method_code, payment_method_name, is_prepaid = (
+            await _resolve_payment(order_id)
+        )
+
         # Build short ID from order_id
         short_id = f"ZV{str(order_id)[-6:].upper()}"
 
@@ -215,7 +264,15 @@ class NotificationService:
             "pickup_distance_km": round(pickup_dist_km, 1),
             "estimated_time_minutes": total_time_min,
             "pickup_time_minutes": pickup_time_min,
-            "payment_method": 0,  # 0=cash, 1=ecocash — extend later
+            # Resolved from the order's actual Payment, never assumed. This
+            # was hardcoded to 0 ("cash"), so every offer told the driver to
+            # collect money -- including on orders already settled by mobile
+            # money, and cash is not even a supported method. A driver asking
+            # a customer to pay twice is not a display bug.
+            "payment_method": payment_method_code,
+            "payment_method_name": payment_method_name,
+            "is_prepaid": is_prepaid,
+            "collect_amount_cents": 0 if is_prepaid else total_cents,
             "order_type": "delivery",
             "items_summary": items_summary,
             "item_count": item_count,

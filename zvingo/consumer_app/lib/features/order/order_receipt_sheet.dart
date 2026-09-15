@@ -148,8 +148,8 @@ class OrderReceiptSheet extends StatelessWidget {
               const SizedBox(height: AppSpacing.xxs),
               Text(
                 order.deliveryInstructions!,
-                style: AppTextStyles.body
-                    .copyWith(color: AppColors.textSecondary),
+                style:
+                    AppTextStyles.body.copyWith(color: AppColors.textSecondary),
               ),
             ],
             const SizedBox(height: AppSpacing.md),

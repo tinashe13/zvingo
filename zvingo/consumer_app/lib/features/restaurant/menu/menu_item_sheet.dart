@@ -255,7 +255,9 @@ class _MenuItemSheetState extends State<MenuItemSheet> {
           const SizedBox(height: AppSpacing.sm),
           ZvButton.primary(
             label: isEditing ? 'Update item' : 'Add to cart',
-            icon: isEditing ? Icons.check_rounded : Icons.add_shopping_cart_rounded,
+            icon: isEditing
+                ? Icons.check_rounded
+                : Icons.add_shopping_cart_rounded,
             onPressed: _canAdd ? _submit : null,
             disabledReason: blocked,
           ),
@@ -439,7 +441,9 @@ class _OptionGroupBlock extends StatelessWidget {
                   ? (satisfied ? ZvTone.success : ZvTone.warning)
                   : ZvTone.neutral,
               icon: group.isRequired
-                  ? (satisfied ? Icons.check_rounded : Icons.priority_high_rounded)
+                  ? (satisfied
+                      ? Icons.check_rounded
+                      : Icons.priority_high_rounded)
                   : null,
             ),
           ],
@@ -456,8 +460,7 @@ class _OptionGroupBlock extends StatelessWidget {
                   group.minSelections == 1
                       ? 'Pick one to continue.'
                       : 'Pick ${group.minSelections} to continue.',
-                  style:
-                      AppTextStyles.caption.copyWith(color: AppColors.error),
+                  style: AppTextStyles.caption.copyWith(color: AppColors.error),
                 ),
               ),
             ],
@@ -523,16 +526,17 @@ class _OptionRow extends StatelessWidget {
               size: 22,
               color: !enabled
                   ? AppColors.actionDisabledFg
-                  : (isSelected ? AppColors.actionDefault : AppColors.neutral400),
+                  : (isSelected
+                      ? AppColors.actionDefault
+                      : AppColors.neutral400),
             ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(
                 option.name,
-                style: (isSelected
-                        ? AppTextStyles.bodyStrong
-                        : AppTextStyles.body)
-                    .copyWith(
+                style:
+                    (isSelected ? AppTextStyles.bodyStrong : AppTextStyles.body)
+                        .copyWith(
                   color: enabled
                       ? AppColors.textPrimary
                       : AppColors.actionDisabledFg,

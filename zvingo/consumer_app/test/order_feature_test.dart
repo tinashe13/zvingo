@@ -73,7 +73,8 @@ void main() {
         expect(rank, isNonNegative, reason: '$state has no rank');
         final matches =
             kOrderTimeline.where((step) => step.rank == rank).toList();
-        expect(matches, hasLength(1), reason: '$state must light exactly one node');
+        expect(matches, hasLength(1),
+            reason: '$state must light exactly one node');
       }
     });
 
@@ -129,7 +130,12 @@ void main() {
     });
 
     test('cancellable states match the backend consumer-cancel rule', () {
-      for (final state in ['CREATED', 'OFFERED', 'ACCEPTED', 'READY_FOR_PICKUP']) {
+      for (final state in [
+        'CREATED',
+        'OFFERED',
+        'ACCEPTED',
+        'READY_FOR_PICKUP'
+      ]) {
         expect(
           TrackedOrder.fromJson(orderPayload(state: state)).canCancel,
           isTrue,
@@ -163,7 +169,8 @@ void main() {
     test('a live courier position gives a precise minute count', () {
       final estimator = OrderEtaEstimator();
       final order = TrackedOrder.fromJson(orderPayload());
-      final eta = estimator.estimate(order, driverPosition: order.driverPosition);
+      final eta =
+          estimator.estimate(order, driverPosition: order.driverPosition);
       expect(eta.confidence, EtaConfidence.precise);
       expect(eta.minutes, isNotNull);
       expect(eta.minutes, greaterThan(0));
@@ -207,7 +214,8 @@ void main() {
       final destination = order.destination!;
 
       // First fix anchors the estimate.
-      final first = estimator.estimate(order, driverPosition: order.driverPosition);
+      final first =
+          estimator.estimate(order, driverPosition: order.driverPosition);
       // Next fix is right on the doorstep: the drop is clamped, not instant.
       final second = estimator.estimate(order, driverPosition: destination);
       expect(second.minutes, greaterThanOrEqualTo(first.minutes! - 3));

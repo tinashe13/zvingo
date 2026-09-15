@@ -462,7 +462,9 @@ class _PinStatus extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(
-              hasPoint ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+              hasPoint
+                  ? Icons.check_circle_rounded
+                  : Icons.error_outline_rounded,
               size: 20,
               color: tone.foreground,
             ),

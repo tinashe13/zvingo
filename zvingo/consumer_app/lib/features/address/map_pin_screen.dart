@@ -14,8 +14,7 @@ class PinnedPoint {
   final double lng;
 
   @override
-  String toString() =>
-      '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
+  String toString() => '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
 }
 
 /// Drag the map to put the pin on the gate, not the street centroid.

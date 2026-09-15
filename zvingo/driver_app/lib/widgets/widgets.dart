@@ -32,3 +32,4 @@ export 'skeletons.dart';
 export 'slide_to_confirm.dart';
 export 'status_chip.dart';
 export 'tap_scale.dart';
+export 'map_attribution.dart';

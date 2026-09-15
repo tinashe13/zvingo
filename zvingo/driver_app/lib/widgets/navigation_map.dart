@@ -10,6 +10,7 @@ import '../core/app_colors.dart';
 import '../core/app_spacing.dart';
 import '../core/app_text_styles.dart';
 import 'floating_map_button.dart';
+import 'map_attribution.dart';
 
 class _RouteStep {
   final String instruction;
@@ -472,6 +473,11 @@ class _NavigationMapState extends State<NavigationMap> {
               onPressed: _recenter,
             ),
           ),
+
+        // ── Attribution ───────────────────────────────────────────────────
+        // Required by the OpenStreetMap and CARTO licences. Last child so it
+        // paints above the tiles and markers.
+        const MapAttribution(),
       ],
     );
   }

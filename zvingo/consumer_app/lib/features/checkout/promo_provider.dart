@@ -48,8 +48,7 @@ class PromoState {
   bool get isBusy => status == PromoStatus.validating;
   bool get isRejected => status == PromoStatus.rejected;
 
-  Money discountIn(String currency) =>
-      discount ?? Money.zero(currency);
+  Money discountIn(String currency) => discount ?? Money.zero(currency);
 }
 
 @Riverpod(keepAlive: true)

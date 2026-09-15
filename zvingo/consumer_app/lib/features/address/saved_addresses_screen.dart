@@ -52,8 +52,7 @@ class SavedAddressesScreen extends ConsumerWidget {
                   address: address,
                   selected: selected,
                   onUse: () => _use(context, ref, address),
-                  onEdit: () =>
-                      context.push('/addresses/edit', extra: address),
+                  onEdit: () => context.push('/addresses/edit', extra: address),
                   onMakeDefault: address.isDefault
                       ? null
                       : () => ref
@@ -149,9 +148,8 @@ class _AddressCard extends StatelessWidget {
                 child: Icon(
                   _iconForLabel(address.label),
                   size: 22,
-                  color: selected
-                      ? AppColors.textOnDark
-                      : AppColors.textSecondary,
+                  color:
+                      selected ? AppColors.textOnDark : AppColors.textSecondary,
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),

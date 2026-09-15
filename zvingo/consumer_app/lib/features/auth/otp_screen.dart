@@ -118,7 +118,8 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
       _otpKey.currentState?.reset();
       _startCooldown();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('New code sent to ${ZvPhone.mask(widget.phone)}')),
+        SnackBar(
+            content: Text('New code sent to ${ZvPhone.mask(widget.phone)}')),
       );
     } on AuthFailure catch (failure) {
       if (mounted) setState(() => _errorMessage = failure.message);

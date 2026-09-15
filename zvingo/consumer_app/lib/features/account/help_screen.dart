@@ -483,7 +483,8 @@ class _FaqTile extends StatelessWidget {
           children: [
             Text(
               faq.answer,
-              style: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
+              style:
+                  AppTextStyles.body.copyWith(color: AppColors.textSecondary),
             ),
           ],
         ),

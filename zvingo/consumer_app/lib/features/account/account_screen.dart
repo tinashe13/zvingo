@@ -244,10 +244,8 @@ class _AddressTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final addresses = ref.watch(savedAddressesProvider);
-    final defaultLabel = addresses
-        .where((a) => a.isDefault)
-        .map((a) => a.label)
-        .firstOrNull;
+    final defaultLabel =
+        addresses.where((a) => a.isDefault).map((a) => a.label).firstOrNull;
 
     return AppIconTile(
       icon: Icons.location_on_outlined,

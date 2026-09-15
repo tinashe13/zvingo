@@ -12,7 +12,11 @@ import 'package:consumer_app/features/restaurant/restaurant_list.dart';
 import 'package:consumer_app/features/restaurant/restaurant_map_screen.dart';
 import 'package:consumer_app/features/restaurant/store_search_screen.dart';
 import 'package:consumer_app/features/search/search_screen.dart';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive/hive.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -170,4 +174,72 @@ void main() {
       },
     );
   }
+
+  group('full-width restaurant card', () {
+    late Directory hiveDir;
+
+    setUpAll(() {
+      hiveDir = Directory.systemTemp.createTempSync('zv_discovery_test');
+      Hive.init(hiveDir.path);
+    });
+
+    tearDownAll(() async {
+      await Hive.close();
+      if (hiveDir.existsSync()) hiveDir.deleteSync(recursive: true);
+    });
+
+    for (final scale in <double>[1.0, 1.5, 2.0]) {
+      testWidgets('lays out at 320px and ${scale}x text', (tester) async {
+        final store = DiscoveryRestaurant.fromJson(const {
+          '_id': 'r2',
+          'name': 'Gava\u2019s Flame Grill & Takeaway',
+          'categories': ['Zimbabwean', 'Grills', 'Chicken'],
+          'rating': 4.6,
+          'review_count': 4213,
+          'delivery_time_min': 25,
+          'delivery_time_max': 40,
+          'delivery_fee_usd': 1.5,
+          'is_zvingo_plus': true,
+          'promotions': ['Buy one get one free on all flame-grilled chicken'],
+          'discovery': {'distance_km': 2.4},
+          'availability': {
+            'is_open': false,
+            'status': 'closed',
+            'reason': 'Opens at 08:00',
+            'accepts_scheduled': true,
+          },
+        });
+
+        tester.view.physicalSize = const Size(320, 1600);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        // MaterialApp supplies the Overlay that ZvIconButton's Tooltip needs.
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp(
+              home: Builder(
+                builder: (context) => MediaQuery(
+                  data: MediaQuery.of(context)
+                      .copyWith(textScaler: TextScaler.linear(scale)),
+                  child: Scaffold(
+                    body: Align(
+                      alignment: Alignment.topCenter,
+                      child: RestaurantCard.discovery(store, onTap: () {}),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'restaurant card overflowed at text scale $scale',
+        );
+      });
+    }
+  });
 }

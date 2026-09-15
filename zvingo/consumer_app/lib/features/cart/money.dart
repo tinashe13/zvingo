@@ -20,9 +20,12 @@ const String kDefaultCurrency = 'USD';
 /// Currencies the backend can settle in — mirrors `app/finance/money.py`'s
 /// `CURRENCIES` map. Keep the two in step.
 const Map<String, CurrencySpec> kCurrencies = <String, CurrencySpec>{
-  'USD': CurrencySpec(code: 'USD', exponent: 2, symbol: r'US$', name: 'US dollar'),
-  'ZIG': CurrencySpec(code: 'ZIG', exponent: 2, symbol: 'ZiG', name: 'Zimbabwe Gold'),
-  'ZAR': CurrencySpec(code: 'ZAR', exponent: 2, symbol: 'R', name: 'South African rand'),
+  'USD':
+      CurrencySpec(code: 'USD', exponent: 2, symbol: r'US$', name: 'US dollar'),
+  'ZIG': CurrencySpec(
+      code: 'ZIG', exponent: 2, symbol: 'ZiG', name: 'Zimbabwe Gold'),
+  'ZAR': CurrencySpec(
+      code: 'ZAR', exponent: 2, symbol: 'R', name: 'South African rand'),
 };
 
 /// Static facts about a currency Zvingo settles in.
@@ -148,12 +151,14 @@ class Money implements Comparable<Money> {
   /// Used only at the payment step, where the backend pins the same rate.
   Money convertTo(String targetCurrency, num rate) {
     final target = currencySpec(targetCurrency);
-    final rateMinor = _minorFromString(rate.toString(), const CurrencySpec(
-      code: '_rate',
-      exponent: 6,
-      symbol: '',
-      name: '',
-    ));
+    final rateMinor = _minorFromString(
+        rate.toString(),
+        const CurrencySpec(
+          code: '_rate',
+          exponent: 6,
+          symbol: '',
+          name: '',
+        ));
     final converted = (minor * rateMinor + 500000) ~/ 1000000;
     return Money._(converted, target.code);
   }
@@ -237,7 +242,8 @@ class Money implements Comparable<Money> {
     final kept = fracPart.length <= spec.exponent
         ? fracPart.padRight(spec.exponent, '0')
         : fracPart.substring(0, spec.exponent);
-    var minor = whole * spec.scale + (kept.isEmpty ? 0 : int.tryParse(kept) ?? 0);
+    var minor =
+        whole * spec.scale + (kept.isEmpty ? 0 : int.tryParse(kept) ?? 0);
     if (fracPart.length > spec.exponent) {
       final nextDigit = int.tryParse(fracPart[spec.exponent]) ?? 0;
       if (nextDigit >= 5) minor += 1;

@@ -53,8 +53,7 @@ class ZvSessionInterceptor extends Interceptor {
   /// signed out" rather than silently landing on the login screen.
   bool sessionExpired = false;
 
-  bool _isAuthPath(String path) =>
-      _noRefreshPaths.any((p) => path.endsWith(p));
+  bool _isAuthPath(String path) => _noRefreshPaths.any((p) => path.endsWith(p));
 
   @override
   void onRequest(

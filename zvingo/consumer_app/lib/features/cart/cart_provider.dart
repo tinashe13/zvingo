@@ -124,8 +124,7 @@ class CartItem {
 
   /// Base price plus every selected option's delta.
   Money get unitPrice =>
-      unitBasePrice +
-      choices.map((c) => c.priceDelta).sum(currency: currency);
+      unitBasePrice + choices.map((c) => c.priceDelta).sum(currency: currency);
 
   /// What this line contributes to the subtotal.
   Money get lineTotal => unitPrice * quantity;
@@ -163,9 +162,8 @@ class CartItem {
         restaurantName: restaurantName,
         imageUrl: imageUrl,
         restaurantImage: restaurantImage,
-        lineId: (choices == null && specialInstructions == null)
-            ? lineId
-            : null,
+        lineId:
+            (choices == null && specialInstructions == null) ? lineId : null,
       );
 
   Map<String, dynamic> toJson() => {
@@ -195,8 +193,8 @@ class CartItem {
       ),
       quantity: (json['quantity'] as num?)?.toInt() ?? 1,
       choices: ((json['choices'] as List?) ?? const [])
-          .map((e) => CartOptionChoice.fromJson(
-              Map<String, dynamic>.from(e as Map)))
+          .map((e) =>
+              CartOptionChoice.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList(),
       specialInstructions: json['special_instructions'] as String?,
       restaurantId: json['restaurant_id'] as String?,
@@ -398,8 +396,8 @@ class Cart extends _$Cart {
     final index = state.indexWhere((i) => i.lineId == line.lineId);
     if (index >= 0) {
       final next = [...state];
-      next[index] = next[index]
-          .copyWith(quantity: next[index].quantity + line.quantity);
+      next[index] =
+          next[index].copyWith(quantity: next[index].quantity + line.quantity);
       _set(next);
     } else {
       _set([...state, line]);
@@ -534,12 +532,14 @@ class Cart extends _$Cart {
         'type': 'Point',
         'coordinates': [dropoffLng, dropoffLat],
       },
-      if (deliveryInstructions != null && deliveryInstructions.trim().isNotEmpty)
+      if (deliveryInstructions != null &&
+          deliveryInstructions.trim().isNotEmpty)
         'delivery_instructions': deliveryInstructions.trim(),
       'tip_amount': (tip ?? zero).major,
       if (promoCode != null && promoCode.trim().isNotEmpty)
         'promo_code': promoCode.trim().toUpperCase(),
-      if (scheduledAt != null) 'scheduled_at': scheduledAt.toUtc().toIso8601String(),
+      if (scheduledAt != null)
+        'scheduled_at': scheduledAt.toUtc().toIso8601String(),
       'idempotency_key': idempotencyKey,
     };
 

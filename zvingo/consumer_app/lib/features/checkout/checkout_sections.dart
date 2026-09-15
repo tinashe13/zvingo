@@ -161,9 +161,8 @@ class FulfilmentSection extends StatelessWidget {
         else
           ZvCard(
             onTap: onAddressTap,
-            color: location == null
-                ? AppColors.warningSurface
-                : AppColors.surface,
+            color:
+                location == null ? AppColors.warningSurface : AppColors.surface,
             borderColor:
                 location == null ? AppColors.warning : AppColors.border,
             child: Row(
@@ -340,7 +339,9 @@ class FulfilmentSection extends StatelessWidget {
     final isToday = local.year == now.year &&
         local.month == now.month &&
         local.day == now.day;
-    return isToday ? 'Today at $hh:$mm' : '${local.day}/${local.month} at $hh:$mm';
+    return isToday
+        ? 'Today at $hh:$mm'
+        : '${local.day}/${local.month} at $hh:$mm';
   }
 }
 
@@ -418,12 +419,10 @@ class _SchedulePickerSheet extends StatelessWidget {
           children: [
             ZvCard(
               onTap: () => onPicked(null),
-              color: selected == null
-                  ? AppColors.surfaceMuted
-                  : AppColors.surface,
-              borderColor: selected == null
-                  ? AppColors.actionDefault
-                  : AppColors.border,
+              color:
+                  selected == null ? AppColors.surfaceMuted : AppColors.surface,
+              borderColor:
+                  selected == null ? AppColors.actionDefault : AppColors.border,
               child: Row(
                 children: [
                   const Icon(Icons.bolt_rounded,
@@ -460,8 +459,8 @@ class _SchedulePickerSheet extends StatelessWidget {
                   for (final slot in day.value)
                     _SlotChip(
                       label: _time(slot),
-                      selected: selected != null &&
-                          selected!.isAtSameMomentAs(slot),
+                      selected:
+                          selected != null && selected!.isAtSameMomentAs(slot),
                       onTap: () => onPicked(slot),
                     ),
                 ],
@@ -497,9 +496,8 @@ class _SchedulePickerSheet extends StatelessWidget {
       final isToday = slot.year == now.year &&
           slot.month == now.month &&
           slot.day == now.day;
-      final isTomorrow = slot.difference(DateTime(now.year, now.month, now.day))
-              .inDays ==
-          1;
+      final isTomorrow =
+          slot.difference(DateTime(now.year, now.month, now.day)).inDays == 1;
       final key = isToday
           ? 'Today'
           : isTomorrow
@@ -673,8 +671,7 @@ class PromoSection extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(state.code ?? '',
-                          style: AppTextStyles.bodyStrong),
+                      Text(state.code ?? '', style: AppTextStyles.bodyStrong),
                       if (state.message != null)
                         Text(state.message!,
                             style: AppTextStyles.caption

@@ -144,7 +144,8 @@ void main() {
       expect(quote.reconciles, isTrue);
     });
 
-    test('falls back to the backend block formula when there is no fee set', () {
+    test('falls back to the backend block formula when there is no fee set',
+        () {
       // $5 per started 5km block, matching app/finance/fee_calculator.py.
       final fee = OrderQuote.estimatedDeliveryFee(
         restaurantLat: -17.8252,
@@ -159,7 +160,8 @@ void main() {
       expect(quote.reconciles, isTrue);
     });
 
-    test('a promo-funded free delivery zeroes the fee and still reconciles', () {
+    test('a promo-funded free delivery zeroes the fee and still reconciles',
+        () {
       final quote = OrderQuote.forCart(
         subtotal: Money.fromMajor(20),
         mode: FulfilmentMode.delivery,

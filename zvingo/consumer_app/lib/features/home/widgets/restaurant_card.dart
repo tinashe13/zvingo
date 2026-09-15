@@ -527,23 +527,28 @@ class _AvailabilityChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (state.isKnownClosed) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
+      // A Wrap, not a Row: at 200% text scale two chips do not fit on one
+      // line inside a card, and "Closed" must never be the thing that clips.
+      return Wrap(
+        spacing: AppSpacing.xxs,
+        runSpacing: AppSpacing.xxs,
         children: [
-          ZvStatusChip(
-            label: state.closedLabel,
-            icon: Icons.schedule_rounded,
-            uppercase: false,
-          ),
-          if (state.acceptsScheduled) ...[
-            const SizedBox(width: AppSpacing.xxs),
-            const ZvStatusChip(
-              label: 'Pre-order',
-              tone: ZvTone.info,
-              icon: Icons.event_available_rounded,
+          ShrinkToFit(
+            child: ZvStatusChip(
+              label: state.closedLabel,
+              icon: Icons.schedule_rounded,
               uppercase: false,
             ),
-          ],
+          ),
+          if (state.acceptsScheduled)
+            const ShrinkToFit(
+              child: ZvStatusChip(
+                label: 'Pre-order',
+                tone: ZvTone.info,
+                icon: Icons.event_available_rounded,
+                uppercase: false,
+              ),
+            ),
         ],
       );
     }

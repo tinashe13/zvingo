@@ -403,7 +403,7 @@ class _DeliveryCard extends StatelessWidget {
               Gap.sm,
               Row(
                 children: [
-                  Icon(Icons.route_rounded,
+                  const Icon(Icons.route_rounded,
                       size: 14, color: AppColors.textTertiary),
                   Gap.hXs,
                   Expanded(
@@ -445,7 +445,7 @@ class _DeliveryCard extends StatelessWidget {
                   style: AppTextStyles.caption
                       .copyWith(color: AppColors.textSecondary),
                 ),
-                Icon(Icons.chevron_right_rounded,
+                const Icon(Icons.chevron_right_rounded,
                     size: 18, color: AppColors.textTertiary),
               ],
             ),
@@ -585,7 +585,7 @@ class _RemovableChip extends StatelessWidget {
                     .copyWith(color: AppColors.textPrimary),
               ),
               Gap.hXs,
-              Icon(Icons.close_rounded,
+              const Icon(Icons.close_rounded,
                   size: 14, color: AppColors.textSecondary),
             ],
           ),
@@ -722,7 +722,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                           AppTextStyles.onSurface(context, AppTextStyles.h2),
                     ),
                     Gap.xl,
-                    _FilterLabel('Dates'),
+                    const _FilterLabel('Dates'),
                     Gap.sm,
                     DriverSecondaryButton(
                       label: _range == null
@@ -732,7 +732,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                       onPressed: _pickRange,
                     ),
                     Gap.xl,
-                    _FilterLabel('Paid by'),
+                    const _FilterLabel('Paid by'),
                     Gap.sm,
                     Wrap(
                       spacing: AppSpacing.sm,
@@ -753,7 +753,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                       ],
                     ),
                     Gap.xl,
-                    _FilterLabel('Earned at least'),
+                    const _FilterLabel('Earned at least'),
                     Gap.sm,
                     Wrap(
                       spacing: AppSpacing.sm,
@@ -772,7 +772,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                       ],
                     ),
                     Gap.xl,
-                    _FilterLabel('Merchant'),
+                    const _FilterLabel('Merchant'),
                     Gap.sm,
                     TextField(
                       controller: _merchantController,
@@ -783,7 +783,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                       ),
                     ),
                     Gap.xl,
-                    _FilterLabel('Area or suburb'),
+                    const _FilterLabel('Area or suburb'),
                     Gap.sm,
                     TextField(
                       controller: _areaController,

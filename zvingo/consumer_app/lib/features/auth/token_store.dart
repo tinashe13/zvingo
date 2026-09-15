@@ -33,29 +33,28 @@ class TokenStore {
     'search_history',
   ];
 
-  static Box get _box => Hive.box(boxName);
+  /// The settings box, or null when Hive has not opened it.
+  ///
+  /// Nullable on purpose: `main()` opens this box before `runApp`, but widget
+  /// tests, isolates and a cold background handler may not have, and a session
+  /// store that throws in those cases takes the whole screen down with it.
+  /// Every caller treats "no box" as "not signed in".
+  static Box? get _box => Hive.isBoxOpen(boxName) ? Hive.box(boxName) : null;
 
-  static String? get accessToken {
-    final value = _box.get(_accessKey);
-    final token = value?.toString();
+  static String? _readString(String key) {
+    final token = _box?.get(key)?.toString();
     return (token == null || token.isEmpty) ? null : token;
   }
 
-  static String? get refreshToken {
-    final value = _box.get(_refreshKey);
-    final token = value?.toString();
-    return (token == null || token.isEmpty) ? null : token;
-  }
+  static String? get accessToken => _readString(_accessKey);
 
-  static String? get userId {
-    final value = _box.get(_userIdKey);
-    final id = value?.toString();
-    return (id == null || id.isEmpty) ? null : id;
-  }
+  static String? get refreshToken => _readString(_refreshKey);
+
+  static String? get userId => _readString(_userIdKey);
 
   /// When the current access token stops being accepted, if the server told us.
   static DateTime? get expiresAt {
-    final millis = _box.get(_expiresAtKey);
+    final millis = _box?.get(_expiresAtKey);
     if (millis is! int) return null;
     return DateTime.fromMillisecondsSinceEpoch(millis, isUtc: true);
   }
@@ -79,18 +78,21 @@ class TokenStore {
   /// that omits them leaves the previous values in place rather than wiping a
   /// working session.
   static Future<void> saveTokenResponse(Map<String, dynamic> data) async {
+    final box = _box;
+    if (box == null) return;
+
     final access = data['access_token']?.toString();
     if (access == null || access.isEmpty) return;
 
     final refresh = data['refresh_token']?.toString();
     final expiresIn = data['expires_in'];
 
-    await _box.put(_accessKey, access);
+    await box.put(_accessKey, access);
     if (refresh != null && refresh.isNotEmpty) {
-      await _box.put(_refreshKey, refresh);
+      await box.put(_refreshKey, refresh);
     }
     if (expiresIn is num && expiresIn > 0) {
-      await _box.put(
+      await box.put(
         _expiresAtKey,
         DateTime.now()
             .toUtc()
@@ -100,22 +102,24 @@ class TokenStore {
     } else {
       // No expiry advertised — don't keep a stale one that would trigger
       // pointless refreshes.
-      await _box.delete(_expiresAtKey);
+      await box.delete(_expiresAtKey);
     }
   }
 
   static Future<void> saveUserId(String? id) async {
     if (id == null || id.isEmpty) return;
-    await _box.put(_userIdKey, id);
+    await _box?.put(_userIdKey, id);
   }
 
   /// Drop the session only. Used when a refresh fails: the person is signed
   /// out, but their saved addresses and cart survive for when they sign back in.
   static Future<void> clearSession() async {
-    await _box.delete(_accessKey);
-    await _box.delete(_refreshKey);
-    await _box.delete(_expiresAtKey);
-    await _box.delete(_userIdKey);
+    final box = _box;
+    if (box == null) return;
+    await box.delete(_accessKey);
+    await box.delete(_refreshKey);
+    await box.delete(_expiresAtKey);
+    await box.delete(_userIdKey);
   }
 
   /// Full sign-out: session plus every box that holds this person's data.

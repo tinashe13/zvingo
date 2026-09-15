@@ -212,7 +212,9 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
               ),
               const SizedBox(height: AppSpacing.sm),
               ZvButton.secondary(
-                label: isFavourite ? 'Remove from favourites' : 'Save to favourites',
+                label: isFavourite
+                    ? 'Remove from favourites'
+                    : 'Save to favourites',
                 icon: isFavourite
                     ? Icons.favorite_rounded
                     : Icons.favorite_border_rounded,
@@ -450,7 +452,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
           icon: isFavourite
               ? Icons.favorite_rounded
               : Icons.favorite_border_rounded,
-          tooltip: isFavourite ? 'Remove from favourites' : 'Save to favourites',
+          tooltip:
+              isFavourite ? 'Remove from favourites' : 'Save to favourites',
           background: AppColors.surface,
           foreground: isFavourite ? AppColors.error : AppColors.textPrimary,
           onPressed: () =>
@@ -582,8 +585,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
           child: Text(
             '${matches.length} result${matches.length == 1 ? '' : 's'} '
             'for "${_query.trim()}"',
-            style: AppTextStyles.caption
-                .copyWith(color: AppColors.textSecondary),
+            style:
+                AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
           ),
         ),
       ),
@@ -681,8 +684,8 @@ class _StoreHeader extends StatelessWidget {
           const SizedBox(height: AppSpacing.xxs),
           Text(
             restaurant.category,
-            style: AppTextStyles.caption
-                .copyWith(color: AppColors.textSecondary),
+            style:
+                AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -852,9 +855,7 @@ class _ReviewsSheet extends ConsumerWidget {
                           children: [
                             for (final tag in review.tags)
                               ZvStatusChip(
-                                  label: tag,
-                                  compact: true,
-                                  uppercase: false),
+                                  label: tag, compact: true, uppercase: false),
                           ],
                         ),
                       ],

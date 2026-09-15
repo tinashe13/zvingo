@@ -105,7 +105,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               ZvPhoneField(
                 controller: _phoneController,
                 enabled: !busy,
-                helper: 'We text your delivery updates and one-time codes here.',
+                helper:
+                    'We text your delivery updates and one-time codes here.',
                 textInputAction: TextInputAction.next,
                 autofillHints: const [AutofillHints.telephoneNumber],
                 validator: ZvPhone.validate,

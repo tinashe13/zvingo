@@ -93,9 +93,13 @@ class Favourites extends _$Favourites {
           : <String>{};
       state = ids;
       await _persist(ids);
-      ref.read(favouritesSyncStatusProvider.notifier).set(FavouritesSync.synced);
+      ref
+          .read(favouritesSyncStatusProvider.notifier)
+          .set(FavouritesSync.synced);
     } catch (_) {
-      ref.read(favouritesSyncStatusProvider.notifier).set(FavouritesSync.failed);
+      ref
+          .read(favouritesSyncStatusProvider.notifier)
+          .set(FavouritesSync.failed);
     }
   }
 
@@ -130,7 +134,9 @@ class Favourites extends _$Favourites {
             .toSet();
         state = ids;
         await _persist(ids);
-        ref.read(favouritesSyncStatusProvider.notifier).set(FavouritesSync.synced);
+        ref
+            .read(favouritesSyncStatusProvider.notifier)
+            .set(FavouritesSync.synced);
         return ids.contains(restaurantId);
       }
       return nowFavourite;
@@ -142,7 +148,9 @@ class Favourites extends _$Favourites {
       // screen learns about it.
       state = previous;
       await _persist(previous);
-      ref.read(favouritesSyncStatusProvider.notifier).set(FavouritesSync.failed);
+      ref
+          .read(favouritesSyncStatusProvider.notifier)
+          .set(FavouritesSync.failed);
       return previous.contains(restaurantId);
     }
   }

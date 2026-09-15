@@ -126,15 +126,15 @@ class _ManageAccountScreenState extends ConsumerState<ManageAccountScreen> {
                 'you, and which wallet Paynow charges. Changing it has to be '
                 'verified on the new number, so our support team does it with '
                 'you rather than it happening from a single tap.',
-                style: AppTextStyles.body
-                    .copyWith(color: AppColors.textSecondary),
+                style:
+                    AppTextStyles.body.copyWith(color: AppColors.textSecondary),
               ),
               const SizedBox(height: AppSpacing.md),
               Text(
                 'Email ${SupportContact.email} from the address on your '
                 'account, or message us on WhatsApp — ${SupportContact.hours}.',
-                style: AppTextStyles.body
-                    .copyWith(color: AppColors.textSecondary),
+                style:
+                    AppTextStyles.body.copyWith(color: AppColors.textSecondary),
               ),
               const SizedBox(height: AppSpacing.lg),
               ZvButton.primary(

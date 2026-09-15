@@ -183,7 +183,8 @@ class GeocodeService {
         storedAt:
             DateTime.fromMillisecondsSinceEpoch(decoded['at'] as int? ?? 0),
         results: (decoded['results'] as List<dynamic>)
-            .map((e) => GeocodedAddress.fromJson(Map<String, dynamic>.from(e as Map)))
+            .map((e) =>
+                GeocodedAddress.fromJson(Map<String, dynamic>.from(e as Map)))
             .toList(),
       );
     } catch (_) {
@@ -290,7 +291,8 @@ class GeocodeSearch extends _$GeocodeSearch {
     if (!GeocodeService.isSearchable(query)) return;
     try {
       final results = await ref.read(geocodeServiceProvider).search(query);
-      if (generation != _generation) return; // a newer query superseded this one
+      if (generation != _generation)
+        return; // a newer query superseded this one
       state = state.copyWith(
         query: query,
         results: results,

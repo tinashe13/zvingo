@@ -49,8 +49,7 @@ class FavouritesScreen extends ConsumerWidget {
           onRetry: () => ref.invalidate(restaurantListProvider),
         ),
         data: (all) {
-          final saved =
-              all.where((r) => favouriteIds.contains(r.id)).toList();
+          final saved = all.where((r) => favouriteIds.contains(r.id)).toList();
 
           if (saved.isEmpty) {
             return ZvEmptyState(
@@ -137,8 +136,7 @@ class _DismissibleFavourite extends ConsumerWidget {
             Icon(Icons.heart_broken_rounded, color: AppColors.error),
             SizedBox(width: AppSpacing.xs),
             Text('Remove',
-                style: AppTextStyles.bodyStrong,
-                textAlign: TextAlign.right),
+                style: AppTextStyles.bodyStrong, textAlign: TextAlign.right),
           ],
         ),
       ),

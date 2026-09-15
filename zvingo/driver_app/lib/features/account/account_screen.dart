@@ -86,7 +86,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                 child: _ProfileCard(auth: auth, ratings: ratings),
               ),
               Gap.section,
-              StaggeredEntrance(index: 1, child: _GroupLabel('Driving')),
+              const StaggeredEntrance(index: 1, child: _GroupLabel('Driving')),
               Gap.sm,
               StaggeredEntrance(
                 index: 2,
@@ -114,7 +114,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                 ),
               ),
               Gap.xl,
-              StaggeredEntrance(index: 3, child: _GroupLabel('App')),
+              const StaggeredEntrance(index: 3, child: _GroupLabel('App')),
               Gap.sm,
               StaggeredEntrance(
                 index: 4,
@@ -136,7 +136,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                 ),
               ),
               Gap.xl,
-              StaggeredEntrance(index: 5, child: _GroupLabel('Support & legal')),
+              const StaggeredEntrance(index: 5, child: _GroupLabel('Support & legal')),
               Gap.sm,
               StaggeredEntrance(
                 index: 6,
@@ -450,7 +450,7 @@ class _MenuItem extends StatelessWidget {
             ),
             if (trailing != null) ...[Gap.hSm, trailing!],
             Gap.hXs,
-            Icon(Icons.chevron_right_rounded,
+            const Icon(Icons.chevron_right_rounded,
                 size: 20, color: AppColors.textTertiary),
           ],
         ),

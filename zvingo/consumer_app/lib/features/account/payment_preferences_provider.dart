@@ -131,7 +131,8 @@ extension PaymentPreferencesSummary on PaymentPreferences {
     return '${wallet!.label} · ${_pretty(number)}';
   }
 
-  static String _pretty(String raw) => raw.isEmpty ? 'your account number' : raw;
+  static String _pretty(String raw) =>
+      raw.isEmpty ? 'your account number' : raw;
 }
 
 /// A tone-consistent chip for the wallet, reused on the account screen.

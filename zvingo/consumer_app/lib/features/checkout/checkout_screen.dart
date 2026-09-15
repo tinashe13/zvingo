@@ -142,6 +142,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       ref.read(promoProvider.notifier).revalidate(subtotal: next);
     });
 
+    // If the basket is edited after an order was created but before it was
+    // paid for, the order on the server no longer matches what is on screen.
+    // Drop the placement so the next tap creates a fresh, correct order rather
+    // than charging for something that has changed underneath it.
+    ref.listen<List<CartItem>>(cartProvider, (previous, next) {
+      if (_celebrated || previous == null || previous == next) return;
+      if (!ref.read(orderPlacementProvider).isPlaced) return;
+      ref.read(orderPlacementProvider.notifier).reset();
+      ref.read(paymentProvider.notifier).reset();
+      setState(() => _placedQuote = null);
+    });
+
     // One listener for the whole screen: when the prompt on the customer's
     // phone settles, celebrate exactly once.
     ref.listen<PaymentSession>(paymentProvider, (previous, next) {
@@ -177,7 +189,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             if (payment.phase == PaymentPhase.awaitingCustomer) ...[
               PaymentWaitingPanel(
                 session: payment,
-                onCancel: () => ref.read(paymentProvider.notifier).cancelWaiting(),
+                onCancel: () =>
+                    ref.read(paymentProvider.notifier).cancelWaiting(),
               ),
               const SizedBox(height: AppSpacing.sm),
             ] else if (payment.phase == PaymentPhase.failed &&
@@ -235,6 +248,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         padding: const EdgeInsets.fromLTRB(
             AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.xl),
         children: [
+          if (placement.isPlaced && !_placedThisSession)
+            const CheckoutNotice(
+              tone: ZvTone.info,
+              icon: Icons.receipt_long_rounded,
+              title: 'This order is already created',
+              message:
+                  'It is waiting for payment. Paying below finishes the same '
+                  'order — it will not be placed twice.',
+            ),
           if (restaurantAsync != null && restaurantAsync.isLoading)
             const ZvSkeletonBox(height: 64, radius: AppRadius.lg)
           else if (restaurant != null && !restaurant.isOpen)
@@ -597,6 +619,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final isToday = local.year == today.year &&
         local.month == today.month &&
         local.day == today.day;
-    return isToday ? 'Today at $hh:$mm' : '${local.day}/${local.month} at $hh:$mm';
+    return isToday
+        ? 'Today at $hh:$mm'
+        : '${local.day}/${local.month} at $hh:$mm';
   }
 }

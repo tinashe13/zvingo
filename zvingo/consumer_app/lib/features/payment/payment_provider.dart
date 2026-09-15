@@ -80,7 +80,8 @@ extension PaymentMethodDisplay on PaymentMethodType {
         PaymentMethodType.innbucks =>
           'Open the InnBucks app and approve the payment request, or use the '
               'authorisation code InnBucks sent you.',
-        PaymentMethodType.cash => 'Have the cash ready when your driver arrives.',
+        PaymentMethodType.cash =>
+          'Have the cash ready when your driver arrives.',
       };
 }
 
@@ -138,7 +139,8 @@ class PaymentSession {
   final int attempt;
 
   bool get isBusy =>
-      phase == PaymentPhase.initiating || phase == PaymentPhase.awaitingCustomer;
+      phase == PaymentPhase.initiating ||
+      phase == PaymentPhase.awaitingCustomer;
   bool get isSettled => phase == PaymentPhase.paid;
   bool get canRetry => phase == PaymentPhase.failed;
 
@@ -161,7 +163,8 @@ class PaymentSession {
         method: method ?? this.method,
         amount: amount ?? this.amount,
         rawStatus: rawStatus ?? this.rawStatus,
-        failureReason: clearFailure ? null : (failureReason ?? this.failureReason),
+        failureReason:
+            clearFailure ? null : (failureReason ?? this.failureReason),
         secondsRemaining: secondsRemaining ?? this.secondsRemaining,
         attempt: attempt ?? this.attempt,
       );
@@ -310,7 +313,8 @@ class Payment extends _$Payment {
             'Check your balance and try again.',
         'CANCELLED' => 'The payment was cancelled on your phone.',
         'EXPIRED' => 'The payment request expired before it was approved.',
-        'REFUNDED' || 'REFUND_PENDING' =>
+        'REFUNDED' ||
+        'REFUND_PENDING' =>
           'This payment is being refunded, so it cannot be used for this order.',
         _ => null,
       };

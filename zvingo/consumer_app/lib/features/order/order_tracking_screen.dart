@@ -74,7 +74,8 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
 
     return ZvScreen(
       title: 'Track order',
-      subtitle: restaurant?.name ?? order?.shortReference ?? 'Loading your order',
+      subtitle:
+          restaurant?.name ?? order?.shortReference ?? 'Loading your order',
       fallbackRoute: '/orders',
       actions: [
         if (order != null)
@@ -126,7 +127,8 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
     }
 
     return RefreshIndicator(
-      onRefresh: () => ref.read(orderTrackerProvider(widget.orderId)).refreshNow(),
+      onRefresh: () =>
+          ref.read(orderTrackerProvider(widget.orderId)).refreshNow(),
       child: ListView(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.md,
@@ -246,7 +248,8 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
       );
     }
 
-    final unread = ref.watch(orderChatUnreadProvider(order.id)).valueOrNull ?? 0;
+    final unread =
+        ref.watch(orderChatUnreadProvider(order.id)).valueOrNull ?? 0;
     return ZvStickyFooter(
       child: ZvButton.primary(
         label: unread > 0
@@ -331,7 +334,8 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
       await ref.read(orderActionsProvider).cancel(order.id);
       if (!mounted) return;
       setState(() => _cancelling = false);
-      _snack('Order cancelled. Your refund is on its way.', tone: ZvTone.success);
+      _snack('Order cancelled. Your refund is on its way.',
+          tone: ZvTone.success);
     } catch (error) {
       if (!mounted) return;
       setState(() => _cancelling = false);
@@ -365,7 +369,8 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
     }
   }
 
-  Future<void> _openChat(TrackedOrder order, OrderRestaurant? restaurant) async {
+  Future<void> _openChat(
+      TrackedOrder order, OrderRestaurant? restaurant) async {
     await showOrderChatSheet(
       context,
       orderId: order.id,
@@ -449,8 +454,9 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
       ..showSnackBar(
         SnackBar(
           content: Text(message),
-          backgroundColor:
-              tone == ZvTone.neutral ? AppColors.actionDefault : tone.foreground,
+          backgroundColor: tone == ZvTone.neutral
+              ? AppColors.actionDefault
+              : tone.foreground,
         ),
       );
   }
@@ -514,7 +520,8 @@ class _HeroStatus extends StatelessWidget {
             valueKey: headline.detail,
             child: Text(
               headline.detail,
-              style: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
+              style:
+                  AppTextStyles.body.copyWith(color: AppColors.textSecondary),
             ),
           ),
 
@@ -556,8 +563,8 @@ class _EtaBlock extends StatelessWidget {
                 eta.confidence == EtaConfidence.unknown
                     ? 'Estimated arrival'
                     : 'Arriving in',
-                style:
-                    AppTextStyles.overline.copyWith(color: AppColors.textSecondary),
+                style: AppTextStyles.overline
+                    .copyWith(color: AppColors.textSecondary),
               ),
               const SizedBox(height: AppSpacing.xxs),
               _EtaValue(eta: eta, muted: muted),
@@ -707,7 +714,8 @@ class _CourierCard extends ConsumerWidget {
     }
 
     final summary = ref.watch(driverRatingProvider(driver.id)).valueOrNull;
-    final unread = ref.watch(orderChatUnreadProvider(order.id)).valueOrNull ?? 0;
+    final unread =
+        ref.watch(orderChatUnreadProvider(order.id)).valueOrNull ?? 0;
     final courierPosition = state.driverPosition;
     final destination = order.destination;
     final distance = (courierPosition != null && destination != null)
@@ -959,9 +967,8 @@ class _TimelineNode extends StatelessWidget {
                   child: Icon(
                     done ? Icons.check_rounded : step.icon,
                     size: 15,
-                    color: reached
-                        ? AppColors.textOnDark
-                        : AppColors.textTertiary,
+                    color:
+                        reached ? AppColors.textOnDark : AppColors.textTertiary,
                   ),
                 ),
               ),
@@ -1070,8 +1077,8 @@ class _OrderSummaryCard extends StatelessWidget {
               ),
               Text(
                 '${order.itemCount} item${order.itemCount == 1 ? '' : 's'}',
-                style:
-                    AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                style: AppTextStyles.caption
+                    .copyWith(color: AppColors.textSecondary),
               ),
             ],
           ),
@@ -1249,8 +1256,8 @@ class _TrackingSkeleton extends StatelessWidget {
       children: [
         ZvShimmer(
           child: ZvSkeletonBox(
-            height: (MediaQuery.sizeOf(context).height * 0.30)
-                .clamp(190.0, 300.0),
+            height:
+                (MediaQuery.sizeOf(context).height * 0.30).clamp(190.0, 300.0),
             radius: AppRadius.xl,
           ),
         ),

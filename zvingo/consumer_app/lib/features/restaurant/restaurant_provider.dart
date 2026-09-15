@@ -298,7 +298,8 @@ class Restaurant {
     this.operatingHours,
     this.minimumOrderUsd,
     this.acceptsScheduledOrders = true,
-  }) : availability = availability ?? const RestaurantAvailability(
+  }) : availability = availability ??
+            const RestaurantAvailability(
               isOpen: true,
               status: 'open',
               reason: '',
@@ -372,8 +373,7 @@ class Restaurant {
           : RestaurantAvailability.unknown(),
       operatingHours: json['operating_hours']?.toString(),
       minimumOrderUsd: (json['minimum_order_usd'] as num?)?.toDouble(),
-      acceptsScheduledOrders:
-          json['accepts_scheduled_orders'] as bool? ?? true,
+      acceptsScheduledOrders: json['accepts_scheduled_orders'] as bool? ?? true,
     );
   }
 }
@@ -525,6 +525,7 @@ final restaurantReviewsProvider =
   final dio = ref.watch(apiClientProvider);
   final response = await dio.get('/rating/restaurants/$id/reviews');
   return (response.data as List)
-      .map((e) => RestaurantReview.fromJson(Map<String, dynamic>.from(e as Map)))
+      .map(
+          (e) => RestaurantReview.fromJson(Map<String, dynamic>.from(e as Map)))
       .toList();
 });

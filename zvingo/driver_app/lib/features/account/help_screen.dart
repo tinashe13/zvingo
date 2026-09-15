@@ -153,7 +153,7 @@ class HelpScreen extends ConsumerWidget {
                     ),
                     Gap.md,
                     if (SupportContact.phone.isNotEmpty) ...[
-                      CopyableRow(
+                      const CopyableRow(
                         icon: Icons.phone_outlined,
                         label: 'Driver support',
                         value: SupportContact.phone,
@@ -161,7 +161,7 @@ class HelpScreen extends ConsumerWidget {
                       Gap.sm,
                     ],
                     if (SupportContact.whatsApp.isNotEmpty) ...[
-                      CopyableRow(
+                      const CopyableRow(
                         icon: Icons.chat_outlined,
                         label: 'WhatsApp',
                         value: SupportContact.whatsApp,
@@ -169,7 +169,7 @@ class HelpScreen extends ConsumerWidget {
                       Gap.sm,
                     ],
                     if (SupportContact.email.isNotEmpty)
-                      CopyableRow(
+                      const CopyableRow(
                         icon: Icons.mail_outline_rounded,
                         label: 'Email',
                         value: SupportContact.email,
@@ -251,7 +251,7 @@ class _FaqTileState extends State<_FaqTile> {
                   AnimatedRotation(
                     turns: _open ? 0.5 : 0,
                     duration: AppMotion.durationOf(context, AppMotion.fast),
-                    child: Icon(
+                    child: const Icon(
                       Icons.expand_more_rounded,
                       size: 22,
                       color: AppColors.textSecondary,
@@ -321,7 +321,7 @@ class _SupportSummary extends StatelessWidget {
               ),
             ),
             Gap.hSm,
-            Icon(Icons.content_copy_rounded,
+            const Icon(Icons.content_copy_rounded,
                 size: 18, color: AppColors.textTertiary),
           ],
         ),

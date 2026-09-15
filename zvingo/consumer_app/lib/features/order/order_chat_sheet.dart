@@ -291,7 +291,8 @@ class _OrderChatSheetState extends ConsumerState<OrderChatSheet> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.title, required this.subtitle, required this.live});
+  const _Header(
+      {required this.title, required this.subtitle, required this.live});
 
   final String title;
   final String? subtitle;
@@ -395,7 +396,8 @@ class _MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final stamp = message.createdAt;
     return Padding(
-      padding: EdgeInsets.only(top: showSender ? AppSpacing.sm : AppSpacing.xxs),
+      padding:
+          EdgeInsets.only(top: showSender ? AppSpacing.sm : AppSpacing.xxs),
       child: Column(
         crossAxisAlignment:
             mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -426,7 +428,8 @@ class _MessageBubble extends StatelessWidget {
                 topLeft: const Radius.circular(AppRadius.lg),
                 topRight: const Radius.circular(AppRadius.lg),
                 bottomLeft: Radius.circular(mine ? AppRadius.lg : AppRadius.sm),
-                bottomRight: Radius.circular(mine ? AppRadius.sm : AppRadius.lg),
+                bottomRight:
+                    Radius.circular(mine ? AppRadius.sm : AppRadius.lg),
               ),
             ),
             child: Text(
