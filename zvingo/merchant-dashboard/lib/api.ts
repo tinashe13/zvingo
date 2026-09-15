@@ -663,7 +663,17 @@ export const endpoints = {
   },
 
   orders: {
-    forMerchant: (merchantId: string) => api.get<Order[]>(`/orders/merchant/${merchantId}`),
+    /**
+     * Orders across every restaurant this merchant owns, newest first.
+     * `limit` / `offset` are optional — the backend clamps them server-side.
+     */
+    forMerchant: (merchantId: string, page?: { limit?: number; offset?: number }) => {
+      const query = new URLSearchParams();
+      if (page?.limit !== undefined) query.set("limit", String(page.limit));
+      if (page?.offset !== undefined) query.set("offset", String(page.offset));
+      const suffix = query.size ? `?${query.toString()}` : "";
+      return api.get<Order[]>(`/orders/merchant/${merchantId}${suffix}`);
+    },
     detail: (orderId: string) => api.get<Order>(`/orders/${orderId}`),
     setState: (orderId: string, state: OrderState) =>
       api.put<Order>(`/orders/${orderId}/state`, { state }),

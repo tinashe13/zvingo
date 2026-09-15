@@ -187,26 +187,37 @@ class OfferCard extends StatelessWidget {
               children: [
                 // ── Header: seconds left + decline ───────────────────────
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    StatusChip(
-                      label: '${remainingSeconds}s left',
-                      tone: _timeTone,
-                      icon: Icons.timer_outlined,
-                      preserveCase: true,
-                      emphasized: _timeTone == StatusTone.error,
+                    // Wrap, not Row: at 200% text scale on a 320px screen the
+                    // two chips no longer fit side by side, and they must
+                    // reflow rather than clip the countdown.
+                    Expanded(
+                      child: Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.sm,
+                        children: [
+                          StatusChip(
+                            label: '${remainingSeconds}s left',
+                            tone: _timeTone,
+                            icon: Icons.timer_outlined,
+                            preserveCase: true,
+                            emphasized: _timeTone == StatusTone.error,
+                          ),
+                          StatusChip(
+                            label: paymentMethod,
+                            tone: paymentMethod.toLowerCase() == 'cash'
+                                ? StatusTone.warning
+                                : StatusTone.info,
+                            icon: paymentMethod.toLowerCase() == 'cash'
+                                ? Icons.payments_outlined
+                                : Icons.phone_iphone_rounded,
+                            preserveCase: true,
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(width: AppSpacing.sm),
-                    StatusChip(
-                      label: paymentMethod,
-                      tone: paymentMethod.toLowerCase() == 'cash'
-                          ? StatusTone.warning
-                          : StatusTone.info,
-                      icon: paymentMethod.toLowerCase() == 'cash'
-                          ? Icons.payments_outlined
-                          : Icons.phone_iphone_rounded,
-                      preserveCase: true,
-                    ),
-                    const Spacer(),
                     DriverIconButton(
                       icon: Icons.close_rounded,
                       tooltip: 'Decline offer',

@@ -398,8 +398,16 @@ class OrderService:
                 "The original order has no delivery address. Place this order "
                 "from the cart so a delivery address can be chosen."
             )
+        is_pickup_only = bool(getattr(original, "is_pickup", False))
+        if not is_pickup_only and (pickup is None or pickup.is_null_island):
+            # Creating an order dispatch can never act on just strands the
+            # consumer, so refuse it here the way create_order does.
+            raise ValueError(
+                "This restaurant's pickup location is unavailable, so the order "
+                "cannot be placed right now."
+            )
 
-        is_pickup = bool(getattr(original, "is_pickup", False))
+        is_pickup = is_pickup_only
         new_order = Order(
             merchant_id=original.merchant_id,
             consumer_id=consumer_id,
@@ -538,10 +546,10 @@ class OrderService:
                     f"{' or '.join(sorted(s.value for s in expected))}"
                 )
 
-            if require_driver_id is not None and order.driver_id != require_driver_id:
-                raise OrderConflict(
-                    "This order is not assigned to you"
-                )
+            if require_driver_id is not None and str(
+                order.driver_id or ""
+            ) != str(require_driver_id):
+                raise OrderConflict("This order is not assigned to you")
 
             assign_driver = driver_id if target is OrderState.ACCEPTED and driver_id else None
 
@@ -862,6 +870,39 @@ class OrderService:
             logger.warning(
                 "Could not reset offer history", order_id=str(order_id), error=str(e)
             )
+
+    @staticmethod
+    async def claim_scheduled_release(order, pickup=None) -> bool:
+        """Claim a scheduled order for dispatch. True only for the winner.
+
+        Several workers can be polling for due orders at once; the conditional
+        filter means exactly one of them releases the order, so a scheduled
+        order is never dispatched twice. Any pickup point resolved along the way
+        is persisted in the same write, so later retries do not re-resolve it.
+        """
+        changes = {"scheduled_dispatched": True}
+        if pickup is not None and hasattr(pickup, "model_dump"):
+            changes["pickup_location"] = pickup.model_dump()
+
+        collection = _order_collection()
+        if collection is None:
+            if getattr(order, "scheduled_dispatched", False):
+                return False
+            order.scheduled_dispatched = True
+            await order.save()
+            return True
+
+        result = await collection.find_one_and_update(
+            {
+                "_id": _document_id(getattr(order, "id", None)),
+                "scheduled_dispatched": {"$ne": True},
+            },
+            {"$set": changes},
+        )
+        if result is None:
+            return False
+        order.scheduled_dispatched = True
+        return True
 
     @staticmethod
     async def mark_dispatch_escalated(order_id: str) -> bool:

@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import 'package:consumer_app/core/app_colors.dart';
+import 'package:consumer_app/core/app_motion.dart';
 import 'package:consumer_app/core/app_spacing.dart';
 import 'package:consumer_app/core/app_text_styles.dart';
 
@@ -89,9 +90,8 @@ class ZvCard extends StatelessWidget {
 
     if (onTap == null) return surface;
     return ZvTapScale(
-      onTap: onTap,
+      childHandlesTap: true,
       behavior: HitTestBehavior.deferToChild,
-      enableFeedback: false,
       semanticLabel: semanticLabel,
       child: surface,
     );
@@ -299,7 +299,7 @@ class ZvNetworkImage extends StatelessWidget {
       CachedNetworkImage(
         imageUrl: source,
         fit: fit,
-        fadeInDuration: const Duration(milliseconds: 180),
+        fadeInDuration: AppMotion.fast,
         placeholder: (context, _) => const ZvShimmer(
           child: DecoratedBox(
             decoration: BoxDecoration(color: AppColors.shimmerBase),

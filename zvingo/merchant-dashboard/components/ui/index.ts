@@ -122,6 +122,9 @@ export type { EmptyStateProps } from "./EmptyState";
 export { ErrorState, InlineError } from "./ErrorState";
 export type { ErrorStateProps } from "./ErrorState";
 
+export { SafeImage } from "./SafeImage";
+export type { SafeImageProps } from "./SafeImage";
+
 export { StatCard } from "./StatCard";
 export type { Sparkline, StatCardProps, StatFormat } from "./StatCard";
 

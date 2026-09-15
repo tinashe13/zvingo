@@ -31,6 +31,7 @@ import redis.asyncio as aioredis
 import structlog
 from beanie import Document, Indexed
 from pydantic import Field
+from pymongo import IndexModel
 
 from app.config import settings
 from app.finance.money import (
@@ -144,7 +145,16 @@ class OrderRateLock(Document):
 
     class Settings:
         name = "order_rate_locks"
-        indexes = [[("order_id", 1), ("currency", 1)]]
+        # Unique: the pin is what guarantees an order's rate cannot move, so
+        # two concurrent quotes for the same order must not create two locks.
+        # `_pin` relies on the duplicate-key failure to fall back to the winner.
+        indexes = [
+            IndexModel(
+                [("order_id", 1), ("currency", 1)],
+                name="order_rate_lock_unique",
+                unique=True,
+            )
+        ]
 
     @property
     def rate(self) -> Decimal:

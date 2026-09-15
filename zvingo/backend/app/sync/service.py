@@ -19,11 +19,9 @@ import msgpack
 import time
 from datetime import datetime
 from app.time_utils import utc_from_timestamp
-from typing import List
 import redis.asyncio as aioredis
-from app.sync.schemas import SyncRequest, SyncResponse
+from app.sync.schemas import SyncResponse
 from app.order.models import Order
-from app.auth.models import User
 from app.order.state_machine import ACTIVE_DRIVER_STATES, OrderState
 from app.config import settings
 import structlog

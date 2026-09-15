@@ -164,7 +164,13 @@ async def track_order(websocket: WebSocket, order_id: str):
         await websocket.close(code=1008)
         return
 
-    order = await Order.get(order_id)
+    try:
+        order = await Order.get(order_id)
+    except Exception as e:
+        # A malformed id must close the socket cleanly rather than raise out of
+        # the handler, which would surface as an opaque connection error.
+        logger.warning("Tracking WS rejected: unreadable order id", order_id=order_id, error=str(e))
+        order = None
     if order is None:
         await websocket.close(code=1008)
         return

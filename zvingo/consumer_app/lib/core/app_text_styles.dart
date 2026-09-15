@@ -29,7 +29,7 @@ class AppTextStyles {
   /// The bundled family. The design system specifies Inter with a Roboto
   /// fallback; only Roboto ships in `assets/fonts/` today, so Roboto is the
   /// resolved family on every platform.
-  static const String fontFamily = 'Roboto';
+  static const String fontFamily = 'Inter';
 
   /// Tabular (monospaced) figures — required for money, ETAs and counters.
   static const List<FontFeature> tabularFigures = <FontFeature>[

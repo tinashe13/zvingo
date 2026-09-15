@@ -128,7 +128,14 @@ class VehicleUpdate(BaseModel):
     @field_validator("plate")
     @classmethod
     def _tidy_plate(cls, value: Optional[str]) -> Optional[str]:
-        return value.strip().upper() if value else value
+        """Normalise "abc 123" and "ABC123" to one stored form.
+
+        Zimbabwean plates are written with a space; storing them without one
+        means a lookup or a duplicate check cannot be defeated by spacing.
+        """
+        if not value:
+            return value
+        return "".join(value.split()).upper()
 
 
 def _schedule_payload(user: User) -> dict:

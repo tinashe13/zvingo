@@ -25,7 +25,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Optional, Tuple
+from typing import Any, Tuple
 
 from app.config import settings
 from app.finance.money import (

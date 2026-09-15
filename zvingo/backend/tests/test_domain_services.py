@@ -291,7 +291,9 @@ async def test_dispatch_location_scoring_and_workflows(monkeypatch):
     monkeypatch.setattr(notification_module.notification_service, "notify_consumer", notify)
     assert await service.accept_offer("d1", "order") is order
     inserted.assert_awaited_once()
-    notify.assert_awaited_once()
+    # The consumer notification belongs to the state transition, so accepting no
+    # longer sends a second, identical push of its own.
+    notify.assert_not_awaited()
     assert await service.decline_offer("d1", "order") == {"status": "declined"}
 
     active = object()

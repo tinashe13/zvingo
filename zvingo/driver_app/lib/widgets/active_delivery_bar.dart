@@ -94,14 +94,20 @@ class ActiveDeliveryBar extends StatelessWidget {
         onTap: onTap,
         enforceMinTarget: false,
         child: Container(
-          height: AppSpacing.activeDeliveryBarHeight,
+          // A minimum, not a fixed height — see OnlineOfflineToggle.
+          constraints: const BoxConstraints(
+            minHeight: AppSpacing.activeDeliveryBarHeight,
+          ),
           margin: const EdgeInsets.fromLTRB(
             AppSpacing.md,
             0,
             AppSpacing.md,
             AppSpacing.sm,
           ),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.sm,
+          ),
           decoration: BoxDecoration(
             color: fill,
             borderRadius: AppSpacing.brLg,

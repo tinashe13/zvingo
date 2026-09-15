@@ -20,7 +20,6 @@ Protocol (JSON messages in both directions):
 
 import asyncio
 import json
-from datetime import datetime
 from app.time_utils import utc_now
 
 import redis.asyncio as aioredis

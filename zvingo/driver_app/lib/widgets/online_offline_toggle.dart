@@ -11,7 +11,7 @@ import 'tap_scale.dart';
 /// The single most consequential control in the driver app: online means
 /// offers arrive, offline means they do not.
 ///
-/// It is deliberately large (72pt tall, full width), states its current mode
+/// It is deliberately large (at least 72pt tall, full width), states its mode
 /// in words as well as colour, and is unmistakable at a glance from a metre
 /// away in sunlight.
 ///
@@ -130,8 +130,13 @@ class OnlineOfflineToggle extends StatelessWidget {
         child: AnimatedContainer(
           duration: AppMotion.durationOf(context, AppMotion.base),
           curve: AppMotion.standard,
-          height: 72,
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+          // A minimum, not a fixed height: at 200% text scale two lines of
+          // copy need more than 72pt and the control must grow, not clip.
+          constraints: const BoxConstraints(minHeight: 72),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.xl,
+            vertical: AppSpacing.md,
+          ),
           decoration: BoxDecoration(
             color: fill,
             borderRadius: AppSpacing.brXl,

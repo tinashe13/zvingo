@@ -40,6 +40,8 @@ from typing import List, Optional, Sequence
 import structlog
 from beanie import Document, Indexed
 from pydantic import BaseModel, Field
+from pymongo import IndexModel
+from pymongo.errors import DuplicateKeyError
 
 from app.finance.money import DEFAULT_CURRENCY, currency_spec, format_money
 from app.time_utils import utc_now
@@ -118,9 +120,20 @@ class LedgerEntry(Document):
         name = "ledger_entries"
         indexes = [
             [("posting_id", 1)],
-            # Unique so a concurrent duplicate posting loses at the database,
-            # not just in application code.
-            [("idempotency_key", 1), ("entry_type", 1), ("party_type", 1)],
+            # Unique: a concurrent duplicate posting loses at the database, not
+            # merely in application code. Every line of a posting differs in
+            # (entry_type, party_type, party_id), so this constrains duplicates
+            # without constraining legitimate lines.
+            IndexModel(
+                [
+                    ("idempotency_key", 1),
+                    ("entry_type", 1),
+                    ("party_type", 1),
+                    ("party_id", 1),
+                ],
+                name="ledger_posting_line_unique",
+                unique=True,
+            ),
             [("order_id", 1), ("created_at", 1)],
             [("party_type", 1), ("party_id", 1), ("created_at", -1)],
             [("payment_id", 1)],
@@ -215,6 +228,20 @@ class LedgerService:
         ).to_list()
 
     @staticmethod
+    def _line_identity(entry_or_line) -> tuple:
+        if isinstance(entry_or_line, dict):
+            return (
+                entry_or_line["entry_type"],
+                entry_or_line["party_type"],
+                entry_or_line["party_id"],
+            )
+        return (
+            entry_or_line.entry_type,
+            entry_or_line.party_type,
+            entry_or_line.party_id,
+        )
+
+    @staticmethod
     async def post(posting: LedgerPosting) -> List[LedgerEntry]:
         """Write a balanced posting, exactly once.
 
@@ -222,6 +249,11 @@ class LedgerService:
         if the posting has already been made. Raises
         :class:`UnbalancedPostingError` before touching the database if the
         lines do not sum to zero.
+
+        If a previous attempt was interrupted partway (process killed between
+        two line inserts) the existing entries will not balance. Rather than
+        return a half-posting and leave the ledger permanently wrong, the
+        missing lines are completed; the unique index makes that safe to redo.
         """
         posting.validate_balanced()
         if not posting.lines:
@@ -229,16 +261,28 @@ class LedgerService:
 
         existing = await LedgerService.already_posted(posting.idempotency_key)
         if existing:
-            logger.info(
-                "Ledger posting already applied; skipping",
+            residual = LedgerService.residual(existing)
+            if residual == 0:
+                logger.info(
+                    "Ledger posting already applied; skipping",
+                    idempotency_key=posting.idempotency_key,
+                    entries=len(existing),
+                )
+                return list(existing)
+            logger.error(
+                "Found a partially written ledger posting; completing it",
                 idempotency_key=posting.idempotency_key,
+                residual_minor=residual,
                 entries=len(existing),
             )
-            return list(existing)
 
-        posting_id = str(uuid.uuid4())
-        written: List[LedgerEntry] = []
+        already = {LedgerService._line_identity(e) for e in existing}
+        posting_id = existing[0].posting_id if existing else str(uuid.uuid4())
+        written: List[LedgerEntry] = list(existing)
+
         for line in posting.lines:
+            if LedgerService._line_identity(line) in already:
+                continue
             entry = LedgerEntry(
                 posting_id=posting_id,
                 idempotency_key=posting.idempotency_key,
@@ -251,7 +295,17 @@ class LedgerService:
                 payment_id=posting.payment_id,
                 memo=line["memo"],
             )
-            await entry.insert()
+            try:
+                await entry.insert()
+            except DuplicateKeyError:
+                # Another worker wrote this exact line first; that is the
+                # unique index doing its job, not an error.
+                logger.info(
+                    "Ledger line already written by a concurrent poster",
+                    idempotency_key=posting.idempotency_key,
+                    entry_type=line["entry_type"].value,
+                )
+                continue
             written.append(entry)
 
         logger.info(

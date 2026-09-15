@@ -128,12 +128,15 @@ def install_order_store(monkeypatch, documents):
     class FakeOrder:
         @staticmethod
         async def get(order_id):
-            # Reading yields, so competing coroutines really do observe the same
-            # pre-race state. Without this the "race" would be serialised.
-            await asyncio.sleep(0)
+            # The snapshot is taken *before* the yield, so a read already in
+            # flight can be overtaken by another coroutine's write. That is what
+            # makes these races real rather than accidentally serialised.
             for doc in documents:
                 if doc["_id"] == str(order_id):
-                    return FakeOrderDocument(doc)
+                    snapshot = FakeOrderDocument(doc)
+                    await asyncio.sleep(0)
+                    return snapshot
+            await asyncio.sleep(0)
             return None
 
     monkeypatch.setattr(service, "Order", FakeOrder)
@@ -165,7 +168,7 @@ async def test_two_drivers_accepting_the_same_offer_produce_one_assignment(monke
     from app.order.service import OrderService
 
     document = order_document()
-    install_order_store(monkeypatch, [document])
+    collection = install_order_store(monkeypatch, [document])
 
     async def accept(driver_id):
         return await OrderService.transition_state(
@@ -195,6 +198,9 @@ async def test_two_drivers_accepting_the_same_offer_produce_one_assignment(monke
     assert [e["state"] for e in document["events"]] == [OrderState.ACCEPTED.value]
     assert document["events"][0]["actor_id"] == document["driver_id"]
     assert document["events"][0]["reason"] == "driver_accepted"
+    # Both coroutines read the unassigned order and both tried to write it. The
+    # loser was stopped by the conditional update, not by luck of scheduling.
+    assert collection.update_calls >= 2
 
 
 @pytest.mark.asyncio

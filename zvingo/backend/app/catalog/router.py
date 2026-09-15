@@ -696,6 +696,21 @@ async def _assert_owns_restaurant(restaurant_id: Optional[str], current_user: Us
         )
 
 
+async def _assert_code_is_free(code: Optional[str], promo_id: Optional[str] = None) -> None:
+    """Promo codes must be globally unique — they are the redemption key.
+
+    Two promos sharing a code means `compute_discount` and `record_redemption`
+    can pick different documents, so one is validated and the other charged.
+    """
+    if not code:
+        return
+    existing = await Promotion.find_one({"code": code})
+    if existing is not None and str(existing.id) != str(promo_id or ""):
+        raise HTTPException(
+            status_code=409, detail=f"Promo code '{code}' is already in use"
+        )
+
+
 class PromotionUpdate(BaseModel):
     title: Optional[str] = None
     subtitle: Optional[str] = None
@@ -839,6 +854,7 @@ async def create_promotion(promo_in: PromotionCreate, current_user: User = Depen
             detail="free_item promotions require free_item_id or free_item_name",
         )
     await _assert_owns_restaurant(promo_in.restaurant_id, current_user)
+    await _assert_code_is_free(promo_in.code)
 
     promo = Promotion(
         merchant_id=str(current_user.id),
@@ -890,6 +906,8 @@ async def update_promotion(promo_id: str, promo_in: PromotionUpdate, current_use
     update_data = promo_in.model_dump(exclude_unset=True)
     if "restaurant_id" in update_data:
         await _assert_owns_restaurant(update_data["restaurant_id"], current_user)
+    if "code" in update_data:
+        await _assert_code_is_free(update_data["code"], promo_id=promo.id)
     new_type = update_data.get("promo_type")
     if new_type is not None and new_type not in SUPPORTED_PROMO_TYPES:
         raise HTTPException(

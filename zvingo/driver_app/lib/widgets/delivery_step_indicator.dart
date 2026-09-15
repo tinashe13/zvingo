@@ -107,56 +107,94 @@ class _DeliveryStepIndicatorState extends State<DeliveryStepIndicator>
     final done = AppColors.successOf(context);
     final pending = AppColors.borderOf(context);
     final current = AppColors.actionOf(context);
-    final muted = Theme.of(context).brightness == Brightness.dark
-        ? AppColors.darkTextSecondary
-        : AppColors.textSecondary;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final muted = isDark ? AppColors.darkTextSecondary : AppColors.textSecondary;
 
     return Semantics(
       label: 'Delivery progress: step ${_to + 1} of ${steps.length}, '
           '${steps[_to].$1}',
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) {
-          // Curve applied by value, not by wrapping in a CurvedAnimation:
-          // this builder runs every frame and a fresh animation object each
-          // time would leak.
-          final curve = AppMotion.curveOf(context, AppMotion.standard)
-              .transform(_controller.value);
-          // Fractional position of the "filled" head of the rail.
-          final head = _from + (_to - _from) * curve;
+      child: ExcludeSemantics(
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) {
+            // Curve applied by value, not by wrapping in a CurvedAnimation:
+            // this builder runs every frame and a fresh animation object each
+            // time would leak.
+            final curve = AppMotion.curveOf(context, AppMotion.standard)
+                .transform(_controller.value);
+            // Fractional position of the "filled" head of the rail.
+            final head = _from + (_to - _from) * curve;
 
-          return Row(
-            children: [
-              for (var i = 0; i < steps.length; i++) ...[
-                if (i > 0)
-                  Expanded(
-                    child: _Connector(
-                      // Connector i-1→i is filled once `head` passes i.
-                      fill: (head - (i - 1)).clamp(0.0, 1.0),
-                      filledColor: done,
-                      trackColor: pending,
-                    ),
-                  ),
-                _Node(
-                  label: steps[i].$1,
-                  showLabel: widget.showLabels,
-                  state: i < _to
-                      ? _NodeState.done
-                      : (i == _to ? _NodeState.current : _NodeState.pending),
-                  // A node pops in as the head reaches it.
-                  scale: i <= _to
-                      ? (0.6 + 0.4 * (head - (i - 1)).clamp(0.0, 1.0))
-                          .clamp(0.6, 1.0)
-                      : 1.0,
-                  doneColor: done,
-                  currentColor: current,
-                  pendingColor: pending,
-                  labelColor: muted,
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // The rail itself. Nodes are fixed and small; the connectors
+                // take all remaining width, so the row cannot overflow at any
+                // screen size or text scale.
+                Row(
+                  children: [
+                    for (var i = 0; i < steps.length; i++) ...[
+                      if (i > 0)
+                        Expanded(
+                          child: _Connector(
+                            // Connector i-1→i fills as `head` passes i.
+                            fill: (head - (i - 1)).clamp(0.0, 1.0),
+                            filledColor: done,
+                            trackColor: pending,
+                          ),
+                        ),
+                      _Node(
+                        state: i < _to
+                            ? _NodeState.done
+                            : (i == _to
+                                ? _NodeState.current
+                                : _NodeState.pending),
+                        // A node pops in as the head reaches it.
+                        scale: i <= _to
+                            ? (0.6 + 0.4 * (head - (i - 1)).clamp(0.0, 1.0))
+                                .clamp(0.6, 1.0)
+                            : 1.0,
+                        doneColor: done,
+                        currentColor: current,
+                        pendingColor: pending,
+                      ),
+                    ],
+                  ],
                 ),
+                // One readable line beats seven truncated ones. A driver
+                // glancing at this for a second gets the step name at body
+                // size instead of seven 10pt words fighting for 40px each.
+                if (widget.showLabels) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          steps[_to].$1,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.bodyStrong.copyWith(
+                            color: isDark
+                                ? AppColors.darkTextPrimary
+                                : AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        'Step ${_to + 1} of ${steps.length}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.caption.copyWith(color: muted),
+                      ),
+                    ],
+                  ),
+                ],
               ],
-            ],
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -211,24 +249,18 @@ class _Connector extends StatelessWidget {
 }
 
 class _Node extends StatelessWidget {
-  final String label;
-  final bool showLabel;
   final _NodeState state;
   final double scale;
   final Color doneColor;
   final Color currentColor;
   final Color pendingColor;
-  final Color labelColor;
 
   const _Node({
-    required this.label,
-    required this.showLabel,
     required this.state,
     required this.scale,
     required this.doneColor,
     required this.currentColor,
     required this.pendingColor,
-    required this.labelColor,
   });
 
   @override
@@ -236,17 +268,20 @@ class _Node extends StatelessWidget {
     final (Color color, double size, Widget? glyph) = switch (state) {
       _NodeState.done => (
           doneColor,
-          18.0,
-          const Icon(Icons.check_rounded, size: 12, color: Colors.white),
+          20.0,
+          const Icon(Icons.check_rounded, size: 13, color: Colors.white),
         ),
-      _NodeState.current => (currentColor, 22.0, null),
+      _NodeState.current => (currentColor, 24.0, null),
       _NodeState.pending => (pendingColor, 14.0, null),
     };
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Transform.scale(
+    // A fixed 26px cell keeps the rail's node budget at 7 x 26 = 182px, so
+    // the connectors always have room left even on a 320px screen.
+    return SizedBox(
+      width: 26,
+      height: 26,
+      child: Center(
+        child: Transform.scale(
           scale: scale,
           child: Container(
             width: size,
@@ -254,45 +289,23 @@ class _Node extends StatelessWidget {
             decoration: BoxDecoration(
               color: color,
               shape: BoxShape.circle,
-              border: state == _NodeState.current
-                  ? Border.all(color: currentColor, width: 3)
-                  : null,
             ),
-            child: glyph == null
-                ? (state == _NodeState.current
+            child: glyph ??
+                (state == _NodeState.current
                     ? Center(
                         child: Container(
-                          width: 8,
-                          height: 8,
+                          width: 9,
+                          height: 9,
                           decoration: const BoxDecoration(
                             color: Colors.white,
                             shape: BoxShape.circle,
                           ),
                         ),
                       )
-                    : null)
-                : Center(child: glyph),
+                    : null),
           ),
         ),
-        if (showLabel) ...[
-          const SizedBox(height: AppSpacing.xs + 2),
-          SizedBox(
-            width: 52,
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.overline.copyWith(
-                fontSize: 10,
-                color: state == _NodeState.pending
-                    ? labelColor.withValues(alpha: 0.6)
-                    : labelColor,
-              ),
-            ),
-          ),
-        ],
-      ],
+      ),
     );
   }
 }

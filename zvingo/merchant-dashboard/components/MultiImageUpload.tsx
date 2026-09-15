@@ -1,89 +1,115 @@
 "use client";
 
-import { useState } from 'react';
-import { ImagePlus, Loader2, X } from 'lucide-react';
-import { getToken, UPLOAD_API_URL } from '@/lib/api';
+import { useState } from "react";
+import { ImagePlus, X } from "lucide-react";
+import { UPLOAD_API_URL, api, errorMessage } from "@/lib/api";
+import { SafeImage } from "@/components/ui/SafeImage";
+import { Spinner } from "@/components/ui/Spinner";
+import { useOptionalToast } from "@/components/ui/Toast";
 
 interface MultiImageUploadProps {
     values: string[];
     onChange: (urls: string[]) => void;
 }
 
+const MAX_BYTES = 5 * 1024 * 1024;
+
+/** Gallery picker: add photos one at a time, remove any of them. */
 export default function MultiImageUpload({ values = [], onChange }: MultiImageUploadProps) {
     const [uploading, setUploading] = useState(false);
+    const [error, setError] = useState("");
+    const toast = useOptionalToast();
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
+        if (file.size > MAX_BYTES) {
+            const message = "That image is over 5 MB. Try a smaller photo.";
+            setError(message);
+            toast?.error("Image too large", { description: message });
+            e.target.value = "";
+            return;
+        }
+
+        setError("");
+        setUploading(true);
         try {
-            setUploading(true);
-            const formData = new FormData();
-            formData.append('file', file);
-
-            const token = getToken();
-            const res = await fetch(`${UPLOAD_API_URL}/upload/`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                },
-                body: formData
-            });
-
-            if (!res.ok) throw new Error('Upload failed');
-
-            const data = await res.json();
-            let url = data.url;
-            if (url.startsWith('/')) {
-                url = `${UPLOAD_API_URL}${url}`;
-            }
-
+            const form = new FormData();
+            form.append("file", file);
+            const data = await api.upload<{ url: string }>("/upload/", form);
+            const url = data.url.startsWith("/") ? `${UPLOAD_API_URL}${data.url}` : data.url;
             onChange([...values, url]);
         } catch (err) {
-            console.error(err);
-            alert('Failed to upload image');
+            const message = errorMessage(err, "The image could not be uploaded. Please try again.");
+            setError(message);
+            toast?.error("Upload failed", { description: message });
         } finally {
             setUploading(false);
-            // Reset input
-            e.target.value = '';
+            e.target.value = "";
         }
     };
 
     const removeImage = (index: number) => {
-        const newValues = [...values];
-        newValues.splice(index, 1);
-        onChange(newValues);
+        const removed = values[index];
+        const next = values.filter((_, i) => i !== index);
+        onChange(next);
+        toast?.info("Photo removed", {
+            onUndo: removed
+                ? () => {
+                      const restored = [...next];
+                      restored.splice(index, 0, removed);
+                      onChange(restored);
+                  }
+                : undefined,
+        });
     };
 
     return (
-        <div className="rounded-2xl bg-neutral-50 p-4">
+        <div className="rounded-lg border border-border bg-neutral-50 p-4">
             <div className="flex flex-wrap gap-3">
                 {values.map((url, index) => (
-                    <div key={index} className="group relative h-24 w-24 overflow-hidden rounded-xl bg-neutral-200">
-                        <img src={url} alt={`Preview ${index}`} className="h-full w-full object-cover" />
+                    <div key={`${url}-${index}`} className="group relative h-24 w-24">
+                        <SafeImage
+                            src={url}
+                            alt={`Photo ${index + 1}`}
+                            containerClassName="h-24 w-24 rounded-md"
+                        />
                         <button
                             type="button"
                             onClick={() => removeImage(index)}
-                            className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-neutral-900/80 text-white opacity-0 backdrop-blur transition-opacity group-hover:opacity-100 focus:opacity-100"
-                            aria-label={`Remove image ${index + 1}`}
+                            className="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-full bg-neutral-900/80 text-neutral-0 backdrop-blur transition-opacity hover:bg-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-0"
+                            aria-label={`Remove photo ${index + 1}`}
                         >
-                            <X className="h-3.5 w-3.5" />
+                            <X className="h-4 w-4" aria-hidden="true" />
                         </button>
                     </div>
                 ))}
 
-                <label className="flex h-24 w-24 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-neutral-300 text-neutral-500 transition-colors hover:border-neutral-500 hover:bg-white">
-                    {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
-                    <span className="mt-2 text-xs font-bold">{uploading ? 'Uploading' : 'Add image'}</span>
+                <label className="flex h-24 w-24 cursor-pointer flex-col items-center justify-center rounded-md border-[1.5px] border-dashed border-neutral-300 text-text-secondary transition-colors hover:border-neutral-500 hover:bg-surface focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-action">
+                    {uploading ? (
+                        <Spinner size={20} label="Uploading" />
+                    ) : (
+                        <ImagePlus className="h-5 w-5" aria-hidden="true" />
+                    )}
+                    <span className="type-caption mt-2 font-bold">
+                        {uploading ? "Uploading" : "Add photo"}
+                    </span>
                     <input
                         type="file"
                         accept="image/*"
                         onChange={handleFileChange}
                         disabled={uploading}
-                        className="hidden"
+                        className="sr-only"
                     />
                 </label>
             </div>
+
+            {error && (
+                <p role="alert" className="type-caption mt-3 text-error">
+                    {error}
+                </p>
+            )}
         </div>
     );
 }

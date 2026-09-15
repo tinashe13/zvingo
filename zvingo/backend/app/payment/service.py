@@ -19,7 +19,6 @@ Four invariants this module exists to hold:
 import asyncio
 import hashlib
 import json
-from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, Dict, Optional, Tuple
 
@@ -65,9 +64,6 @@ METHOD_PROVIDER_MAP = {
     PaymentMethod.ONEMONEY: "onemoney",
     PaymentMethod.INNBUCKS: "innbucks",
 }
-
-# How long a payment may sit un-settled before reconciliation calls it stuck.
-STUCK_PAYMENT_MINUTES = 30
 
 # Paynow status strings that mean a state we handle distinctly.
 _TERMINAL_FAILURE_STATES = {
@@ -169,18 +165,6 @@ class PaymentService:
         """
         quote = await exchange.resolve_rate_for_order(currency, order_id)
         return quote.rate
-
-    @staticmethod
-    async def _quote_for(currency: str, order_id: Optional[str]) -> Tuple[Decimal, Optional[Any]]:
-        """Rate plus its provenance, tolerating a monkeypatched rate seam."""
-        try:
-            quote = await exchange.resolve_rate_for_order(currency, order_id)
-        except (exchange.StaleExchangeRateError, exchange.UnsupportedCurrencyError):
-            raise
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.warning("Rate provenance unavailable", error=str(exc))
-            return await PaymentService.get_exchange_rate(currency, order_id), None
-        return quote.rate, quote
 
     # ── initiation ──────────────────────────────────────────────────
 
@@ -656,7 +640,15 @@ class PaymentService:
 
     @staticmethod
     async def get_payment_for_order(order_id: str) -> Optional[Payment]:
-        return await Payment.find_one(Payment.order_id == order_id)
+        """The most recent payment attempt for an order.
+
+        An order can accumulate several attempts (a failed EcoCash push, then a
+        successful one), so the newest is the one that describes where the money
+        currently stands.
+        """
+        return await Payment.find_one(
+            Payment.order_id == order_id, sort=[("created_at", -1)]
+        )
 
     # ── refunds ─────────────────────────────────────────────────────
 
@@ -876,30 +868,6 @@ class PaymentService:
             payment_id, requested_by="system", reason="legacy refund call"
         )
         return payment
-
-    # ── reconciliation support ──────────────────────────────────────
-
-    @staticmethod
-    async def find_stuck_payments(minutes: int = STUCK_PAYMENT_MINUTES):
-        """Payments still un-settled well past the point they should have been."""
-        cutoff = utc_now() - timedelta(minutes=minutes)
-        return await Payment.find(
-            {
-                "status": {
-                    "$in": [
-                        PaymentStatus.PENDING.value,
-                        PaymentStatus.AWAITING_DELIVERY.value,
-                    ]
-                },
-                "updated_at": {"$lt": cutoff},
-            }
-        ).to_list()
-
-    @staticmethod
-    async def find_pending_refunds():
-        return await RefundRequest.find(
-            RefundRequest.status == RefundStatus.PENDING_MANUAL
-        ).to_list()
 
 
 def _safe_payload(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:

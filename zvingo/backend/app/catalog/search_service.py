@@ -96,6 +96,9 @@ AVAILABILITY_MULTIPLIER = {
 
 MIN_QUERY_LENGTH = 2
 
+#: Apostrophes are *removed* rather than turned into a space, so a search for
+#: "nandos" matches "Nando's" instead of splitting it into "nando" + "s".
+_APOSTROPHE = re.compile(r"['’ʼ]")
 _PUNCT = re.compile(r"[^a-z0-9\s]+")
 _WS = re.compile(r"\s+")
 
@@ -111,7 +114,8 @@ def normalise(text: Optional[str]) -> str:
         return ""
     decomposed = unicodedata.normalize("NFKD", str(text))
     stripped = "".join(c for c in decomposed if not unicodedata.combining(c))
-    return _WS.sub(" ", _PUNCT.sub(" ", stripped.lower())).strip()
+    stripped = _APOSTROPHE.sub("", stripped.lower())
+    return _WS.sub(" ", _PUNCT.sub(" ", stripped)).strip()
 
 
 def _singular(token: str) -> str:

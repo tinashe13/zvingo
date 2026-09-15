@@ -179,9 +179,11 @@ async def test_driver_accepts_offer_transitions_order_and_creates_dispatch(monke
         "status": "ASSIGNED",
     }
     inserted.assert_awaited_once()
-    notify.assert_awaited_once_with(
-        None, "order-1", "order_accepted", data={"driver_id": "driver-1"}
-    )
+    # The consumer is told by the ACCEPTED transition itself (see
+    # OrderService._notify_consumer). Accepting used to announce it a second
+    # time, which sent the consumer two identical "driver on the way" pushes —
+    # and this order has no consumer_id, so nothing is published at all.
+    notify.assert_not_awaited()
 
 
 @pytest.mark.asyncio

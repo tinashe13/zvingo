@@ -13,12 +13,11 @@ Two things are load-bearing here and easy to get wrong:
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional
 from datetime import datetime, timedelta, date
 from app.time_utils import utc_now
 import redis.asyncio as aioredis
 import json
-import math
 
 import structlog
 
@@ -470,6 +469,7 @@ async def record_earning(
         tip_cents=tip_cents,
         total_earning_cents=total_cents,
         payment_method=payment_method,
+        currency=currency,
         distance_km=round(dist_km, 2),
         completed_at=utc_now(),
         created_date=date.today().isoformat(),
@@ -485,16 +485,19 @@ async def record_earning(
         from app.finance.ledger import LedgerService
         from app.finance.postings import build_driver_payout_posting
 
-        await LedgerService.post(
-            build_driver_payout_posting(
-                order_id=order_id,
-                driver_id=driver_id,
-                driver_share_minor=driver_cents,
-                tip_minor=tip_cents,
-                currency=currency if currency == "USD" else "USD",
-                payment_id=payment_id,
-            )
+        posting = build_driver_payout_posting(
+            order_id=order_id,
+            driver_id=driver_id,
+            driver_share_minor=driver_cents,
+            tip_minor=tip_cents,
+            # The driver's share is denominated in USD regardless of the
+            # currency the customer was charged in.
+            currency="USD",
+            payment_id=payment_id,
         )
+        await LedgerService.post(posting)
+        earning.ledger_posting_key = posting.idempotency_key
+        await earning.save()
         ledger_posted = True
     except Exception as exc:
         logger.error(
@@ -602,9 +605,6 @@ async def get_earnings_history(
 
     if min_amount_cents is not None:
         filters.append(DriverEarning.total_earning_cents >= min_amount_cents)
-
-    # Text-based filters use regex
-    query = DriverEarning.find(*filters)
 
     # For merchant_name and area, do post-query filtering since Beanie
     # doesn't easily support case-insensitive contains on regular fields.

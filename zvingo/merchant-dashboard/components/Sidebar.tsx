@@ -142,7 +142,6 @@ export default function Sidebar({ collapsed = false, onNavigate, className }: Si
                   className={cn(
                     "absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-full bg-brand-lime transition-opacity",
                     active ? "opacity-100" : "opacity-0",
-                    collapsed ? "-left-3" : "-left-3",
                   )}
                 />
                 <item.icon

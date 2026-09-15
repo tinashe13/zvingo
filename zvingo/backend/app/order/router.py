@@ -10,7 +10,13 @@ from app.order.schemas import (
     OrderUpdateState,
 )
 from app.order.service import OrderService
-from app.order.access import can_access_order, owning_merchant_id
+from app.auth.authorization import (
+    is_same_user,
+    owning_merchant_id,
+    require_order_consumer,
+    require_order_participant,
+    require_self,
+)
 from app.order.models import Order
 from app.order.state_machine import (
     CANCELLABLE_STATES,
@@ -149,18 +155,16 @@ async def _driver_position(driver_id: str):
 
 async def _assert_order_access(order: Order, user: User):
     """403 unless the user is the order's consumer, driver, or owning merchant."""
-    if not await can_access_order(order, user):
-        raise HTTPException(status_code=403, detail="Not authorized to view this order")
+    await require_order_participant(order, user)
 
 
 async def _order_role(order: Order, user: User) -> Optional[str]:
     """How `user` relates to `order`: consumer, driver, merchant, or None."""
-    uid = str(user.id)
-    if order.driver_id and uid == order.driver_id:
+    if order.driver_id and is_same_user(user, order.driver_id):
         return "driver"
-    if uid == order.consumer_id:
+    if is_same_user(user, order.consumer_id):
         return "consumer"
-    if uid == await owning_merchant_id(order):
+    if is_same_user(user, await owning_merchant_id(order)):
         return "merchant"
     return None
 
@@ -248,9 +252,9 @@ async def cancel_order(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    # Verify the consumer owns this order
-    if order.consumer_id != str(current_user.id):
-        raise HTTPException(status_code=403, detail="Not authorized to cancel this order")
+    await require_order_consumer(
+        order, current_user, detail="Not authorized to cancel this order"
+    )
 
     current_state = _state_str(order.state)
     # Cancellable states come from the state machine, so the two can never drift.
@@ -419,8 +423,9 @@ async def get_consumer_orders(
 ):
     """The consumer's own orders, newest first."""
     # Ownership check: consumers may only list their own orders
-    if consumer_id != str(current_user.id):
-        raise HTTPException(status_code=403, detail="Not authorized to view these orders")
+    require_self(
+        current_user, consumer_id, detail="Not authorized to view these orders"
+    )
     limit, offset = _paged(limit, offset)
     orders = (
         await Order.find(Order.consumer_id == consumer_id)
@@ -440,8 +445,9 @@ async def get_merchant_orders(
 ):
     """Orders across every restaurant this merchant account owns, newest first."""
     # Ownership check: merchants may only list orders for their own account
-    if merchant_id != str(current_user.id):
-        raise HTTPException(status_code=403, detail="Not authorized to view these orders")
+    require_self(
+        current_user, merchant_id, detail="Not authorized to view these orders"
+    )
     # The merchant_id passed here is the User ID (from auth/me)
     # But Orders are linked to Restaurant IDs (Order.merchant_id = Restaurant.id)
     # So we must find all restaurants owned by this merchant first.
@@ -477,9 +483,9 @@ async def consumer_confirm_delivery(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    # Verify the consumer owns this order
-    if order.consumer_id != str(current_user.id):
-        raise HTTPException(status_code=403, detail="Not authorized to confirm this order")
+    await require_order_consumer(
+        order, current_user, detail="Not authorized to confirm this order"
+    )
 
     # Only allow confirmation when driver has arrived or is very close
     allowed_states = {OrderState.ARRIVED_AT_CUSTOMER.value, OrderState.PICKED_UP.value}

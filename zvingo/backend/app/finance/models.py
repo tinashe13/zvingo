@@ -1,8 +1,18 @@
 """
-DriverEarning — ledger of completed deliveries for driver reconciliation.
+DriverEarning — the driver-facing projection of completed deliveries.
 
 Each record represents one completed delivery and stores the earnings
 breakdown, masked addresses, and metadata needed for the earnings screen.
+
+This is a **projection, not the source of truth**. The authoritative record of
+money owed to a driver is the immutable double-entry ledger in
+:mod:`app.finance.ledger`; each earning here is written alongside a balanced
+``DRIVER_PAYOUT`` posting keyed by ``ledger_posting_key``. The earnings summary
+endpoint reports the ledger balance next to this projection so any divergence
+between them is visible instead of silently trusted, and
+``app.finance.reconciliation`` flags the divergence for an operator.
+
+All amounts are integer cents. Never store money here as a float.
 """
 
 import re
@@ -38,6 +48,14 @@ class DriverEarning(Document):
     driver_earning_cents: int = 0      # 85% of gross fee
     tip_cents: int = 0
     total_earning_cents: int = 0       # driver_earning + tip
+
+    # Currency the fee was charged in. USD is the pricing currency; a delivery
+    # settled in ZIG still accrues the driver's share in USD cents.
+    currency: str = "USD"
+    # Idempotency key of the matching ledger posting, so an earning can be
+    # traced to the money movement that backs it (None only when the ledger
+    # write failed — reconciliation reports those).
+    ledger_posting_key: Optional[str] = None
 
     # Metadata
     payment_method: str = "cash"       # cash / ecocash

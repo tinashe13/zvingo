@@ -59,8 +59,11 @@ class Promotion(Document):
             [("merchant_id", 1)],
             [("is_active", 1), ("ends_at", 1)],
             # Promo codes are looked up by code on every validate and every
-            # redemption; uniqueness also stops two merchants shipping the same
-            # code and racing each other's counters.
-            IndexModel([("code", 1)], unique=True, sparse=True, name="code_unique"),
+            # redemption. Sparse, because most promos have no code.
+            # NOTE: not declared unique — Beanie builds indexes at startup, and
+            # a unique build over existing duplicate codes would fail the whole
+            # boot. Uniqueness is enforced in the router on create/update;
+            # promote this to unique once the collection is known to be clean.
+            IndexModel([("code", 1)], sparse=True, name="code_lookup"),
             [("restaurant_id", 1), ("is_active", 1)],
         ]

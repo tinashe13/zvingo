@@ -56,9 +56,7 @@ def to_dict(preference: NotificationPreference) -> dict:
 async def get_preferences(user_id: str) -> dict:
     """This user's preferences, or the permissive defaults."""
     try:
-        preference = await NotificationPreference.find_one(
-            NotificationPreference.user_id == user_id
-        )
+        preference = await NotificationPreference.find_one({"user_id": user_id})
     except Exception as e:
         logger.warning(
             "Notification preferences unavailable", user_id=user_id, error=str(e)
@@ -69,9 +67,7 @@ async def get_preferences(user_id: str) -> dict:
 
 async def set_preferences(user_id: str, changes: dict) -> dict:
     """Upsert a user's preferences and return the stored result."""
-    preference = await NotificationPreference.find_one(
-        NotificationPreference.user_id == user_id
-    )
+    preference = await NotificationPreference.find_one({"user_id": user_id})
     if preference is None:
         preference = NotificationPreference(user_id=user_id)
     for field, value in changes.items():

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:consumer_app/core/app_colors.dart';
+import 'package:consumer_app/core/app_motion.dart';
 import 'package:consumer_app/core/app_spacing.dart';
 import 'package:consumer_app/core/app_text_styles.dart';
 import 'package:consumer_app/core/theme.dart';
@@ -230,7 +231,8 @@ class ZvButton extends StatelessWidget {
     );
 
     final surface = AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
+      duration: context.motion(AppMotion.fast),
+      curve: context.motionCurve(AppMotion.standard),
       height: _height,
       width: fullWidth ? double.infinity : null,
       padding: EdgeInsets.symmetric(
@@ -262,9 +264,8 @@ class ZvButton extends StatelessWidget {
       enabled: _enabled,
       label: semanticLabel ?? label,
       child: ZvTapScale(
-        onTap: _enabled ? onPressed : null,
+        childHandlesTap: true,
         behavior: HitTestBehavior.deferToChild,
-        enableFeedback: false,
         child: ConstrainedBox(
           constraints: const BoxConstraints(
             minHeight: AppSpacing.minTapTarget,
@@ -404,9 +405,8 @@ class ZvIconButton extends StatelessWidget {
         enabled: enabled,
         label: tooltip,
         child: ZvTapScale(
-          onTap: enabled ? onPressed : null,
+          childHandlesTap: true,
           behavior: HitTestBehavior.deferToChild,
-          enableFeedback: false,
           child: SizedBox(
             height: AppSpacing.minTapTarget,
             width: AppSpacing.minTapTarget,

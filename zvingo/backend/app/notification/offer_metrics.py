@@ -1,67 +1,54 @@
-"""Rolling per-driver delivery-offer counters.
+"""Reading the dispatcher's per-driver offer counters.
 
-The driver app's ratings screen shows an acceptance rate. Acceptances are
-derivable from orders (an assigned order *is* an accepted offer), but offers
-are not stored anywhere — they are pushed and forgotten. This module keeps one
-small counter per driver per day in Redis so the rate can be computed over a
-rolling window.
+The driver app's ratings screen shows an acceptance rate. Dispatch already
+keeps the numbers it needs — it bumps `offers_sent`, `offers_accepted`,
+`offers_declined` and `offers_timed_out` on the Redis hash `driver:{id}` as
+part of scoring candidates — so this module *reads* those counters rather than
+maintaining a second, divergent set.
 
-Counters are best-effort: a Redis failure degrades the acceptance rate to
-"unknown", it never fails an offer or a metrics read.
+Counters are lifetime totals and best-effort: a Redis failure degrades the
+acceptance rate to "unknown", it never fails a metrics read.
 """
-
-from datetime import timedelta
 
 import redis.asyncio as aioredis
 import structlog
 
 from app.config import settings
-from app.time_utils import utc_now
 
 logger = structlog.get_logger()
 
-#: Keep a few days more than the reporting window so a 30-day read is complete.
-COUNTER_TTL_DAYS = 35
+#: The hash dispatch writes to, and the fields it maintains.
+DRIVER_HASH = "driver:{driver_id}"
+OFFER_FIELDS = (
+    "offers_sent",
+    "offers_accepted",
+    "offers_declined",
+    "offers_timed_out",
+)
 
 
-def _key(driver_id: str, day: str) -> str:
-    return f"driver_offers:{driver_id}:{day}"
+def _as_int(value) -> int:
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return 0
 
 
-def _day(offset: int = 0) -> str:
-    return (utc_now() - timedelta(days=offset)).strftime("%Y%m%d")
-
-
-async def record_offer(driver_id: str) -> None:
-    """Count one delivery offer pushed to this driver."""
+async def offer_stats(driver_id: str) -> dict:
+    """Lifetime offer counters for one driver, zeroed when unavailable."""
+    empty = {field: 0 for field in OFFER_FIELDS}
     if not driver_id:
-        return
+        return empty
+
     client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
     try:
-        key = _key(driver_id, _day())
-        await client.incr(key)
-        await client.expire(key, COUNTER_TTL_DAYS * 24 * 3600)
+        values = await client.hmget(
+            DRIVER_HASH.format(driver_id=driver_id), list(OFFER_FIELDS)
+        )
+        return {field: _as_int(value) for field, value in zip(OFFER_FIELDS, values)}
     except Exception as e:
-        logger.warning("Offer counter write failed", driver_id=driver_id, error=str(e))
-    finally:
-        try:
-            await client.close()
-        except Exception:
-            pass
-
-
-async def offers_sent(driver_id: str, days: int = 30) -> int:
-    """Total offers pushed to this driver over the last `days` days."""
-    if not driver_id:
-        return 0
-    client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
-    try:
-        keys = [_key(driver_id, _day(offset)) for offset in range(max(days, 1))]
-        values = await client.mget(keys)
-        return sum(int(v) for v in values if v)
-    except Exception as e:
-        logger.warning("Offer counter read failed", driver_id=driver_id, error=str(e))
-        return 0
+        logger.warning("Offer counters unavailable", driver_id=driver_id, error=str(e))
+        return empty
     finally:
         try:
             await client.close()

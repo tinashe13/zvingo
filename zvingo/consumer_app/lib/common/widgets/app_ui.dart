@@ -280,7 +280,8 @@ class AppIconTile extends StatelessWidget {
 
     if (onTap == null) return row;
     return ZvTapScale(
-      onTap: onTap,
+      childHandlesTap: true,
+      behavior: HitTestBehavior.deferToChild,
       semanticLabel: title,
       child: Material(
         color: Colors.transparent,

@@ -18,7 +18,7 @@ Two loops run here:
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import timedelta
 from app.time_utils import utc_now
 from app.config import settings
 from app.order.models import Order

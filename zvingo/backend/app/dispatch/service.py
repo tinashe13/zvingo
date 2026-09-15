@@ -97,12 +97,6 @@ DEFAULT_ACCEPTANCE = 0.7
 DEFAULT_RATING_SCORE = 0.6
 DEFAULT_CONNECTIVITY = 0.5
 
-# Legacy weight names kept so existing configuration/readers do not break.
-X1_DIST = W_PROXIMITY
-X2_ACCEPT = W_ACCEPTANCE
-X3_RATING = W_RATING
-X4_CONN = W_CONNECTIVITY
-
 
 def _clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
     return max(low, min(high, value))
@@ -434,7 +428,12 @@ class DispatchService:
 
         snapshot = await self._order_snapshot(order_id)
         exclude: set = set()
-        already_offered = False
+        # Only a CREATED order needs moving into OFFERED. An order that is
+        # already OFFERED is simply being re-offered, and one a merchant has
+        # confirmed into ACCEPTED (with no driver) keeps that state while
+        # dispatch keeps looking — pushing it back to OFFERED would fight the
+        # merchant's confirmation.
+        needs_offer_transition = True
 
         if snapshot is not None:
             if not is_dispatchable(snapshot["state"], snapshot["driver_id"]):
@@ -461,7 +460,7 @@ class DispatchService:
                 await self._bump_driver_stat(holder, "offers_timed_out")
 
             exclude = set(snapshot["offered_to"]) | set(snapshot["declined_by"])
-            already_offered = snapshot["state"] is OrderState.OFFERED
+            needs_offer_transition = snapshot["state"] is OrderState.CREATED
 
         candidates = await self.score_candidates(
             pickup_lat, pickup_lng, exclude=exclude
@@ -481,7 +480,7 @@ class DispatchService:
             metrics.dispatch_no_driver_total.inc()
             return None
 
-        if not already_offered:
+        if needs_offer_transition:
             try:
                 await OrderService.transition_state(
                     order_id,
@@ -538,7 +537,6 @@ class DispatchService:
         racing on the same order wins; the loser gets an
         :class:`~app.order.state_machine.OrderConflict`.
         """
-        from app.notification.service import notification_service
         from app.order.service import OrderService
         from app.order.state_machine import OrderState
 
@@ -567,11 +565,9 @@ class DispatchService:
 
         await self._bump_driver_stat(driver_id, "offers_accepted")
 
-        # Notify consumer that driver accepted
-        await notification_service.notify_consumer(
-            order.consumer_id, order_id, "order_accepted",
-            data={"driver_id": driver_id}
-        )
+        # The consumer is told by `transition_state`, which publishes
+        # `order_accepted` (with the driver id) for every ACCEPTED transition.
+        # Announcing it again here sent the consumer two identical pushes.
 
         logger.info("Offer accepted", driver_id=driver_id, order_id=order_id)
         return order

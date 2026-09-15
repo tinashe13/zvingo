@@ -104,8 +104,9 @@ async def driver_performance(driver_id: str) -> dict:
 
     * ``completion_rate``  delivered ÷ (delivered + cancelled while assigned)
     * ``on_time_rate``     delivered within `ON_TIME_SLA_MINUTES` of acceptance
-    * ``acceptance_rate``  orders assigned ÷ offers pushed to this driver
-      (offer counts come from the notification service's rolling counters)
+    * ``acceptance_rate``  offers accepted ÷ offers pushed (lifetime, read from
+      the dispatcher's own per-driver counters — the only place both halves of
+      the ratio are counted at the same moment)
     """
     from app.order.models import Order
     from app.order.state_machine import OrderState
@@ -117,8 +118,25 @@ async def driver_performance(driver_id: str) -> dict:
         "completion_rate": None,
         "on_time_rate": None,
         "acceptance_rate": None,
-        "offers_in_window": 0,
+        "offers_received": 0,
+        "offers_accepted": 0,
     }
+
+    # Acceptance is lifetime and independent of the order window, so it is
+    # resolved first — a driver with no orders yet can still have an
+    # acceptance rate, and an order-read failure must not hide it.
+    try:
+        from app.notification.offer_metrics import offer_stats
+
+        stats = await offer_stats(driver_id)
+    except Exception as e:  # pragma: no cover - Redis optional for metrics
+        logger.warning("Offer counters unavailable", driver_id=driver_id, error=str(e))
+        stats = {}
+    metrics["offers_received"] = stats.get("offers_sent", 0)
+    metrics["offers_accepted"] = stats.get("offers_accepted", 0)
+    metrics["acceptance_rate"] = _percent(
+        metrics["offers_accepted"], metrics["offers_received"]
+    )
 
     cutoff = utc_now() - timedelta(days=METRICS_WINDOW_DAYS)
     try:
@@ -154,15 +172,5 @@ async def driver_performance(driver_id: str) -> dict:
         if (delivered_at - accepted_at) <= timedelta(minutes=ON_TIME_SLA_MINUTES):
             on_time += 1
     metrics["on_time_rate"] = _percent(on_time, measurable)
-
-    try:
-        from app.notification.offer_metrics import offers_sent
-
-        offers = await offers_sent(driver_id, days=METRICS_WINDOW_DAYS)
-    except Exception as e:  # pragma: no cover - Redis optional for metrics
-        logger.warning("Offer counters unavailable", driver_id=driver_id, error=str(e))
-        offers = 0
-    metrics["offers_in_window"] = offers
-    metrics["acceptance_rate"] = _percent(len(window_orders), offers)
 
     return metrics

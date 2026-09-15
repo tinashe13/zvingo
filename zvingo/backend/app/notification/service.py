@@ -47,10 +47,6 @@ class NotificationService:
             order_id, driver_id, driver_dist_km
         )
 
-        # Record the offer so the driver's acceptance rate is measurable.
-        from app.notification.offer_metrics import record_offer
-        await record_offer(driver_id)
-
         # ── FCM push notification ─────────────────────────────
         from app.auth.models import User
         from app.notification.preferences import should_notify

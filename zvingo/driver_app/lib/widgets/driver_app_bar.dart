@@ -62,10 +62,36 @@ class DriverAppBar extends StatelessWidget implements PreferredSizeWidget {
         (subtitle == null ? 60 : 72) + (bottom?.preferredSize.height ?? 0),
       );
 
+  /// Whether there is anything to go back to.
+  ///
+  /// Resolved through `GoRouter.maybeOf` rather than `context.canPop()` so the
+  /// bar still renders inside a plain `Navigator` — a widget test, a preview,
+  /// or a nested `MaterialApp` — instead of asserting.
+  static bool _canPop(BuildContext context) {
+    final router = GoRouter.maybeOf(context);
+    if (router != null) return router.canPop();
+    return Navigator.of(context).canPop();
+  }
+
+  static void _pop(BuildContext context, String fallbackRoute) {
+    if (_canPop(context)) {
+      final router = GoRouter.maybeOf(context);
+      if (router != null) {
+        router.pop();
+      } else {
+        Navigator.of(context).pop();
+      }
+      return;
+    }
+    // Nothing to pop — a deep link, or a flow that rewrote the stack. Send
+    // the driver somewhere real rather than leaving them stranded.
+    GoRouter.maybeOf(context)?.go(fallbackRoute);
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final canPop = showBack ?? context.canPop();
+    final canPop = showBack ?? _canPop(context);
 
     return AppBar(
       toolbarHeight: subtitle == null ? 60 : 72,
@@ -78,13 +104,7 @@ class DriverAppBar extends StatelessWidget implements PreferredSizeWidget {
                 child: DriverIconButton(
                   icon: Icons.arrow_back_rounded,
                   tooltip: 'Back',
-                  onPressed: () {
-                    if (context.canPop()) {
-                      context.pop();
-                    } else {
-                      context.go(fallbackRoute);
-                    }
-                  },
+                  onPressed: () => _pop(context, fallbackRoute),
                 ),
               ),
             )
