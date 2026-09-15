@@ -146,8 +146,11 @@ class DeliveryFlowState {
       isSwitchingShift: isSwitchingShift ?? this.isSwitchingShift,
       offerExpired: offerExpired ?? this.offerExpired,
       connectionStatus: connectionStatus ?? this.connectionStatus,
-      connectionMessage: connectionMessage ?? this.connectionMessage,
-      locationIssue: locationIssue ?? this.locationIssue,
+      connectionMessage: clearConnectionMessage
+          ? null
+          : (connectionMessage ?? this.connectionMessage),
+      locationIssue:
+          clearLocationIssue ? null : (locationIssue ?? this.locationIssue),
       locationForegroundOnly:
           locationForegroundOnly ?? this.locationForegroundOnly,
     );
@@ -184,9 +187,15 @@ class DeliveryNotifier extends StateNotifier<DeliveryFlowState> {
     _pubSub.onError = _onPubSubError;
     _statusSub = _pubSub.statusStream.listen((status) {
       if (!mounted) return;
+      final message = _pubSub.statusMessage;
       state = state.copyWith(
         connectionStatus: status,
-        connectionMessage: _pubSub.statusMessage,
+        connectionMessage: message,
+        clearConnectionMessage: message == null,
+        // The listener must not resurrect a one-shot error/notice that the UI
+        // has already shown, so re-state them as they are.
+        error: state.error,
+        notice: state.notice,
       );
     });
   }
@@ -242,10 +251,17 @@ class DeliveryNotifier extends StateNotifier<DeliveryFlowState> {
     _locationService ??= LocationService(pubSub: _pubSub);
     final result = await _locationService!.startReporting();
 
+    // "While using the app" is not a failure — tracking starts — but it does
+    // mean offers stop the moment the phone goes in a pocket, so it is
+    // surfaced through the same channel as the hard failures.
+    final issue = result.failure ??
+        (result.foregroundOnly ? LocationStartFailure.backgroundDenied : null);
+
     state = state.copyWith(
       isOnline: true,
       isSwitchingShift: false,
-      locationIssue: result.failure,
+      locationIssue: issue,
+      clearLocationIssue: issue == null,
       locationForegroundOnly: result.foregroundOnly,
       error: result.started ? null : _locationErrorFor(result.failure),
     );

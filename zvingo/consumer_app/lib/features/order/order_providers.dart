@@ -153,13 +153,12 @@ final orderRestaurantProvider = FutureProvider.autoDispose
     final data = response.data;
     if (data is! Map) return null;
     final rating = data['rating'];
+    final address = data['address']?.toString().trim();
     return OrderRestaurant(
       id: merchantId,
       name: (data['name'] ?? 'Restaurant').toString(),
       imageUrl: (data['image_url'] ?? data['banner_url'])?.toString(),
-      address: (data['address'] as String?)?.trim().isEmpty ?? true
-          ? null
-          : data['address'].toString(),
+      address: (address == null || address.isEmpty) ? null : address,
       rating: rating is num ? rating.toDouble() : null,
     );
   } catch (_) {
