@@ -189,22 +189,6 @@ final consumerOrdersProvider =
       .toList(growable: false);
 });
 
-/// Orders still in flight, newest first.
-final activeConsumerOrdersProvider =
-    Provider.autoDispose<AsyncValue<List<TrackedOrder>>>((ref) {
-  return ref.watch(consumerOrdersProvider).whenData(
-        (orders) => orders.where((o) => o.isActive).toList(growable: false),
-      );
-});
-
-/// Delivered and cancelled orders, newest first.
-final pastConsumerOrdersProvider =
-    Provider.autoDispose<AsyncValue<List<TrackedOrder>>>((ref) {
-  return ref.watch(consumerOrdersProvider).whenData(
-        (orders) => orders.where((o) => o.isTerminal).toList(growable: false),
-      );
-});
-
 // ── Chat ──────────────────────────────────────────────────────────────────
 
 /// The state of one order's chat thread.

@@ -260,9 +260,13 @@ class RestaurantCard extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(width: AppSpacing.xs),
-                    _RatingPill(
-                      rating: restaurant.rating,
-                      reviewCount: restaurant.reviewCount,
+                    Flexible(
+                      child: ShrinkToFit(
+                        child: _RatingPill(
+                          rating: restaurant.rating,
+                          reviewCount: restaurant.reviewCount,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -573,6 +577,11 @@ class _RatingPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // At large text sizes the review count is the first thing to go — the
+    // rating itself is what the decision hangs on.
+    final showCount = reviewCount != null &&
+        reviewCount! > 0 &&
+        zvTextScale(context) <= 1.3;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.xs,
@@ -592,7 +601,7 @@ class _RatingPill extends StatelessWidget {
             style: AppTextStyles.tabular(AppTextStyles.bodyStrong)
                 .copyWith(fontSize: 13),
           ),
-          if (reviewCount != null && reviewCount! > 0) ...[
+          if (showCount) ...[
             const SizedBox(width: 3),
             Text(
               '(${_compactCount(reviewCount!)})',

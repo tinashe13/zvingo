@@ -291,8 +291,8 @@ class GeocodeSearch extends _$GeocodeSearch {
     if (!GeocodeService.isSearchable(query)) return;
     try {
       final results = await ref.read(geocodeServiceProvider).search(query);
-      if (generation != _generation)
-        return; // a newer query superseded this one
+      // A newer query superseded this one.
+      if (generation != _generation) return;
       state = state.copyWith(
         query: query,
         results: results,
