@@ -29,6 +29,7 @@ import 'package:consumer_app/features/restaurant/menu_screen.dart';
 import 'package:consumer_app/features/restaurant/restaurant_map_screen.dart';
 import 'package:consumer_app/features/search/search_screen.dart';
 import 'package:consumer_app/features/shell/main_shell.dart';
+import 'package:consumer_app/features/pickup/pickup_screen.dart';
 
 part 'router.g.dart';
 
@@ -47,6 +48,7 @@ bool _isLoggedIn() {
 /// also hands it to [ZvBackGuard] as the accessible name of the fallback back
 /// affordance.
 const Map<String, String> kRouteTitles = <String, String>{
+  '/pickup': 'Pickup',
   '/offers': 'Offers',
   '/filters': 'Filters',
   '/favourites': 'Favourites',
@@ -251,7 +253,12 @@ GoRouter router(Ref ref) {
       // ── Detail routes (full-screen, above the shell) ───────────────────
       GoRoute(
         path: '/pickup',
-        redirect: (context, state) => '/map',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (context, state) => _detailPage(
+          state,
+          title: kRouteTitles['/pickup']!,
+          child: const PickupScreen(),
+        ),
       ),
       GoRoute(
         path: '/offers',

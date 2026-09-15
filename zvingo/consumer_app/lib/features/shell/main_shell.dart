@@ -4,12 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import 'package:consumer_app/common/widgets/floating_app_dock.dart';
 import 'package:consumer_app/common/widgets/zv_sticky_bars.dart';
-import 'package:consumer_app/core/app_motion.dart';
 import 'package:consumer_app/core/app_spacing.dart';
 import 'package:consumer_app/core/shell_overlays.dart';
 import 'package:consumer_app/features/address/address_provider.dart';
-import 'package:consumer_app/features/order/active_order_provider.dart';
-import 'package:consumer_app/features/order/order_status_bottom_sheet.dart';
 
 /// The five-destination navigation shell — the spine of the consumer app
 /// (§5.4).
@@ -51,13 +48,11 @@ class _MainShellState extends ConsumerState<MainShell> {
     // mounts, so the first home render already has a delivery address.
     ref.watch(locationStartupProvider);
 
-    final activeOrderId = ref.watch(activeOrderProvider);
     final cartBar = ref.watch(shellCartBarProvider);
     final orderBanner = ref.watch(shellOrderBannerProvider);
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     // Space the content must leave clear for the dock and any sticky bars.
-    final dockZone = FloatingAppDock.height + AppSpacing.md + bottomInset;
 
     return Scaffold(
       extendBody: true,
@@ -80,31 +75,6 @@ class _MainShellState extends ConsumerState<MainShell> {
                     progress: orderBanner.progress,
                     onTap: () => context.push('/order/${orderBanner.orderId}'),
                   ),
-          ),
-
-          // ── Legacy order-status card, owned by the order feature ───────
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: dockZone + AppSpacing.xl,
-            child: AnimatedSwitcher(
-              duration: context.motion(AppMotion.slow),
-              switchInCurve: context.motionCurve(AppMotion.enter),
-              switchOutCurve: context.motionCurve(AppMotion.exit),
-              transitionBuilder: (child, animation) => SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0, 1),
-                  end: Offset.zero,
-                ).animate(animation),
-                child: FadeTransition(opacity: animation, child: child),
-              ),
-              child: activeOrderId != null
-                  ? OrderStatusBottomSheet(
-                      key: const ValueKey('orderSheet'),
-                      orderId: activeOrderId,
-                    )
-                  : const SizedBox.shrink(key: ValueKey('noOrderSheet')),
-            ),
           ),
 
           // ── Sticky active-cart bar + dock (bottom) ─────────────────────

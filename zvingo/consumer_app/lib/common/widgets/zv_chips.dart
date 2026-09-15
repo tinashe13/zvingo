@@ -340,11 +340,16 @@ class ZvBadge extends StatelessWidget {
               Icon(icon, size: 12, color: _ink),
               const SizedBox(width: 3),
             ],
-            Text(
-              label.toUpperCase(),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.overline.copyWith(color: _ink),
+            // Flexible so a long label ellipsises inside a narrow card instead
+            // of overflowing it. `mainAxisSize.min` alone does not constrain
+            // the child.
+            Flexible(
+              child: Text(
+                label.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.overline.copyWith(color: _ink),
+              ),
             ),
           ],
         ),
@@ -416,11 +421,16 @@ class ZvMetaItem extends StatelessWidget {
       children: [
         Icon(icon, size: 14, color: tint ?? AppColors.textSecondary),
         const SizedBox(width: 3),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: tabularFigures ? AppTextStyles.time : AppTextStyles.caption,
+        // Flexible, not a bare Text: `mainAxisSize.min` still lets the Row ask
+        // for its children's full width, so an unconstrained Text overflows in
+        // a narrow card or at 200% text scale rather than ellipsising.
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: tabularFigures ? AppTextStyles.time : AppTextStyles.caption,
+          ),
         ),
       ],
     );

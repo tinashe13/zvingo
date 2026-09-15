@@ -264,7 +264,7 @@ class _PreviewShortcutHeaderDelegate extends SliverPersistentHeaderDelegate {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
         child: Container(
-          color: AppColors.white.withOpacity(overlapsContent ? .9 : .96),
+          color: AppColors.white.withValues(alpha: overlapsContent ? .9 : .96),
           padding:
               EdgeInsets.fromLTRB(13, 8 - progress * 3, 13, 8 - progress * 3),
           child: Row(children: [
@@ -436,7 +436,7 @@ class _MapPreview extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
               decoration: BoxDecoration(
-                  color: AppColors.white.withOpacity(.92),
+                  color: AppColors.white.withValues(alpha: .92),
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: const [
                     BoxShadow(color: Color(0x24000000), blurRadius: 14)
@@ -522,7 +522,7 @@ class _MapPreview extends StatelessWidget {
             right: 16,
             bottom: 104,
             child: AppSurface(
-              color: AppColors.white.withOpacity(.95),
+              color: AppColors.white.withValues(alpha: .95),
               padding: const EdgeInsets.all(12),
               child: Row(children: [
                 Container(
