@@ -66,6 +66,9 @@ def harness(monkeypatch):
             created.append(self)
             return self
 
+        async def save(self):
+            return self
+
         @classmethod
         def find(cls, *_a):
             return Query(created)
@@ -142,6 +145,9 @@ async def test_earnings_are_recorded_in_exact_cents_with_a_balanced_posting(harn
 
     posting = harness.postings[-1]
     assert posting.idempotency_key == "order:o1:driver-payout:driver-1"
+    # The earning is traceable back to the money movement that backs it.
+    assert record.ledger_posting_key == posting.idempotency_key
+    assert record.currency == "USD"
     driver_total = sum(
         line["amount_minor"] for line in posting.lines
         if line["party_type"].value == "DRIVER"

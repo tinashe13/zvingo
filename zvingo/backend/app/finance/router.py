@@ -444,7 +444,6 @@ async def record_earning(
     # Payment method
     payment_method = "cash"
     payment_id = None
-    currency = "USD"
     try:
         from app.payment.models import Payment
         payment = await Payment.find_one(Payment.order_id == order_id)
@@ -454,7 +453,6 @@ async def record_earning(
                 pm = pm.value
             payment_method = str(pm).lower()
             payment_id = str(payment.id)
-            currency = getattr(payment, "charge_currency", "USD")
     except Exception:
         pass
 
@@ -469,7 +467,9 @@ async def record_earning(
         tip_cents=tip_cents,
         total_earning_cents=total_cents,
         payment_method=payment_method,
-        currency=currency,
+        # The driver is owed USD regardless of the currency the customer was
+        # charged in; the FX difference is the platform's to carry.
+        currency="USD",
         distance_km=round(dist_km, 2),
         completed_at=utc_now(),
         created_date=date.today().isoformat(),

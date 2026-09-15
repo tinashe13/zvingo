@@ -35,6 +35,10 @@ logger = structlog.get_logger()
 #: order) while still terminating.
 MAX_TRANSITION_ATTEMPTS = 3
 
+#: Ceiling on the driver-load lookup that feeds dispatch scoring. Bounded so a
+#: pathological data state cannot pull an unbounded result set into memory.
+MAX_LOAD_LOOKUP = 500
+
 #: Notification event names published to the consumer per destination state.
 _CONSUMER_EVENTS = {
     OrderState.ACCEPTED: "order_accepted",
@@ -957,7 +961,7 @@ class OrderService:
                     "driver_id": {"$in": ids},
                     "state": {"$in": [s.value for s in ACTIVE_DRIVER_STATES]},
                 }
-            ).to_list()
+            ).limit(MAX_LOAD_LOOKUP).to_list()
         except Exception as e:
             logger.debug("Driver load lookup unavailable", error=str(e))
             return {}
