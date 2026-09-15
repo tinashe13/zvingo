@@ -634,25 +634,26 @@ class CheckoutFailure implements Exception {
 }
 
 // ── Derived providers ──────────────────────────────────────────────
+//
+// Hand-written rather than generated: they are one-liners over `cartProvider`,
+// and the pinned `riverpod_generator` emits a deprecated `AutoDisposeProviderRef`
+// for every generated function provider.
 
 /// Cart subtotal in exact minor units.
-@riverpod
-Money cartSubtotal(Ref ref) {
+final cartSubtotalProvider = Provider<Money>((ref) {
   final items = ref.watch(cartProvider);
   final currency = items.isEmpty ? kDefaultCurrency : items.first.currency;
   return items.map((i) => i.lineTotal).sum(currency: currency);
-}
+});
 
-/// Total units in the cart (a 3× burger counts as 3).
-@riverpod
-int cartUnitCount(Ref ref) {
+/// Total units in the cart (a 3x burger counts as 3).
+final cartUnitCountProvider = Provider<int>((ref) {
   final items = ref.watch(cartProvider);
   return items.fold(0, (sum, item) => sum + item.quantity);
-}
+});
 
 /// The restaurant the cart belongs to.
-@riverpod
-CartOwner cartOwner(Ref ref) {
+final cartOwnerProvider = Provider<CartOwner>((ref) {
   final items = ref.watch(cartProvider);
   if (items.isEmpty) return const CartOwner();
   final first = items.first;
@@ -661,9 +662,10 @@ CartOwner cartOwner(Ref ref) {
     name: first.restaurantName,
     imageUrl: first.restaurantImage,
   );
-}
+});
 
 /// Presentation-only major-unit total. Kept for existing call sites; prefer
-/// [cartSubtotalProvider].
-@riverpod
-double cartTotal(Ref ref) => ref.watch(cartSubtotalProvider).major;
+/// [cartSubtotalProvider] for anything that is added up.
+final cartTotalProvider = Provider<double>(
+  (ref) => ref.watch(cartSubtotalProvider).major,
+);

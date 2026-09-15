@@ -14,6 +14,21 @@ logger = structlog.get_logger()
 AVG_SPEED_KMH = 25.0
 
 
+def _offer_timeout_seconds() -> int:
+    """How long a driver has to answer an offer.
+
+    Read from the dispatch engine rather than duplicated, so the countdown the
+    driver sees always matches the deadline the server actually enforces.
+    Imported lazily because dispatch imports notification.
+    """
+    try:
+        from app.dispatch.service import OFFER_TIMEOUT_SECONDS
+
+        return int(OFFER_TIMEOUT_SECONDS)
+    except Exception:
+        return 45
+
+
 def haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     """Compute distance in km between two lat/lng points."""
     R = 6371.0
@@ -71,7 +86,7 @@ class NotificationService:
         # after the publish (race condition window) can still pick it up.
         # TTL matches the offer timeout so stale offers are never delivered.
         r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
-        offer_ttl = offer_data.get("timeout_seconds", 45)
+        offer_ttl = offer_data.get("timeout_seconds", _offer_timeout_seconds())
         offer_json = json.dumps({"event": "offer", **offer_data})
         try:
             await r.publish(f"driver_{driver_id}", offer_json)
@@ -190,7 +205,7 @@ class NotificationService:
             "order_type": "delivery",
             "items_summary": items_summary,
             "item_count": item_count,
-            "timeout_seconds": 45,
+            "timeout_seconds": _offer_timeout_seconds(),
             "timestamp": utc_now().isoformat(),
         }
 

@@ -242,7 +242,7 @@ async def refund_payment(
     return _payment_to_response(refunded)
 
 
-@router.post("/refunds/{payment_id}/request", response_model=RefundResponse)
+@router.post("/{payment_id}/refund-request", response_model=RefundResponse)
 async def open_refund_request(
     payment_id: str,
     body: RefundRequestCreate,

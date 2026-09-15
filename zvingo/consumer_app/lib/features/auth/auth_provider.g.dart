@@ -6,14 +6,16 @@ part of 'auth_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$userProfileHash() => r'f68f6d6e0adb93c68c0c8450513dabde823d87fa';
+String _$userProfileHash() => r'fddead59e002e862323ed297cf148e10ffdc283c';
 
-/// Provider for user profile data
+/// The signed-in user's profile.
+///
+/// Errors propagate: a screen showing a fabricated "User" profile because the
+/// request failed is worse than one showing [ZvErrorState] with a Retry.
 ///
 /// Copied from [userProfile].
 @ProviderFor(userProfile)
-final userProfileProvider =
-    AutoDisposeFutureProvider<Map<String, dynamic>>.internal(
+final userProfileProvider = AutoDisposeFutureProvider<ZvUserProfile>.internal(
   userProfile,
   name: r'userProfileProvider',
   debugGetCreateSourceHash:
@@ -22,10 +24,16 @@ final userProfileProvider =
   allTransitiveDependencies: null,
 );
 
-typedef UserProfileRef = AutoDisposeFutureProviderRef<Map<String, dynamic>>;
-String _$authHash() => r'b415bb678c637bd971cf1320223816afac804419';
+typedef UserProfileRef = AutoDisposeFutureProviderRef<ZvUserProfile>;
+String _$authHash() => r'6611c27520535f3e1db08efd7d2b70e864967616';
 
-/// See also [Auth].
+/// Every authentication action in the consumer app.
+///
+/// The notifier's `AsyncValue` state drives the submit button's spinner;
+/// failures are surfaced as an [AuthFailure] the caller renders inline, never
+/// as a raw exception or an HTTP status (§5.5).
+///
+/// Copied from [Auth].
 @ProviderFor(Auth)
 final authProvider = AutoDisposeAsyncNotifierProvider<Auth, void>.internal(
   Auth.new,

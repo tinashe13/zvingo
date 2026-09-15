@@ -59,7 +59,6 @@ async def test_get_driver_by_phone(monkeypatch):
         ("ACCEPT", "Invalid format. Use: ACCEPT <ORDER_ID>"),
         ("DECLINE", "Invalid format. Use: DECLINE <ORDER_ID>"),
         ("COMPLETE", "Invalid format. Use: COMPLETE <ORDER_ID>"),
-        ("DECLINE ABC", "Order ABC declined."),
         ("HELP", "Commands: ACCEPT <id>, DECLINE <id>, COMPLETE <id>, STATUS"),
         ("", "Commands: ACCEPT <id>, DECLINE <id>, COMPLETE <id>, STATUS"),
     ],
@@ -84,14 +83,14 @@ async def test_driver_required(command, monkeypatch):
             OrderState.ACCEPTED,
             "Order 1 accepted. Head to merchant for pickup.",
             "Order 1 not found",
-            "Cannot accept order: boom",
+            "Cannot accept order 1. It may already be taken.",
         ),
         (
             "COMPLETE 1",
             OrderState.DELIVERED,
             "Order 1 delivered. Earnings updated.",
             "Order 1 not found",
-            "Cannot complete order: boom",
+            "Cannot complete order 1. Contact support.",
         ),
     ],
 )
@@ -105,10 +104,10 @@ async def test_order_commands(
     transition = AsyncMock(return_value=SimpleNamespace(id="1"))
     monkeypatch.setattr(service.OrderService, "transition_state", transition)
     assert await SMSParser.handle_command("+263", command) == success_text
-    if state == OrderState.ACCEPTED:
-        transition.assert_awaited_with("1", state, "driver-1", driver_id="driver-1")
-    else:
-        transition.assert_awaited_with("1", state, "driver-1")
+    # Both ACCEPT and COMPLETE must scope the write to the texting driver.
+    # COMPLETE previously omitted driver_id, which let any driver complete any
+    # order by SMS; this assertion is what stops that regressing.
+    transition.assert_awaited_with("1", state, "driver-1", driver_id="driver-1")
     transition.return_value = None
     assert await SMSParser.handle_command("+263", command) == missing_text
     transition.side_effect = RuntimeError("boom")
@@ -146,3 +145,18 @@ async def test_status_command(monkeypatch):
 
     monkeypatch.setattr(SMSParser, "_get_driver_by_phone", AsyncMock(return_value=None))
     assert await SMSParser.handle_command("+263", "STATUS") == "Driver not found"
+
+
+@pytest.mark.asyncio
+async def test_decline_forwards_to_dispatch(monkeypatch):
+    """DECLINE used to return a friendly string without telling dispatch, so the
+    offer sat until it timed out while the driver believed they had released it."""
+    import app.dispatch.service as dispatch_module
+
+    driver = SimpleNamespace(id="driver-1")
+    monkeypatch.setattr(SMSParser, "_get_driver_by_phone", AsyncMock(return_value=driver))
+    decline = AsyncMock()
+    monkeypatch.setattr(dispatch_module.dispatch_service, "decline_offer", decline)
+
+    assert await SMSParser.handle_command("+263", "DECLINE ABC") == "Order ABC declined."
+    decline.assert_awaited_once_with("driver-1", "ABC")

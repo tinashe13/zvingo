@@ -1,657 +1,746 @@
-import 'dart:ui';
-
-import 'package:consumer_app/core/app_colors.dart';
-import 'package:consumer_app/core/app_text_styles.dart';
+import 'package:consumer_app/common/zvingo_ui.dart';
 import 'package:consumer_app/core/delivery_location_provider.dart';
 import 'package:consumer_app/features/address/address_selection_sheet.dart';
 import 'package:consumer_app/features/cart/cart_provider.dart';
 import 'package:consumer_app/features/filter/filter_provider.dart';
+import 'package:consumer_app/features/home/discovery_provider.dart';
+import 'package:consumer_app/features/home/widgets/category_row.dart';
 import 'package:consumer_app/features/home/widgets/promo_banner.dart';
 import 'package:consumer_app/features/home/widgets/restaurant_card.dart';
-import 'package:consumer_app/features/restaurant/restaurant_provider.dart';
-import 'package:consumer_app/common/widgets/shimmer_card.dart';
+import 'package:consumer_app/features/pickup/pickup_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+/// The first ten seconds of every session.
+///
+/// Address → search → categories → offers → ranked restaurant sections.
+/// Every section header is a [ZvSectionHeader], every list enters staggered,
+/// every load is a layout-matched skeleton and every failure offers Retry.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
+  /// Clears the dock's own bottom inset so the last card is reachable.
+  static const double _dockInset = 118;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final restaurantsAsync = ref.watch(restaurantListProvider);
-    final deliveryLoc = ref.watch(deliveryLocationNotifierProvider);
+    final location = ref.watch(deliveryLocationNotifierProvider);
+    final filters = ref.watch(filtersProvider);
     final cartItems = ref.watch(cartProvider);
-    final filterState = ref.watch(filtersProvider);
-    final selectedShortcut = filterState.categories.isEmpty
-        ? 'Hot food'
-        : filterState.categories.first;
+    final query = DiscoveryQuery.from(filters, location);
+    final feed = ref.watch(discoveryFeedProvider(query));
 
     return Scaffold(
-      backgroundColor: AppColors.white,
+      backgroundColor: AppColors.background,
       body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: _DiscoveryHeader(
-                address: deliveryLoc?.displayName ?? 'Set delivery address',
-                cartCount: cartItems.length,
-                onAddressTap: () => AddressSelectionSheet.show(context),
-                onCartTap: () => context.push('/cart'),
-                onNotificationTap: () => _showUpdatesSheet(context),
-              ),
-            ),
-            SliverPersistentHeader(
-              pinned: true,
-              delegate: _ShortcutHeaderDelegate(
-                selectedShortcut: selectedShortcut,
-                onBurgersTap: () => ref
-                    .read(filtersProvider.notifier)
-                    .selectCategory('Burgers'),
-                onPizzaTap: () =>
-                    ref.read(filtersProvider.notifier).selectCategory('Pizza'),
-                onHotFoodTap: () =>
-                    ref.read(filtersProvider.notifier).selectCategory(null),
-                onGroceryTap: () => ref
-                    .read(filtersProvider.notifier)
-                    .selectCategory('Grocery'),
-                onRidesTap: () => _showRidesSheet(context),
-              ),
-            ),
-
-            // ── Promo Banner (fetched from backend) ─────
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.only(top: 8, bottom: 8),
-                child: PromoBanner(),
-              ),
-            ),
-
-            // ── Section: Fastest Near You ───────────────
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                child: Row(
-                  children: [
-                    const Text('Fastest Near You',
-                        style: AppTextStyles.titleLarge),
-                    const Spacer(),
-                    GestureDetector(
-                      onTap: () => context.go('/search'),
-                      child: Text(
-                        'VIEW ALL',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
+        bottom: false,
+        child: RefreshIndicator(
+          color: AppColors.actionDefault,
+          onRefresh: () async {
+            ref.invalidate(discoveryFeedProvider(query));
+            await ref.read(discoveryFeedProvider(query).future);
+          },
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(
+                child: _AddressBar(
+                  address: location?.displayName,
+                  cartCount: cartItems.length,
+                  onAddressTap: () => AddressSelectionSheet.show(context),
                 ),
               ),
-            ),
-
-            // ── Horizontal fast restaurants ─────────────
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: 200,
-                child: restaurantsAsync.when(
-                  data: (restaurants) {
-                    final visible = _filterRestaurants(
-                      restaurants,
-                      filterState,
-                    );
-                    return ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: visible.length.clamp(0, 6),
-                      separatorBuilder: (_, __) => const SizedBox(width: 12),
-                      itemBuilder: (context, index) {
-                        final r = visible[index];
-                        return GestureDetector(
-                          onTap: () => context.push('/restaurant/${r.id}'),
-                          child: SizedBox(
-                            width: 155,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Image
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(14),
-                                  child: Container(
-                                    height: 120,
-                                    width: 155,
-                                    color: AppColors.primarySurface,
-                                    child: r.imageUrl.isNotEmpty
-                                        ? Image.network(r.imageUrl,
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (_, __, ___) =>
-                                                _horizontalPlaceholder(r.name))
-                                        : _horizontalPlaceholder(r.name),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  r.name,
-                                  style: AppTextStyles.titleSmall,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  r.category,
-                                  style: AppTextStyles.bodySmall
-                                      .copyWith(fontSize: 11),
-                                  maxLines: 1,
-                                ),
-                                const SizedBox(height: 2),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.access_time,
-                                        size: 12,
-                                        color: AppColors.textSecondary),
-                                    const SizedBox(width: 3),
-                                    Text(
-                                      r.deliveryTime,
-                                      style: AppTextStyles.bodySmall
-                                          .copyWith(fontSize: 11),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    const Icon(Icons.star,
-                                        size: 12, color: AppColors.rating),
-                                    const SizedBox(width: 2),
-                                    Text(
-                                      r.rating.toStringAsFixed(1),
-                                      style: AppTextStyles.bodySmall.copyWith(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                  loading: () => const ShimmerHorizontalRow(),
-                  error: (_, __) => const Center(
-                    child: Text('Could not load restaurants'),
-                  ),
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: _SearchHeaderDelegate(
+                  activeFilters: filters.activeCount,
+                  onSearchTap: () => context.go('/search'),
+                  onFilterTap: () => context.push('/filters'),
                 ),
               ),
-            ),
-
-            // ── Section: Try something new ────────────
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child:
-                    Text('Try something new', style: AppTextStyles.titleLarge),
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xs)),
+              SliverToBoxAdapter(
+                child: _FulfilmentToggle(
+                  onPickup: () => openPickupScreen(context),
+                ),
               ),
-            ),
-
-            // ── Restaurant List (vertical) ──────────────
-            restaurantsAsync.when(
-              data: (restaurants) {
-                final filtered = _filterRestaurants(restaurants, filterState);
-
-                if (filtered.isEmpty) {
-                  return SliverToBoxAdapter(
+              if (filters.hasActiveFilters)
+                SliverToBoxAdapter(
+                  child: _ActiveFilterStrip(filters: filters),
+                ),
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.sm)),
+              const SliverToBoxAdapter(child: CategoryRow()),
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.sm)),
+              const SliverToBoxAdapter(child: PromoBanner()),
+              ...feed.when(
+                loading: () => const [_HomeSkeleton()],
+                error: (error, _) => [
+                  SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Center(
-                        child: Column(
-                          children: [
-                            const Icon(Icons.filter_list_off,
-                                size: 48, color: AppColors.textHint),
-                            const SizedBox(height: 12),
-                            const Text('No restaurants match your filters',
-                                style: AppTextStyles.bodyMedium),
-                            const SizedBox(height: 8),
-                            TextButton(
-                              onPressed: () =>
-                                  ref.read(filtersProvider.notifier).reset(),
-                              child: Text('Clear Filters',
-                                  style: AppTextStyles.bodySmall.copyWith(
-                                      color: AppColors.primary,
-                                      fontWeight: FontWeight.w600)),
-                            ),
-                          ],
-                        ),
+                      padding: const EdgeInsets.only(top: AppSpacing.xxl),
+                      child: ZvErrorState(
+                        error: error,
+                        onRetry: () =>
+                            ref.invalidate(discoveryFeedProvider(query)),
                       ),
                     ),
-                  );
-                }
-
-                return SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final r = filtered[index];
-                      return RestaurantCard(
-                        restaurant: r,
-                        onTap: () => context.push('/restaurant/${r.id}'),
-                      );
-                    },
-                    childCount: filtered.length,
                   ),
-                );
-              },
-              loading: () => const SliverToBoxAdapter(
-                child: ShimmerRestaurantList(),
-              ),
-              error: (err, __) => SliverFillRemaining(
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.wifi_off,
-                          size: 48, color: AppColors.textHint),
-                      const SizedBox(height: 12),
-                      const Text('Could not load restaurants',
-                          style: AppTextStyles.bodyMedium),
-                      const SizedBox(height: 4),
-                      Text('$err',
-                          style: AppTextStyles.bodySmall,
-                          textAlign: TextAlign.center),
-                    ],
-                  ),
+                ],
+                data: (stores) => _sections(
+                  context: context,
+                  ref: ref,
+                  stores: stores,
+                  filters: filters,
+                  hasLocation: location != null,
                 ),
               ),
-            ),
-
-            const SliverToBoxAdapter(child: SizedBox(height: 118)),
-          ],
+              const SliverToBoxAdapter(child: SizedBox(height: _dockInset)),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _horizontalPlaceholder(String name) {
-    return Container(
-      color: AppColors.primarySurface,
-      child: const Center(
-        child: Icon(Icons.restaurant, size: 32, color: AppColors.primary),
-      ),
-    );
-  }
-}
+  List<Widget> _sections({
+    required BuildContext context,
+    required WidgetRef ref,
+    required List<DiscoveryRestaurant> stores,
+    required FilterState filters,
+    required bool hasLocation,
+  }) {
+    if (stores.isEmpty) {
+      return [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.xxl),
+            child: filters.hasActiveFilters
+                ? ZvEmptyState(
+                    icon: Icons.filter_alt_off_rounded,
+                    title: 'Nothing matches those filters',
+                    message:
+                        'You have ${filters.activeCount} filters on. Clearing them usually brings back a full feed.',
+                    actionLabel: 'Clear filters',
+                    onAction: () => ref.read(filtersProvider.notifier).reset(),
+                    secondaryActionLabel: 'Change filters',
+                    onSecondaryAction: () => context.push('/filters'),
+                  )
+                : ZvEmptyState(
+                    icon: Icons.storefront_outlined,
+                    title: 'No restaurants here yet',
+                    message:
+                        'We have not reached this address yet. Try a different delivery address to see what is nearby.',
+                    actionLabel: 'Change address',
+                    onAction: () => AddressSelectionSheet.show(context),
+                  ),
+          ),
+        ),
+      ];
+    }
 
-List<Restaurant> _filterRestaurants(
-  List<Restaurant> restaurants,
-  FilterState filters,
-) {
-  var filtered = restaurants.toList();
-  if (filters.freeDeliveryOnly) {
-    filtered =
-        filtered.where((restaurant) => restaurant.deliveryFee == 0).toList();
-  }
-  if (filters.minRating != null) {
-    filtered = filtered
-        .where((restaurant) => restaurant.rating >= filters.minRating!)
-        .toList();
-  }
-  if (filters.categories.isNotEmpty) {
-    filtered = filtered
-        .where((restaurant) => filters.categories.any(
-              (category) => restaurant.category
-                  .toLowerCase()
-                  .contains(category.toLowerCase()),
-            ))
-        .toList();
-  }
-  switch (filters.sortBy) {
-    case SortOption.rating:
-      filtered.sort((a, b) => b.rating.compareTo(a.rating));
-      break;
-    case SortOption.deliveryTime:
-      filtered.sort(
-        (a, b) => a.deliveryTimeMin.compareTo(b.deliveryTimeMin),
+    void open(DiscoveryRestaurant store) =>
+        context.push('/restaurant/${store.id}');
+
+    final openNow = stores.where((s) => !s.isClosed).toList();
+    final pool = openNow.isEmpty ? stores : openNow;
+
+    final nearby = [...pool.where((s) => s.distanceKm != null)]
+      ..sort((a, b) => a.distanceKm!.compareTo(b.distanceKm!));
+    final fastest = [...pool]..sort(
+        (a, b) => a.restaurant.deliveryTimeMax
+            .compareTo(b.restaurant.deliveryTimeMax),
       );
-      break;
-    case SortOption.priceLowToHigh:
-      filtered.sort((a, b) => a.deliveryFee.compareTo(b.deliveryFee));
-      break;
-    case SortOption.priceHighToLow:
-      filtered.sort((a, b) => b.deliveryFee.compareTo(a.deliveryFee));
-      break;
-    default:
-      break;
+    final deals =
+        pool.where((s) => s.hasPromotion || s.isFreeDelivery).toList();
+    final popular = [...stores]..sort((a, b) {
+        if (a.isClosed != b.isClosed) return a.isClosed ? 1 : -1;
+        return b.restaurant.rating.compareTo(a.restaurant.rating);
+      });
+
+    return [
+      if (hasLocation && nearby.isNotEmpty)
+        _RailSection(
+          title: 'Near you',
+          subtitle: 'The closest kitchens to your address',
+          stores: nearby.take(10).toList(),
+          onOpen: open,
+          onSeeAll: () {
+            ref.read(filtersProvider.notifier).setSortBy(SortOption.distance);
+            context.go('/map');
+          },
+          seeAllLabel: 'Map',
+        )
+      else if (!hasLocation)
+        SliverToBoxAdapter(
+          child: _SetAddressPrompt(
+            onTap: () => AddressSelectionSheet.show(context),
+          ),
+        ),
+      if (fastest.isNotEmpty)
+        _RailSection(
+          title: 'Fastest delivery',
+          subtitle: 'Arriving in ${fastest.first.restaurant.deliveryTimeMin}'
+              '–${fastest.first.restaurant.deliveryTimeMax} min',
+          stores: fastest.take(10).toList(),
+          onOpen: open,
+          onSeeAll: () {
+            ref
+                .read(filtersProvider.notifier)
+                .setSortBy(SortOption.deliveryTime);
+            context.go('/search');
+          },
+        ),
+      if (deals.isNotEmpty)
+        _RailSection(
+          title: 'Offers',
+          subtitle: '${deals.length} restaurants with a deal on right now',
+          stores: deals.take(10).toList(),
+          onOpen: open,
+          onSeeAll: () => context.push('/offers'),
+        ),
+      SliverToBoxAdapter(
+        child: ZvSectionHeader(
+          title: 'Popular near you',
+          subtitle: '${popular.length} restaurants',
+          actionLabel: 'Filters',
+          onAction: () => context.push('/filters'),
+        ),
+      ),
+      SliverPadding(
+        padding: const EdgeInsets.only(top: AppSpacing.xs),
+        sliver: ZvStaggeredSliverList(
+          itemCount: popular.length,
+          gap: 0,
+          itemBuilder: (context, index) => RestaurantCard.discovery(
+            popular[index],
+            onTap: () => open(popular[index]),
+          ),
+        ),
+      ),
+    ];
   }
-  return filtered;
 }
 
-class _DiscoveryHeader extends StatelessWidget {
-  const _DiscoveryHeader({
+// ── Header ────────────────────────────────────────────────────────────────
+
+class _AddressBar extends StatelessWidget {
+  const _AddressBar({
     required this.address,
     required this.cartCount,
     required this.onAddressTap,
-    required this.onCartTap,
-    required this.onNotificationTap,
   });
 
-  final String address;
+  final String? address;
   final int cartCount;
   final VoidCallback onAddressTap;
-  final VoidCallback onCartTap;
-  final VoidCallback onNotificationTap;
 
   @override
   Widget build(BuildContext context) {
+    final known = address != null && address!.isNotEmpty;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.xs,
+        AppSpacing.md,
+        0,
+      ),
+      child: Row(
         children: [
-          Row(children: [
-            Expanded(
-              child: InkWell(
-                onTap: onAddressTap,
-                borderRadius: BorderRadius.circular(10),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 3),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          Expanded(
+            child: ZvTapScale(
+              onTap: onAddressTap,
+              semanticLabel: known
+                  ? 'Delivering to $address. Tap to change'
+                  : 'Set your delivery address',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    known ? 'DELIVER TO' : 'WHERE TO?',
+                    style: AppTextStyles.overline
+                        .copyWith(color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: AppSpacing.xxxs),
+                  Row(
                     children: [
-                      Text('DELIVER NOW',
-                          style: AppTextStyles.labelSmall.copyWith(
-                              fontSize: 10, color: AppColors.textTertiary)),
-                      const SizedBox(height: 2),
-                      Row(children: [
-                        const Icon(Icons.location_on_rounded,
-                            size: 16, color: AppColors.primary),
-                        const SizedBox(width: 4),
-                        Flexible(
-                            child: Text(address,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTextStyles.titleSmall)),
-                        const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
-                      ]),
+                      const Icon(
+                        Icons.location_on_rounded,
+                        size: 18,
+                        color: AppColors.brandGreen,
+                      ),
+                      const SizedBox(width: AppSpacing.xxs),
+                      Flexible(
+                        child: Text(
+                          known ? address! : 'Set delivery address',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.h3,
+                        ),
+                      ),
+                      const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 20,
+                        color: AppColors.textSecondary,
+                      ),
                     ],
                   ),
-                ),
+                ],
               ),
             ),
-            _RoundAction(
-              icon: Icons.notifications_none_rounded,
-              badge: 0,
-              onTap: onNotificationTap,
-            ),
-            const SizedBox(width: 8),
-            _RoundAction(
-              icon: Icons.shopping_bag_outlined,
-              badge: cartCount,
-              onTap: onCartTap,
-            ),
-          ]),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          ZvIconButton(
+            icon: Icons.favorite_border_rounded,
+            tooltip: 'Saved restaurants',
+            onPressed: () => context.push('/favourites'),
+          ),
+          const SizedBox(width: AppSpacing.xxs),
+          ZvIconButton(
+            icon: Icons.shopping_bag_outlined,
+            tooltip: 'Your cart',
+            badgeCount: cartCount,
+            onPressed: () => context.push('/cart'),
+          ),
         ],
       ),
     );
   }
 }
 
-class _ShortcutHeaderDelegate extends SliverPersistentHeaderDelegate {
-  const _ShortcutHeaderDelegate({
-    required this.selectedShortcut,
-    required this.onBurgersTap,
-    required this.onPizzaTap,
-    required this.onHotFoodTap,
-    required this.onGroceryTap,
-    required this.onRidesTap,
+class _SearchHeaderDelegate extends SliverPersistentHeaderDelegate {
+  const _SearchHeaderDelegate({
+    required this.activeFilters,
+    required this.onSearchTap,
+    required this.onFilterTap,
   });
 
-  final String selectedShortcut;
-  final VoidCallback onBurgersTap;
-  final VoidCallback onPizzaTap;
-  final VoidCallback onHotFoodTap;
-  final VoidCallback onGroceryTap;
-  final VoidCallback onRidesTap;
+  final int activeFilters;
+  final VoidCallback onSearchTap;
+  final VoidCallback onFilterTap;
+
+  static const double _extent = 68;
 
   @override
-  double get maxExtent => 94;
+  double get maxExtent => _extent;
 
   @override
-  double get minExtent => 58;
+  double get minExtent => _extent;
 
   @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
-    final progress = (shrinkOffset / (maxExtent - minExtent)).clamp(0.0, 1.0);
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: Container(
-          color: AppColors.white.withOpacity(overlapsContent ? 0.9 : 0.96),
-          padding: EdgeInsets.fromLTRB(
-            13,
-            8 - (progress * 3),
-            13,
-            8 - (progress * 3),
+  Widget build(BuildContext context, double shrinkOffset, bool overlaps) {
+    return Container(
+      color: AppColors.background,
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.xs,
+        AppSpacing.md,
+        AppSpacing.xs,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: ZvSearchField(
+              hint: 'Search restaurants or dishes',
+              readOnly: true,
+              onTap: onSearchTap,
+            ),
           ),
-          child: Row(children: [
-            _ShrinkingShortcut(
-              icon: Icons.lunch_dining_rounded,
-              label: 'Burgers',
-              selected: selectedShortcut == 'Burgers',
-              progress: progress,
-              onTap: onBurgersTap,
-            ),
-            _ShrinkingShortcut(
-              icon: Icons.local_pizza_rounded,
-              label: 'Pizza',
-              selected: selectedShortcut == 'Pizza',
-              progress: progress,
-              onTap: onPizzaTap,
-            ),
-            _ShrinkingShortcut(
-              icon: Icons.restaurant_rounded,
-              label: 'Hot food',
-              selected: selectedShortcut == 'Hot food',
-              progress: progress,
-              onTap: onHotFoodTap,
-            ),
-            _ShrinkingShortcut(
-              icon: Icons.local_grocery_store_rounded,
-              label: 'Grocery',
-              selected: selectedShortcut == 'Grocery',
-              progress: progress,
-              onTap: onGroceryTap,
-            ),
-            _ShrinkingShortcut(
-              icon: Icons.directions_car_filled_rounded,
-              label: 'Rides',
-              selected: false,
-              progress: progress,
-              onTap: onRidesTap,
-            ),
-          ]),
-        ),
+          const SizedBox(width: AppSpacing.xs),
+          _FilterButton(count: activeFilters, onTap: onFilterTap),
+        ],
       ),
     );
   }
 
   @override
-  bool shouldRebuild(covariant _ShortcutHeaderDelegate oldDelegate) =>
-      selectedShortcut != oldDelegate.selectedShortcut;
+  bool shouldRebuild(covariant _SearchHeaderDelegate oldDelegate) =>
+      activeFilters != oldDelegate.activeFilters;
 }
 
-class _ShrinkingShortcut extends StatelessWidget {
-  const _ShrinkingShortcut({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.progress,
-    required this.onTap,
-  });
+class _FilterButton extends StatelessWidget {
+  const _FilterButton({required this.count, required this.onTap});
 
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final double progress;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Expanded(
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 3),
-            padding: EdgeInsets.symmetric(vertical: 10 - (progress * 5)),
-            decoration: BoxDecoration(
-              color: selected ? AppColors.selectedDark : AppColors.surfaceMuted,
-              borderRadius: BorderRadius.circular(16 - (progress * 3)),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  icon,
-                  size: 23 - (progress * 4),
-                  color: selected ? AppColors.white : AppColors.textPrimary,
-                ),
-                SizedBox(height: 6 - (progress * 4)),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.fade,
-                  softWrap: false,
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: selected ? AppColors.white : AppColors.textPrimary,
-                    fontSize: 10.5 - progress,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-}
-
-class _RoundAction extends StatelessWidget {
-  const _RoundAction(
-      {required this.icon, required this.badge, required this.onTap});
-  final IconData icon;
-  final int badge;
+  final int count;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    final active = count > 0;
+    return ZvTapScale(
       onTap: onTap,
-      customBorder: const CircleBorder(),
-      child: Stack(clipBehavior: Clip.none, children: [
-        Container(
-          width: 42,
-          height: 42,
-          decoration: const BoxDecoration(
-            color: AppColors.surfaceMuted,
-            shape: BoxShape.circle,
+      semanticLabel:
+          active ? '$count filters applied. Change filters' : 'Filters',
+      child: Container(
+        height: 52,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        decoration: BoxDecoration(
+          color: active ? AppColors.actionDefault : AppColors.surface,
+          borderRadius: AppRadius.fullAll,
+          border: Border.all(
+            color: active ? AppColors.actionDefault : AppColors.border,
           ),
-          child: Icon(icon, size: 21),
         ),
-        if (badge > 0)
-          Positioned(
-            right: -2,
-            top: -3,
-            child: Container(
-              constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              alignment: Alignment.center,
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
-              ),
-              child: Text('$badge',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.tune_rounded,
+              size: 20,
+              color: active ? AppColors.textOnDark : AppColors.textPrimary,
             ),
-          ),
-      ]),
+            if (active) ...[
+              const SizedBox(width: AppSpacing.xxs + 2),
+              Text(
+                '$count',
+                style: AppTextStyles.tabular(AppTextStyles.bodyStrong)
+                    .copyWith(color: AppColors.textOnDark),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
 
-void _showUpdatesSheet(BuildContext context) {
-  showModalBottomSheet<void>(
-    context: context,
-    builder: (context) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+class _FulfilmentToggle extends StatelessWidget {
+  const _FulfilmentToggle({required this.onPickup});
+
+  final VoidCallback onPickup;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.xxs),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceMuted,
+          borderRadius: AppRadius.fullAll,
+        ),
+        child: Row(
           children: [
-            Container(
-              width: 58,
-              height: 58,
-              decoration: BoxDecoration(
-                color: AppColors.accentSurface,
-                borderRadius: BorderRadius.circular(20),
+            Expanded(
+              child: _ModePill(
+                label: 'Delivery',
+                icon: Icons.pedal_bike_rounded,
+                selected: true,
+                onTap: null,
               ),
-              child: const Icon(Icons.notifications_none_rounded, size: 28),
             ),
-            const SizedBox(height: 16),
-            const Text('You’re all caught up', style: AppTextStyles.titleLarge),
-            const SizedBox(height: 7),
-            Text(
-              'Live order and courier updates will appear here when they arrive.',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.textSecondary,
+            Expanded(
+              child: _ModePill(
+                label: 'Pickup',
+                icon: Icons.storefront_rounded,
+                selected: false,
+                onTap: onPickup,
               ),
             ),
           ],
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
-void _showRidesSheet(BuildContext context) {
-  showModalBottomSheet<void>(
-    context: context,
-    builder: (context) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
-        child: Column(
+class _ModePill extends StatelessWidget {
+  const _ModePill({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ZvTapScale(
+      onTap: onTap,
+      semanticLabel: selected ? '$label, selected' : 'Switch to $label',
+      child: AnimatedContainer(
+        duration: context.motion(AppMotion.fast),
+        curve: AppMotion.standard,
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? AppColors.surface : Colors.transparent,
+          borderRadius: AppRadius.fullAll,
+          boxShadow: selected ? AppShadows.sm : AppShadows.none,
+        ),
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 58,
-              height: 58,
-              decoration: BoxDecoration(
-                color: AppColors.selectedDark,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Icon(
-                Icons.directions_car_filled_rounded,
-                color: AppColors.white,
-                size: 28,
-              ),
+            Icon(
+              icon,
+              size: 18,
+              color:
+                  selected ? AppColors.textPrimary : AppColors.textSecondary,
             ),
-            const SizedBox(height: 16),
-            const Text('Rides are coming to Zvingo',
-                style: AppTextStyles.titleLarge),
-            const SizedBox(height: 7),
-            Text(
-              'The shortcut is ready, but ride booking will stay disabled until the rides service is connected.',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.textSecondary,
+            const SizedBox(width: AppSpacing.xxs + 2),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.caption.copyWith(
+                  color: selected
+                      ? AppColors.textPrimary
+                      : AppColors.textSecondary,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
               ),
             ),
           ],
         ),
       ),
-    ),
-  );
+    );
+  }
+}
+
+/// The active filters, each individually removable. Makes "why am I seeing
+/// this?" and "how do I undo it?" answerable without opening the filter sheet.
+class _ActiveFilterStrip extends ConsumerWidget {
+  const _ActiveFilterStrip({required this.filters});
+
+  final FilterState filters;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final chips = filters.summary;
+    if (chips.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.xs),
+      child: SizedBox(
+        height: 40,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          itemCount: chips.length + 1,
+          separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.xs),
+          itemBuilder: (context, index) {
+            if (index == chips.length) {
+              return ZvTapScale(
+                onTap: () => ref.read(filtersProvider.notifier).reset(),
+                semanticLabel: 'Clear all filters',
+                child: Container(
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                  ),
+                  child: Text(
+                    'Clear all',
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+              );
+            }
+            final chip = chips[index];
+            return ZvTapScale(
+              onTap: () => ref
+                  .read(filtersProvider.notifier)
+                  .clearFacet(chip.facet, chip.value),
+              semanticLabel: 'Remove filter ${chip.label}',
+              child: Container(
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.actionDefault,
+                  borderRadius: AppRadius.fullAll,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      chip.label,
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.textOnDark,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.xxs + 2),
+                    const Icon(
+                      Icons.close_rounded,
+                      size: 14,
+                      color: AppColors.textOnDark,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _SetAddressPrompt extends StatelessWidget {
+  const _SetAddressPrompt({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.md,
+        0,
+      ),
+      child: ZvCard(
+        onTap: onTap,
+        color: AppColors.brandGreenSurface,
+        borderColor: AppColors.brandGreenSurface,
+        child: Row(
+          children: [
+            const Icon(
+              Icons.my_location_rounded,
+              color: AppColors.brandGreen,
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Set your delivery address',
+                      style: AppTextStyles.bodyStrong),
+                  SizedBox(height: AppSpacing.xxxs),
+                  Text(
+                    'We will show distance, accurate delivery times and what is open near you.',
+                    style: AppTextStyles.caption,
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Sections ──────────────────────────────────────────────────────────────
+
+class _RailSection extends StatelessWidget {
+  const _RailSection({
+    required this.title,
+    required this.stores,
+    required this.onOpen,
+    this.subtitle,
+    this.onSeeAll,
+    this.seeAllLabel = 'See all',
+  });
+
+  final String title;
+  final String? subtitle;
+  final List<DiscoveryRestaurant> stores;
+  final void Function(DiscoveryRestaurant) onOpen;
+  final VoidCallback? onSeeAll;
+  final String seeAllLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverToBoxAdapter(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ZvSectionHeader(
+            title: title,
+            subtitle: subtitle,
+            actionLabel: seeAllLabel,
+            onAction: onSeeAll,
+          ),
+          SizedBox(
+            height: 212,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              itemCount: stores.length,
+              separatorBuilder: (_, __) =>
+                  const SizedBox(width: AppSpacing.listGap),
+              itemBuilder: (context, index) => ZvEntrance(
+                index: index,
+                child: RestaurantRailCard(
+                  store: stores[index],
+                  onTap: () => onOpen(stores[index]),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
+      ),
+    );
+  }
+}
+
+/// Matches the real layout: two rails then the vertical feed.
+class _HomeSkeleton extends StatelessWidget {
+  const _HomeSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverToBoxAdapter(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SkeletonHeader(),
+          const SizedBox(
+            height: 212,
+            child: ZvSkeletonRail(count: 3, cardWidth: 176),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          const _SkeletonHeader(),
+          const SizedBox(
+            height: 212,
+            child: ZvSkeletonRail(count: 3, cardWidth: 176),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          const _SkeletonHeader(),
+          const ZvSkeletonList.restaurants(count: 3),
+        ],
+      ),
+    );
+  }
+}
+
+class _SkeletonHeader extends StatelessWidget {
+  const _SkeletonHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.sm,
+      ),
+      child: ZvShimmer(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ZvSkeletonBox(height: 18, width: 160),
+            SizedBox(height: AppSpacing.xs),
+            ZvSkeletonBox(height: 12, width: 110),
+          ],
+        ),
+      ),
+    );
+  }
 }

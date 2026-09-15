@@ -131,6 +131,31 @@ class Settings(BaseSettings):
     DISPATCH_RETRY_INTERVAL_SECONDS: int = 120
     DISPATCH_MAX_RETRY_ATTEMPTS: int = 10
 
+    # Dispatch engine. app/dispatch/service.py reads these through a helper that
+    # falls back to the same defaults, so the engine still runs if a value is
+    # absent — but they belong here so they are tunable per environment and show
+    # up in the settings surface like everything else.
+    #: Seconds a driver has to answer an offer before it moves to the next driver.
+    DISPATCH_OFFER_TIMEOUT_SECONDS: int = 45
+    #: Drivers who see one order at once. 1 = strictly sequential offers.
+    DISPATCH_OFFER_FANOUT: int = 1
+    #: How often the sweep expires lapsed offers.
+    DISPATCH_OFFER_SWEEP_SECONDS: int = 5
+    #: Radius of the driver geo search around the pickup point.
+    DISPATCH_SEARCH_RADIUS_KM: float = 5.0
+    #: Upper bound on candidates pulled from Redis in one search.
+    DISPATCH_MAX_CANDIDATES: int = 50
+    #: Deliveries a driver may hold before dispatch stops offering them work.
+    DISPATCH_MAX_CONCURRENT_DELIVERIES: int = 2
+    #: A driver idle this long scores maximum fairness in the offer ranking.
+    DISPATCH_FAIRNESS_WINDOW_SECONDS: int = 900
+    #: A GPS ping older than this makes a driver look unreachable.
+    DISPATCH_LOCATION_STALE_SECONDS: int = 120
+    #: Orders processed per sweep pass.
+    DISPATCH_SWEEP_BATCH_SIZE: int = 200
+    #: Scheduled orders released per poll pass.
+    SCHEDULED_RELEASE_BATCH_SIZE: int = 200
+
     # Scheduled orders — a dedicated poller dispatches them ahead of time so
     # the driver arrives for the requested slot instead of starting then.
     SCHEDULED_POLL_INTERVAL_SECONDS: int = 15

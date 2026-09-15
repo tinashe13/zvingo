@@ -21,6 +21,7 @@ import 'package:consumer_app/core/api_client.dart';
 import 'package:consumer_app/features/cart/money.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'payment_provider.g.dart';
@@ -438,8 +439,10 @@ class Payment extends _$Payment {
 }
 
 /// Live exchange rates, used to show what a USD total costs in ZIG or ZAR.
-@riverpod
-Future<Map<String, double>> exchangeRates(Ref ref) async {
+///
+/// Hand-written provider: the pinned generator emits a deprecated
+/// `AutoDisposeFutureProviderRef` for generated function providers.
+final exchangeRatesProvider = FutureProvider<Map<String, double>>((ref) async {
   final dio = ref.watch(apiClientProvider);
   try {
     final response = await dio.get('/finance/rates');
@@ -453,4 +456,4 @@ Future<Map<String, double>> exchangeRates(Ref ref) async {
     // Settlement in USD always works; the alternatives simply stay hidden.
     return const {'USD': 1.0};
   }
-}
+});
