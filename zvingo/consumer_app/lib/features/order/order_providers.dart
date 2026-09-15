@@ -73,8 +73,13 @@ final orderEventsProvider = FutureProvider.autoDispose
 /// Backed by `GET /rating/orders/{id}/review`, so the app can say "You rated
 /// this 5★" instead of prompting twice. One review per order is enforced by a
 /// unique index server-side; this is the client half of that contract.
+///
+/// Deliberately **not** `autoDispose`: the post-delivery prompt reads
+/// `.future` from a callback, and an auto-disposing provider can be torn down
+/// mid-await, which would either crash the prompt or make it re-ask someone
+/// who has already rated. One small entry per viewed order is the cheaper bug.
 final orderReviewProvider =
-    FutureProvider.autoDispose.family<OrderReview?, String>((ref, orderId) async {
+    FutureProvider.family<OrderReview?, String>((ref, orderId) async {
   final dio = ref.watch(apiClientProvider);
   try {
     final response = await dio.get<dynamic>('/rating/orders/$orderId/review');

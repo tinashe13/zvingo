@@ -1,284 +1,422 @@
 import 'dart:async';
-import 'package:consumer_app/core/app_colors.dart';
-import 'package:consumer_app/core/app_text_styles.dart';
+
+import 'package:consumer_app/common/zvingo_ui.dart';
 import 'package:consumer_app/features/cart/cart_provider.dart';
 import 'package:consumer_app/features/restaurant/restaurant_provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
+/// How in-store results are ordered.
+enum StoreSortOption {
+  relevance('Best match'),
+  priceLowToHigh('Price: low to high'),
+  priceHighToLow('Price: high to low'),
+  nameAsc('Name A–Z');
+
+  const StoreSortOption(this.label);
+  final String label;
+}
+
+/// Search inside one restaurant's menu.
+///
+/// Every control here is wired: the category chips come from the store's own
+/// menu, the price chips really filter, and sort really re-orders. Nothing on
+/// this screen is decorative.
 class StoreSearchScreen extends ConsumerStatefulWidget {
+  const StoreSearchScreen({
+    super.key,
+    required this.restaurantId,
+    required this.restaurantName,
+  });
+
   final String restaurantId;
   final String restaurantName;
-  const StoreSearchScreen(
-      {super.key, required this.restaurantId, required this.restaurantName});
 
   @override
   ConsumerState<StoreSearchScreen> createState() => _StoreSearchScreenState();
 }
 
 class _StoreSearchScreenState extends ConsumerState<StoreSearchScreen> {
-  final _searchController = TextEditingController();
+  static const Duration _debounceWindow = Duration(milliseconds: 280);
+
+  final TextEditingController _controller = TextEditingController();
   Timer? _debounce;
+
   String _query = '';
-  // Mock filters for UI match
-  final _filters = [
-    'Deals',
-    'Brands',
-    'HSA/FSA',
-    'Under \$3',
-    'Organic',
-    'Gluten Free'
-  ];
+  double? _maxPrice;
+  StoreSortOption _sort = StoreSortOption.relevance;
 
   @override
   void dispose() {
-    _searchController.dispose();
     _debounce?.cancel();
+    _controller.dispose();
     super.dispose();
   }
 
-  void _onSearchChanged(String query) {
-    if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 500), () {
-      setState(() {
-        _query = query;
-      });
+  void _onChanged(String value) {
+    _debounce?.cancel();
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      setState(() => _query = '');
+      return;
+    }
+    _debounce = Timer(_debounceWindow, () {
+      if (mounted) setState(() => _query = trimmed);
     });
+  }
+
+  void _useTerm(String term) {
+    _controller.text = term;
+    _controller.selection =
+        TextSelection.collapsed(offset: _controller.text.length);
+    _debounce?.cancel();
+    setState(() => _query = term);
+  }
+
+  List<MenuItem> _refine(List<MenuItem> items) {
+    var out = items;
+    if (_maxPrice != null) {
+      out = out.where((item) => item.price <= _maxPrice!).toList();
+    } else {
+      out = List<MenuItem>.of(out);
+    }
+    switch (_sort) {
+      case StoreSortOption.relevance:
+        break; // The backend already returns best-match first.
+      case StoreSortOption.priceLowToHigh:
+        out.sort((a, b) => a.price.compareTo(b.price));
+      case StoreSortOption.priceHighToLow:
+        out.sort((a, b) => b.price.compareTo(a.price));
+      case StoreSortOption.nameAsc:
+        out.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    }
+    return out;
+  }
+
+  void _addToCart(MenuItem item) {
+    ref.read(cartProvider.notifier).addItem(
+          item.id,
+          item.name,
+          item.price,
+          restaurantId: widget.restaurantId,
+          restaurantName: widget.restaurantName,
+          imageUrl: item.imageUrl,
+        );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${item.name} added to your cart'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Future<void> _pickSort() async {
+    final chosen = await showModalBottomSheet<StoreSortOption>(
+      context: context,
+      builder: (sheetContext) => ZvSheet(
+        title: 'Sort results',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final option in StoreSortOption.values)
+              AppIconTile(
+                icon: option == _sort
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                title: option.label,
+                onTap: () => Navigator.of(sheetContext).pop(option),
+              ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+        ),
+      ),
+    );
+    if (chosen != null && mounted) setState(() => _sort = chosen);
   }
 
   @override
   Widget build(BuildContext context) {
-    final searchAsync =
-        ref.watch(searchRestaurantItemsProvider(widget.restaurantId, _query));
+    final detail = ref.watch(restaurantDetailProvider(widget.restaurantId));
+    final results = ref.watch(
+      searchRestaurantItemsProvider(widget.restaurantId, _query),
+    );
+    final searching = _query.isNotEmpty;
 
-    return Scaffold(
-      backgroundColor: AppColors.white,
-      appBar: AppBar(
-        backgroundColor: AppColors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => context.pop(),
-        ),
-        title: Container(
-          height: 40,
-          decoration: BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: TextField(
-            controller: _searchController,
-            autofocus: true,
-            decoration: InputDecoration(
-              hintText: 'Search in store',
-              hintStyle:
-                  AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
-              border: InputBorder.none,
-              prefixIcon: const Icon(Icons.search,
-                  color: AppColors.textPrimary, size: 20),
-              suffixIcon: _query.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.close,
-                          size: 18, color: AppColors.textSecondary),
-                      onPressed: () {
-                        _searchController.clear();
-                        _onSearchChanged('');
-                      },
-                    )
-                  : null,
-              contentPadding: const EdgeInsets.symmetric(vertical: 8),
-            ),
-            style: AppTextStyles.bodyMedium,
-            onChanged: _onSearchChanged,
-          ),
-        ),
-      ),
-      body: Column(
+    return ZvScreen(
+      title: 'Search the menu',
+      subtitle: widget.restaurantName,
+      fallbackRoute: '/restaurant/${widget.restaurantId}',
+      child: Column(
         children: [
-          // ── Filter Chips ──────────────────────────────
-          Container(
-            height: 50,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: AppColors.divider)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.sm,
+              AppSpacing.md,
+              AppSpacing.xs,
             ),
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              scrollDirection: Axis.horizontal,
-              itemCount: 1 + _filters.length, // +1 for Settings icon
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade300),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.tune, size: 16),
-                  );
-                }
-                final filter = _filters[index - 1];
-                return Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    children: [
-                      if (filter == 'Deals') ...[
-                        const Icon(Icons.local_offer,
-                            size: 14, color: AppColors.textPrimary),
-                        const SizedBox(width: 4),
-                      ],
-                      Text(filter,
-                          style: AppTextStyles.bodySmall
-                              .copyWith(fontWeight: FontWeight.w600)),
-                      const SizedBox(width: 4),
-                      if (filter == 'Brands')
-                        const Icon(Icons.keyboard_arrow_down, size: 16),
-                    ],
-                  ),
-                );
-              },
+            child: ZvSearchField(
+              controller: _controller,
+              hint: 'Search ${widget.restaurantName}',
+              autofocus: true,
+              onChanged: _onChanged,
+              onSubmitted: _onChanged,
+              onClear: () => setState(() => _query = ''),
             ),
           ),
-
-          // ── Results Header ────────────────────────────
-          if (_query.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: Row(
-                children: [
-                  Text(
-                    'Results for "$_query"', // Placeholder count
-                    style: AppTextStyles.titleMedium,
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade300),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      children: [
-                        Text('Sort',
-                            style: AppTextStyles.bodySmall
-                                .copyWith(fontWeight: FontWeight.w600)),
-                        const SizedBox(width: 4),
-                        const Icon(Icons.keyboard_arrow_down, size: 16),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-          if (_query.isNotEmpty)
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE8F5E9), // Light Green
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.check_circle,
-                      size: 16, color: Color(0xFF2E7D32)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Freshness guaranteed or your money back',
-                      style: AppTextStyles.bodySmall.copyWith(
-                          color: const Color(0xFF1B5E20),
-                          fontWeight: FontWeight.w500),
-                    ),
-                  ),
-                  const Icon(Icons.info_outline,
-                      size: 16, color: Color(0xFF1B5E20)),
-                ],
-              ),
-            ),
-
-          // ── Search Results Grid ───────────────────────
+          if (searching) _refineBar(),
           Expanded(
-            child: _query.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.search,
-                            size: 64, color: AppColors.textHint),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Search for items',
-                          style: AppTextStyles.bodyMedium
-                              .copyWith(color: AppColors.textHint),
+            child: searching
+                ? results.when(
+                    loading: () => const ZvSkeletonList.menuItems(count: 6),
+                    error: (error, _) => ZvErrorState(
+                      error: error,
+                      onRetry: () => ref.invalidate(
+                        searchRestaurantItemsProvider(
+                          widget.restaurantId,
+                          _query,
                         ),
-                      ],
+                      ),
                     ),
+                    data: (items) => _resultList(_refine(items)),
                   )
-                : searchAsync.when(
-                    data: (items) {
-                      if (items.isEmpty) {
-                        return Center(
-                          child: Text(
-                            'No items found for "$_query"',
-                            style: AppTextStyles.bodyMedium
-                                .copyWith(color: AppColors.textHint),
-                          ),
-                        );
-                      }
-                      return GridView.builder(
-                        padding: const EdgeInsets.all(16),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          childAspectRatio: 0.75, // Adjust for card height
-                          crossAxisSpacing: 16,
-                          mainAxisSpacing: 24,
-                        ),
-                        itemCount: items.length,
-                        itemBuilder: (context, index) {
-                          final item = items[index];
-                          return _SearchGridItemCard(
-                            item: item,
-                            restaurantId: widget.restaurantId,
-                            restaurantName: widget.restaurantName,
-                            onAdd: () {
-                              ref.read(cartProvider.notifier).addItem(
-                                    item.id,
-                                    item.name,
-                                    item.price,
-                                    restaurantId: widget.restaurantId,
-                                    restaurantName: widget.restaurantName,
-                                    imageUrl: item.imageUrl,
-                                  );
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('${item.name} added to cart'),
-                                  duration: const Duration(seconds: 1),
-                                  behavior: SnackBarBehavior.floating,
-                                  backgroundColor: AppColors.primary,
-                                  width: 200,
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      );
-                    },
-                    loading: () =>
-                        const Center(child: CircularProgressIndicator()),
-                    error: (err, stack) => Center(child: Text('Error: $err')),
+                : _browse(detail),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _refineBar() {
+    return SizedBox(
+      height: 52,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        children: [
+          _Chip(
+            label: _sort.label,
+            icon: Icons.swap_vert_rounded,
+            selected: _sort != StoreSortOption.relevance,
+            onTap: _pickSort,
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          _Chip(
+            label: 'Under US\$3',
+            selected: _maxPrice == 3,
+            onTap: () => setState(() => _maxPrice = _maxPrice == 3 ? null : 3),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          _Chip(
+            label: 'Under US\$5',
+            selected: _maxPrice == 5,
+            onTap: () => setState(() => _maxPrice = _maxPrice == 5 ? null : 5),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          _Chip(
+            label: 'Under US\$10',
+            selected: _maxPrice == 10,
+            onTap: () =>
+                setState(() => _maxPrice = _maxPrice == 10 ? null : 10),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Before anyone types: the store's own menu categories, straight from the
+  /// menu we already fetched. No invented "top searches".
+  Widget _browse(AsyncValue<Restaurant> detail) {
+    return detail.when(
+      loading: () => const ZvSkeletonList.tiles(count: 6),
+      error: (error, _) => ZvErrorState(
+        error: error,
+        title: 'Could not load this menu',
+        onRetry: () =>
+            ref.invalidate(restaurantDetailProvider(widget.restaurantId)),
+      ),
+      data: (restaurant) {
+        final categories = <String>{
+          for (final item in restaurant.menu) item.category,
+        }.where((c) => c.trim().isNotEmpty).toList()
+          ..sort();
+
+        if (categories.isEmpty) {
+          return const ZvEmptyState(
+            icon: Icons.menu_book_outlined,
+            title: 'Nothing on the menu yet',
+            message:
+                'This restaurant has not published any items. Try another store from the home feed.',
+          );
+        }
+
+        return ListView(
+          padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
+          children: [
+            ZvSectionHeader(
+              title: 'Browse the menu',
+              subtitle: '${restaurant.menu.length} items in '
+                  '${categories.length} ${categories.length == 1 ? 'category' : 'categories'}',
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              child: Wrap(
+                spacing: AppSpacing.xs,
+                runSpacing: AppSpacing.xs,
+                children: [
+                  for (final category in categories)
+                    _Chip(
+                      label: category,
+                      selected: false,
+                      onTap: () => _useTerm(category),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _resultList(List<MenuItem> items) {
+    if (items.isEmpty) {
+      return ZvEmptyState(
+        icon: Icons.search_off_rounded,
+        title: 'No items match "$_query"',
+        message: _maxPrice != null
+            ? 'The price filter may be hiding matches. Clearing it usually helps.'
+            : 'Try a shorter word, or browse the menu by category instead.',
+        actionLabel: _maxPrice != null ? 'Clear price filter' : 'Clear search',
+        onAction: () {
+          if (_maxPrice != null) {
+            setState(() => _maxPrice = null);
+            return;
+          }
+          _controller.clear();
+          setState(() => _query = '');
+        },
+      );
+    }
+
+    return ZvStaggeredListView.builder(
+      itemCount: items.length + 1,
+      gap: 0,
+      padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return ZvSectionHeader(
+            title: 'Results',
+            subtitle: '${items.length} '
+                '${items.length == 1 ? 'item matches' : 'items match'} "$_query"',
+          );
+        }
+        final item = items[index - 1];
+        return _MenuResultRow(item: item, onAdd: () => _addToCart(item));
+      },
+    );
+  }
+}
+
+class _MenuResultRow extends StatelessWidget {
+  const _MenuResultRow({required this.item, required this.onAdd});
+
+  final MenuItem item;
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    final available = item.isAvailable;
+    return ZvCard(
+      margin: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        0,
+        AppSpacing.md,
+        AppSpacing.listGap,
+      ),
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      semanticLabel: '${item.name}, US\$${item.price.toStringAsFixed(2)}'
+          '${available ? '' : ', unavailable'}',
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.name,
+                  style: AppTextStyles.bodyStrong,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (item.description.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.xxxs),
+                  Text(
+                    item.description,
+                    style: AppTextStyles.caption
+                        .copyWith(color: AppColors.textSecondary),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
+                ],
+                const SizedBox(height: AppSpacing.xs),
+                Wrap(
+                  spacing: AppSpacing.xs,
+                  runSpacing: AppSpacing.xxs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      'US\$${item.price.toStringAsFixed(2)}',
+                      style: AppTextStyles.money,
+                    ),
+                    if (item.isGreatPrice)
+                      const ZvBadge(
+                        label: 'Great price',
+                        tone: ZvTone.success,
+                        icon: Icons.trending_down_rounded,
+                      ),
+                    if (item.approvalPercent != null)
+                      ZvMetaItem(
+                        icon: Icons.thumb_up_rounded,
+                        label: '${item.approvalPercent}%'
+                            '${item.approvalCount != null ? ' (${item.approvalCount})' : ''}',
+                      ),
+                    if (!available)
+                      const ZvStatusChip(
+                        label: 'Unavailable',
+                        icon: Icons.remove_shopping_cart_rounded,
+                        compact: true,
+                        uppercase: false,
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Column(
+            children: [
+              ZvNetworkImage(
+                url: item.imageUrl,
+                height: 72,
+                width: 72,
+                fallbackLabel: item.name,
+                fallbackIcon: Icons.fastfood_rounded,
+              ),
+              const SizedBox(height: AppSpacing.xxs),
+              ZvIconButton(
+                icon: Icons.add_rounded,
+                tooltip: available
+                    ? 'Add ${item.name} to cart'
+                    : '${item.name} is unavailable',
+                background: available
+                    ? AppColors.actionDefault
+                    : AppColors.actionDisabledBg,
+                foreground: AppColors.textOnDark,
+                onPressed: available ? onAdd : null,
+              ),
+            ],
           ),
         ],
       ),
@@ -286,124 +424,53 @@ class _StoreSearchScreenState extends ConsumerState<StoreSearchScreen> {
   }
 }
 
-class _SearchGridItemCard extends StatelessWidget {
-  final MenuItem item;
-  final String restaurantId;
-  final String restaurantName;
-  final VoidCallback onAdd;
+class _Chip extends StatelessWidget {
+  const _Chip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.icon,
+  });
 
-  const _SearchGridItemCard(
-      {required this.item,
-      required this.restaurantId,
-      required this.restaurantName,
-      required this.onAdd});
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Image Container
-        Expanded(
-          child: Stack(
-            children: [
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.primarySurface,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                width: double.infinity,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: item.imageUrl.isNotEmpty
-                      ? CachedNetworkImage(
-                          imageUrl: item.imageUrl,
-                          fit: BoxFit.cover,
-                          placeholder: (_, __) =>
-                              Container(color: AppColors.primarySurface),
-                          errorWidget: (_, __, ___) => const Icon(
-                              Icons.fastfood,
-                              color: AppColors.primary,
-                              size: 40),
-                        )
-                      : const Center(
-                          child: Icon(Icons.fastfood,
-                              color: AppColors.primary, size: 40)),
-                ),
-              ),
-              // Add Button Overlay (Bottom Right)
-              Positioned(
-                bottom: 8,
-                right: 8,
-                child: GestureDetector(
-                  onTap: onAdd,
-                  child: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: AppColors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(Icons.add,
-                        color: AppColors.primary, size: 20),
-                  ),
-                ),
-              ),
-            ],
+    final ink = selected ? AppColors.textOnDark : AppColors.textPrimary;
+    return ZvTapScale(
+      onTap: onTap,
+      semanticLabel: selected ? '$label, on' : label,
+      child: Container(
+        height: AppSpacing.minTapTarget - 4,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.actionDefault : AppColors.surface,
+          borderRadius: AppRadius.fullAll,
+          border: Border.all(
+            color: selected ? AppColors.actionDefault : AppColors.border,
           ),
         ),
-        const SizedBox(height: 8),
-
-        // Price
-        Text(
-          '\$${item.price.toStringAsFixed(2)}',
-          style:
-              AppTextStyles.titleMedium.copyWith(fontWeight: FontWeight.w700),
-        ),
-
-        // Name
-        const SizedBox(height: 4),
-        Text(
-          item.name,
-          style: AppTextStyles.bodyMedium,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-
-        // Stock / Reviews (Mocked)
-        const SizedBox(height: 4),
-        Row(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 6,
-              height: 6,
-              decoration: const BoxDecoration(
-                color: Color(0xFF2E7D32), // Green dot
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 4),
+            if (icon != null) ...[
+              Icon(icon, size: 16, color: ink),
+              const SizedBox(width: AppSpacing.xxs + 2),
+            ],
             Text(
-              'Many in stock', // Mock status
-              style: AppTextStyles.bodySmall
-                  .copyWith(color: const Color(0xFF2E7D32), fontSize: 11),
+              label,
+              style: AppTextStyles.caption.copyWith(
+                color: ink,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 2),
-        Text(
-          '5k+ recently sold', // Mock status
-          style: AppTextStyles.bodySmall
-              .copyWith(color: AppColors.textHint, fontSize: 11),
-        ),
-      ],
+      ),
     );
   }
 }

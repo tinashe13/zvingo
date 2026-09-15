@@ -16,6 +16,7 @@ import 'package:consumer_app/features/cart/cart_provider.dart';
 import 'package:consumer_app/features/cart/money.dart';
 import 'package:consumer_app/features/checkout/order_quote.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'order_placement_provider.g.dart';
@@ -78,6 +79,11 @@ class OrderPlacement extends _$OrderPlacement {
             promoCode: promoCode,
             scheduledAt: scheduledAt,
             isPickup: quote.isPickup,
+            // The basket stays put until the money has actually settled, so a
+            // customer staring at a mobile-money prompt still sees what they
+            // ordered. `_idempotencyKey` makes re-submitting a no-op, so there
+            // is no way to turn the surviving cart into a second order.
+            clearCartOnSuccess: false,
           );
       state = PlacementState(stage: PlacementStage.placed, result: result);
       return result;
@@ -132,3 +138,12 @@ const List<TipPreset> kTipPresets = <TipPreset>[
   TipPreset(200),
   TipPreset(300),
 ];
+
+/// Delivery or pickup, chosen on the restaurant screen and honoured at
+/// checkout. Kept out of the cart so switching mode never touches the basket.
+final fulfilmentModeProvider =
+    StateProvider<FulfilmentMode>((ref) => FulfilmentMode.delivery);
+
+/// The scheduled slot, when the customer picked one. Null means "as soon as
+/// possible".
+final scheduledSlotProvider = StateProvider<DateTime?>((ref) => null);

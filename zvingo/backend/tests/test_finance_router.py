@@ -127,11 +127,24 @@ async def test_merchant_analytics(monkeypatch):
         def find(cls, *args):
             return cls.queue.pop(0)
 
+    # Orders key on a RESTAURANT id, so the handler resolves the merchant's
+    # restaurants first and queries on those. Comparing Order.merchant_id to a
+    # merchant user id matches nothing -- which is what it used to do.
+    owned_restaurant = SimpleNamespace(
+        id="restaurant-1",
+        menu=[
+            SimpleNamespace(is_available=True),
+            SimpleNamespace(is_available=False),
+        ],
+    )
+
     class FakeRestaurant:
         merchant_id = Field()
-        find_one = AsyncMock(return_value=SimpleNamespace(menu=[
-            SimpleNamespace(is_available=True), SimpleNamespace(is_available=False)
-        ]))
+        queue = []
+
+        @classmethod
+        def find(cls, *args):
+            return cls.queue.pop(0)
 
     monkeypatch.setattr(module, "Order", FakeOrder)
     monkeypatch.setattr(module, "Restaurant", FakeRestaurant)
@@ -139,6 +152,7 @@ async def test_merchant_analytics(monkeypatch):
         await module.get_merchant_analytics("merchant", user("other"))
     assert exc.value.status_code == 403
 
+    FakeRestaurant.queue = [Query([owned_restaurant])]
     FakeOrder.queue = [
         Query([delivered]), Query(count=3), Query([delivered, delivered]), Query([history])
     ]
@@ -149,12 +163,21 @@ async def test_merchant_analytics(monkeypatch):
         "active_items": 1, "avg_prep_time": 20.0,
     }
 
-    FakeRestaurant.find_one.return_value = None
+    # A merchant with no restaurant has nothing to measure. avg_prep_time is
+    # None rather than the old hardcoded 18, which reported a prep time for a
+    # kitchen that had never completed an order.
+    FakeRestaurant.queue = [Query([])]
+    result = await module.get_merchant_analytics("merchant", user("merchant"))
+    assert result["active_items"] == 0
+    assert result["avg_prep_time"] is None
+    assert result["today_orders"] == 0
+
+    # Restaurant exists but nothing has reached PICKED_UP yet.
+    FakeRestaurant.queue = [Query([owned_restaurant])]
     no_events = SimpleNamespace(events=[SimpleNamespace(state=OrderState.CREATED, timestamp=now)])
     FakeOrder.queue = [Query([]), Query(count=0), Query([]), Query([no_events])]
     result = await module.get_merchant_analytics("merchant", user("merchant"))
-    assert result["active_items"] == 0
-    assert result["avg_prep_time"] == 18
+    assert result["avg_prep_time"] is None
 
 
 def earning(**overrides):

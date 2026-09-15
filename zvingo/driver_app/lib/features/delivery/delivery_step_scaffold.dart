@@ -38,11 +38,11 @@ class DeliveryStepScaffold extends ConsumerStatefulWidget {
   /// Which node of the rail to light up.
   final DeliveryState state;
 
-  /// The body.
-  final Widget child;
-
   /// The single action. Usually a [DriverSlideToConfirm].
   final Widget footer;
+
+  /// The body.
+  final Widget child;
 
   /// Optional context above [footer] — a total to collect, a warning.
   final Widget? supporting;
@@ -56,8 +56,8 @@ class DeliveryStepScaffold extends ConsumerStatefulWidget {
     super.key,
     required this.title,
     required this.state,
-    required this.child,
     required this.footer,
+    required this.child,
     this.subtitle,
     this.supporting,
     this.fillBody = false,

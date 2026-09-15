@@ -8,6 +8,7 @@ import redis.asyncio as aioredis
 from app.config import settings
 from app.catalog.models import Restaurant
 from app.location.service import LocationService
+from app.notification.stream_auth import redeem_ticket
 
 router = APIRouter()
 
@@ -33,8 +34,16 @@ async def nearby_restaurants(
 
 
 @router.get("/driver/{driver_id}/track")
-async def track_driver(request: Request, driver_id: str):
-    """SSE stream of driver location updates for consumer order tracking."""
+async def track_driver(request: Request, driver_id: str, ticket: str = ""):
+    """SSE stream of a driver's live position, for consumer order tracking.
+
+    Requires a ticket from ``POST /notification/stream-ticket`` for the
+    ``driver_loc_{driver_id}`` channel. Unauthenticated, this endpoint was a
+    stalking primitive aimed at gig workers: anyone who knew a driver id could
+    follow them in real time. The ticket is only issued to that driver, an
+    admin, or a participant in an order they are currently delivering.
+    """
+    await redeem_ticket(ticket, f"driver_loc_{driver_id}")
     async def event_generator():
         r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
         pubsub = r.pubsub()

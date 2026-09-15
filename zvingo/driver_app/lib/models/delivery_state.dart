@@ -62,17 +62,6 @@ enum DeliveryState {
         completed => 'No active delivery',
       };
 
-  /// Sync action string used by the offline sync queue.
-  String? get syncAction => switch (this) {
-        enRoutePickup => 'en_route_pickup',
-        arrivedPickup => 'arrived_pickup',
-        pickedUp => 'picked_up',
-        enRouteDelivery => 'en_route_delivery',
-        arrivedDelivery => 'arrived_delivery',
-        delivered => 'delivered',
-        _ => null,
-      };
-
   /// The backend `OrderState` this step reports, or null when the step is
   /// UI-only and the server already knows where the order is.
   ///

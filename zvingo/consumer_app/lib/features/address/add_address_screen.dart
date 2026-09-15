@@ -216,14 +216,14 @@ class _AddAddressScreenState extends ConsumerState<AddAddressScreen> {
       child: Form(
         key: _formKey,
         child: ListView(
-          padding: EdgeInsets.fromLTRB(
+          padding: const EdgeInsets.fromLTRB(
             AppSpacing.md,
             AppSpacing.md,
             AppSpacing.md,
             AppSpacing.xxl,
           ),
           children: [
-            _SectionLabel(
+            const _SectionLabel(
               step: '1',
               title: 'Where are we delivering?',
             ),
@@ -272,7 +272,7 @@ class _AddAddressScreenState extends ConsumerState<AddAddressScreen> {
               lng: _lng,
             ),
             const SizedBox(height: AppSpacing.xxl),
-            _SectionLabel(step: '2', title: 'What should we call it?'),
+            const _SectionLabel(step: '2', title: 'What should we call it?'),
             const SizedBox(height: AppSpacing.sm),
             Wrap(
               spacing: AppSpacing.xs,
@@ -310,7 +310,7 @@ class _AddAddressScreenState extends ConsumerState<AddAddressScreen> {
               ),
             ],
             const SizedBox(height: AppSpacing.xxl),
-            _SectionLabel(
+            const _SectionLabel(
               step: '3',
               title: 'How does the driver find you?',
               subtitle: 'Optional, but it is what turns a phone call into a '

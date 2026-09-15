@@ -267,6 +267,11 @@ class Restaurant {
   /// Minimum basket value the restaurant will accept, when configured.
   final double? minimumOrderUsd;
 
+  /// Whether the merchant takes pre-orders at all (`accepts_scheduled_orders`).
+  /// Distinct from [RestaurantAvailability.acceptsScheduled], which is only
+  /// true while the restaurant is *closed*.
+  final bool acceptsScheduledOrders;
+
   Restaurant({
     required this.id,
     required this.name,
@@ -292,6 +297,7 @@ class Restaurant {
     RestaurantAvailability? availability,
     this.operatingHours,
     this.minimumOrderUsd,
+    this.acceptsScheduledOrders = true,
   }) : availability = availability ?? const RestaurantAvailability(
               isOpen: true,
               status: 'open',
@@ -366,6 +372,8 @@ class Restaurant {
           : RestaurantAvailability.unknown(),
       operatingHours: json['operating_hours']?.toString(),
       minimumOrderUsd: (json['minimum_order_usd'] as num?)?.toDouble(),
+      acceptsScheduledOrders:
+          json['accepts_scheduled_orders'] as bool? ?? true,
     );
   }
 }

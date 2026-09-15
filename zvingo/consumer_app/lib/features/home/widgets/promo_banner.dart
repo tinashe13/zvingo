@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:consumer_app/common/zvingo_ui.dart';
+import 'package:consumer_app/features/home/widgets/restaurant_card.dart'
+    show zvTextScale;
 import 'package:consumer_app/features/offers/offers_provider.dart';
 import 'package:consumer_app/features/restaurant/restaurant_provider.dart';
 import 'package:flutter/material.dart';
@@ -21,8 +23,12 @@ class PromoBanner extends ConsumerStatefulWidget {
 }
 
 class _PromoBannerState extends ConsumerState<PromoBanner> {
-  static const double _height = 138;
   static const Duration _dwell = Duration(seconds: 6);
+
+  /// Card padding + icon column, plus five text rows that grow with the
+  /// viewer's font size.
+  static double _heightFor(BuildContext context) =>
+      44 + 112 * zvTextScale(context);
 
   final PageController _controller = PageController(viewportFraction: 0.88);
   Timer? _autoplay;
@@ -69,11 +75,10 @@ class _PromoBannerState extends ConsumerState<PromoBanner> {
   Widget build(BuildContext context) {
     final promosAsync = ref.watch(activePromotionsProvider);
 
+    final height = _heightFor(context);
+
     return promosAsync.when(
-      loading: () => const SizedBox(
-        height: _height,
-        child: ZvSkeletonRail(count: 2, cardWidth: 280),
-      ),
+      loading: () => _PromoSkeleton(height: height),
       // A failed promo fetch must never block the food feed; the Offers tab
       // carries the retry affordance for this data.
       error: (_, __) => const SizedBox.shrink(),
@@ -95,7 +100,7 @@ class _PromoBannerState extends ConsumerState<PromoBanner> {
               onAction: () => context.push('/offers'),
             ),
             SizedBox(
-              height: _height,
+              height: height,
               child: NotificationListener<ScrollNotification>(
                 onNotification: (notification) {
                   if (notification is ScrollStartNotification &&
@@ -146,6 +151,39 @@ class _PromoBannerState extends ConsumerState<PromoBanner> {
           ],
         );
       },
+    );
+  }
+}
+
+/// Two promo-shaped blocks — the same size as the real carousel cards.
+class _PromoSkeleton extends StatelessWidget {
+  const _PromoSkeleton({required this.height});
+
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: height,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          0,
+          AppSpacing.md,
+          AppSpacing.xs,
+        ),
+        itemCount: 2,
+        separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
+        itemBuilder: (_, __) => ZvShimmer(
+          child: ZvSkeletonBox(
+            height: height - AppSpacing.xs,
+            width: 280,
+            radius: AppRadius.lg,
+          ),
+        ),
+      ),
     );
   }
 }

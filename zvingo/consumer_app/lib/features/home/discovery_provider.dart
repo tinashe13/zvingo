@@ -391,10 +391,15 @@ class DiscoveryQuery {
   }
 
   /// Search uses `lng` where the browse endpoint uses `lon`. Not a typo.
+  ///
+  /// `GET /catalog/search` also has no `sort_by` (it always ranks by
+  /// relevance) and no `has_promotions`, so both are dropped rather than sent
+  /// and silently ignored.
   Map<String, dynamic> toSearchParameters(String query) {
     final params = toQueryParameters()
       ..remove('lon')
-      ..remove('sort_by');
+      ..remove('sort_by')
+      ..remove('has_promotions');
     return <String, dynamic>{
       'q': query,
       if (lng != null) 'lng': lng,

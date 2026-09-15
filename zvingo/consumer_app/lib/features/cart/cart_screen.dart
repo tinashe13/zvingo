@@ -1,10 +1,20 @@
-import 'package:consumer_app/core/app_colors.dart';
-import 'package:consumer_app/core/app_text_styles.dart';
-import 'package:consumer_app/common/widgets/app_ui.dart';
+/// The cart — review, adjust, and leave for checkout.
+///
+/// Everything here is reversible: a quantity change is optimistic and instant,
+/// a removal returns an undo snackbar that puts the line back at the same
+/// index, and clearing the cart asks first and is also undoable. The only
+/// irreversible step in the funnel is on the next screen.
+library;
+
+import 'package:consumer_app/common/zvingo_ui.dart';
 import 'package:consumer_app/core/delivery_location_provider.dart';
 import 'package:consumer_app/features/address/address_selection_sheet.dart';
 import 'package:consumer_app/features/cart/cart_provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:consumer_app/features/cart/money.dart';
+import 'package:consumer_app/features/checkout/order_placement_provider.dart';
+import 'package:consumer_app/features/checkout/order_quote.dart';
+import 'package:consumer_app/features/restaurant/menu/menu_item_sheet.dart';
+import 'package:consumer_app/features/restaurant/restaurant_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -14,422 +24,652 @@ class CartScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // We watch the notifier to access the grouped items getter
-    // Note: In Riverpod 2.x, watching the provider gives the state (List<CartItem>)
-    // To access the getter dealing with logic, we use ref.read on notifier or ref.watch(cartProvider) then helper
-    // Actually, we can add the getter to the Cart class (List) extension or keep logic in notifier
-    // But since I added `get groupedItems` to the `Cart` class (which extends _$Cart -> Notifier), it's on the notifier.
-    // So we need ref.watch(cartProvider.notifier).groupedItems -- BUT watching notifier doesn't trigger rebuilds on state change alone usually.
-    // Better approach: ref.watch(cartProvider) gives us the list. We can compute groups here or in a provider.
-    // I added `groupedItems` on the Notifier class `Cart`. To access it reactively, keeping state as source of truth.
+    final items = ref.watch(cartProvider);
+    final owner = ref.watch(cartOwnerProvider);
+    final subtotal = ref.watch(cartSubtotalProvider);
+    final units = ref.watch(cartUnitCountProvider);
+    final deliveryLocation = ref.watch(deliveryLocationNotifierProvider);
+    final mode = ref.watch(fulfilmentModeProvider);
 
-    final cartItems = ref.watch(cartProvider);
-    final cartNotifier = ref.read(cartProvider.notifier);
-    final groupedItems = cartNotifier
-        .groupedItems; // This getter uses `state`, but accessing it via read(notifier) might not be reactive if we don't watch state.
-    // However, `cartItems` (state) is watched, so this build method re-runs when items change.
-    // So `cartNotifier.groupedItems` will be re-evaluated with the new state.
-
-    final total = ref.watch(cartTotalProvider);
-    final deliveryLoc = ref.watch(deliveryLocationNotifierProvider);
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.close, color: AppColors.textPrimary),
-          onPressed: () => context.pop(),
+    if (items.isEmpty) {
+      return ZvScreen(
+        title: 'Your cart',
+        fallbackRoute: '/home',
+        child: ZvEmptyState(
+          icon: Icons.shopping_bag_outlined,
+          title: 'Your cart is empty',
+          message: 'Pick a restaurant and add something you fancy — '
+              'it will show up here.',
+          actionLabel: 'Browse restaurants',
+          onAction: () => context.go('/home'),
         ),
-        title: const Text('Your cart'),
-      ),
-      body: cartItems.isEmpty
-          ? _emptyState()
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                // Delivery address bar
-                _DeliveryAddressBar(
-                  deliveryLoc: deliveryLoc,
-                  onTap: () => AddressSelectionSheet.show(context),
-                ),
-                const SizedBox(height: 16),
-                ...groupedItems.entries.map((entry) {
-                  final restaurantId = entry.key;
-                  final items = entry.value;
-                  // Try to find restaurant name from first item
-                  final restaurantName = items.isNotEmpty
-                      ? items.first.restaurantName
-                      : 'Unknown Store';
-                  final restaurantImage =
-                      items.isNotEmpty ? items.first.restaurantImage : null;
-                  final storeTotal =
-                      items.fold(0.0, (sum, item) => sum + item.total);
+      );
+    }
 
-                  return _StoreCartSection(
-                    restaurantName: restaurantName ?? 'Unknown Store',
-                    restaurantImage: restaurantImage,
-                    items: items,
-                    subtotal: storeTotal,
-                    onCheckout: () {
-                      context.push('/checkout?restaurantId=$restaurantId');
-                    },
-                    ref: ref,
-                  );
-                }),
+    final restaurantAsync = owner.id == null
+        ? null
+        : ref.watch(restaurantDetailProvider(owner.id!));
+    final restaurant = restaurantAsync?.valueOrNull;
 
-                const SizedBox(height: 100), // Space for bottom bar
-              ],
-            ),
+    final minimumOrder = restaurant?.minimumOrder;
+    final shortfall = minimumOrder == null || subtotal >= minimumOrder
+        ? null
+        : minimumOrder - subtotal;
 
-      // Global Checkout button if multiple stores
-      bottomNavigationBar: (groupedItems.keys.length > 1)
-          ? SafeArea(
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, -5),
-                    ),
-                  ],
-                ),
-                child: SizedBox(
-                  height: 56,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      context.push('/checkout');
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors
-                          .textPrimary, // Dark button for "Checkout All"
-                    ),
-                    child: Text(
-                      'Checkout All — \$${(total * 1.05).toStringAsFixed(2)}',
-                      style: AppTextStyles.button,
-                    ),
-                  ),
-                ),
-              ),
-            )
-          : null, // If 1 store, the section button handles it (or we can keep bottom bar)
-      // Actually, standard pattern is bottom bar for the "Current" context.
-      // But with multi-cart, user might want to checkout just one.
-      // Strategy: Detailed per-store section with button.
-      // "Checkout All" is an aggregation.
+    final quote = OrderQuote.forCart(
+      subtotal: subtotal,
+      mode: mode,
+      restaurantDeliveryFee: restaurant?.deliveryFeeMoney,
+      restaurantLat: restaurant?.latitude,
+      restaurantLng: restaurant?.longitude,
+      dropoffLat: deliveryLocation?.lat,
+      dropoffLng: deliveryLocation?.lng,
     );
-  }
 
-  Widget _emptyState() {
-    return const AppEmptyState(
-      icon: Icons.shopping_bag_outlined,
-      title: 'Your cart is empty',
-      message: 'Add something delicious and it will show up here.',
-    );
-  }
-}
+    final closed = restaurant != null && !restaurant.isOpen;
+    final blockedReason = closed
+        ? '${restaurant.name} is ${restaurant.availability.label.toLowerCase()}. '
+            'Your cart is saved — come back when it reopens.'
+        : shortfall != null
+            ? 'Add ${shortfall.format()} more to reach '
+                '${minimumOrder!.format()}, the minimum for this restaurant.'
+            : null;
 
-class _StoreCartSection extends StatelessWidget {
-  final String restaurantName;
-  final String? restaurantImage;
-  final List<CartItem> items;
-  final double subtotal;
-  final VoidCallback onCheckout;
-  final WidgetRef ref;
-
-  const _StoreCartSection({
-    required this.restaurantName,
-    this.restaurantImage,
-    required this.items,
-    required this.subtotal,
-    required this.onCheckout,
-    required this.ref,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 24),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                restaurantImage != null && restaurantImage!.isNotEmpty
-                    ? Container(
-                        width: 24,
-                        height: 24,
-                        decoration: const BoxDecoration(shape: BoxShape.circle),
-                        child: ClipOval(
-                          child: CachedNetworkImage(
-                            imageUrl: restaurantImage!,
-                            fit: BoxFit.cover,
-                            placeholder: (_, __) => const Icon(Icons.store,
-                                color: AppColors.primary, size: 16),
-                            errorWidget: (_, __, ___) => const Icon(Icons.store,
-                                color: AppColors.primary, size: 16),
-                          ),
-                        ),
-                      )
-                    : const Icon(Icons.store, color: AppColors.primary),
-                const SizedBox(width: 8),
-                Text(restaurantName, style: AppTextStyles.titleMedium),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-
-          // Items
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: items.length,
-            itemBuilder: (context, index) {
-              final item = items[index];
-              return _CartItemTile(
-                item: item,
-                onRemove: () =>
-                    ref.read(cartProvider.notifier).removeItem(item.id),
-                onIncrement: () => ref
-                    .read(cartProvider.notifier)
-                    .addItem(item.id, item.name, item.price),
-                onDecrement: () =>
-                    ref.read(cartProvider.notifier).decrementItem(item.id),
-              );
-            },
-          ),
-
-          const Divider(height: 1),
-
-          // Footer
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Subtotal', style: AppTextStyles.bodyMedium),
-                    Text('\$${subtotal.toStringAsFixed(2)}',
-                        style: AppTextStyles.titleSmall),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: onCheckout,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.selectedDark,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text('Checkout Store'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DeliveryAddressBar extends StatelessWidget {
-  final DeliveryLocation? deliveryLoc;
-  final VoidCallback onTap;
-
-  const _DeliveryAddressBar({required this.deliveryLoc, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final hasAddress = deliveryLoc != null;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: hasAddress
-              ? AppColors.primarySurface
-              : AppColors.error.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: hasAddress
-                ? AppColors.primary.withOpacity(0.3)
-                : AppColors.error.withOpacity(0.3),
-          ),
+    return ZvScreen(
+      title: 'Your cart',
+      subtitle: owner.name,
+      fallbackRoute: '/home',
+      actions: [
+        ZvIconButton(
+          icon: Icons.delete_outline_rounded,
+          tooltip: 'Empty cart',
+          onPressed: () => _confirmClear(context, ref, items),
         ),
-        child: Row(
+      ],
+      footer: ZvStickyFooter(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Icon(
-              hasAddress ? Icons.location_on : Icons.location_off_outlined,
-              color: hasAddress ? AppColors.primary : AppColors.error,
-              size: 20,
+            Row(
+              children: [
+                Text('Subtotal',
+                    style: AppTextStyles.body
+                        .copyWith(color: AppColors.textSecondary)),
+                const Spacer(),
+                ZvAnimatedCount.money(
+                  value: subtotal.major,
+                  currency: subtotal.symbol,
+                  style: AppTextStyles.moneyLarge,
+                  semanticLabel: 'Cart subtotal',
+                ),
+              ],
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    hasAddress ? 'Delivering to' : 'No delivery address set',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: hasAddress
-                          ? AppColors.textSecondary
-                          : AppColors.error,
-                      fontSize: 11,
-                    ),
-                  ),
-                  if (hasAddress)
-                    Text(
-                      deliveryLoc!.displayName,
-                      style: AppTextStyles.titleSmall,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                ],
-              ),
-            ),
+            const SizedBox(height: AppSpacing.xxs),
             Text(
-              hasAddress ? 'Change' : 'Set Address',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: hasAddress ? AppColors.primary : AppColors.error,
-                fontWeight: FontWeight.w600,
-              ),
+              mode == FulfilmentMode.pickup
+                  ? 'Fees are confirmed at checkout. Pickup has no delivery fee.'
+                  : 'Delivery and service fees are shown in full at checkout.',
+              style: AppTextStyles.caption
+                  .copyWith(color: AppColors.textSecondary),
             ),
-            const SizedBox(width: 4),
-            Icon(
-              Icons.chevron_right,
-              size: 18,
-              color: hasAddress ? AppColors.primary : AppColors.error,
+            const SizedBox(height: AppSpacing.sm),
+            ZvButton.primary(
+              label: 'Go to checkout',
+              trailingIcon: Icons.arrow_forward_rounded,
+              onPressed: blockedReason != null
+                  ? null
+                  : () => context.push('/checkout'),
+              disabledReason: blockedReason,
             ),
           ],
         ),
       ),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.xl),
+        children: [
+          _FulfilmentToggle(
+            mode: mode,
+            onChanged: (value) =>
+                ref.read(fulfilmentModeProvider.notifier).state = value,
+          ),
+          if (mode == FulfilmentMode.delivery) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _DeliveryAddressCard(
+              location: deliveryLocation,
+              onTap: () => AddressSelectionSheet.show(context),
+            ),
+          ],
+          if (closed) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _CartNotice(
+              tone: ZvTone.warning,
+              icon: Icons.schedule_rounded,
+              message: blockedReason!,
+            ),
+          ] else if (shortfall != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _CartNotice(
+              tone: ZvTone.info,
+              icon: Icons.add_shopping_cart_rounded,
+              message: blockedReason!,
+              actionLabel: 'Add more items',
+              onAction: owner.id == null
+                  ? null
+                  : () => context.push('/restaurant/${owner.id}'),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '$units item${units == 1 ? '' : 's'}',
+                  style: AppTextStyles.h3,
+                ),
+              ),
+              if (owner.id != null)
+                ZvButton.tertiary(
+                  label: 'Add more',
+                  icon: Icons.add_rounded,
+                  onPressed: () => context.push('/restaurant/${owner.id}'),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          ZvStaggeredList(
+            children: [
+              for (final item in items)
+                _CartLineTile(
+                  key: ValueKey(item.lineId),
+                  item: item,
+                  restaurant: restaurant,
+                  onQuantityChanged: (value) => ref
+                      .read(cartProvider.notifier)
+                      .setQuantity(item.lineId, value),
+                  onRemove: () => _removeWithUndo(context, ref, item),
+                  onEdit: restaurant == null
+                      ? null
+                      : () => _edit(context, ref, restaurant, item),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          _PreviewBreakdown(quote: quote, mode: mode),
+        ],
+      ),
     );
+  }
+
+  // ── Actions ────────────────────────────────────────────────────
+
+  void _removeWithUndo(BuildContext context, WidgetRef ref, CartItem item) {
+    final snapshot = ref.read(cartProvider.notifier).removeLine(item.lineId);
+    if (snapshot == null) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('${item.name} removed'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 6),
+          action: SnackBarAction(
+            label: 'Undo',
+            onPressed: () =>
+                ref.read(cartProvider.notifier).restoreLine(snapshot),
+          ),
+        ),
+      );
+  }
+
+  Future<void> _confirmClear(
+    BuildContext context,
+    WidgetRef ref,
+    List<CartItem> items,
+  ) async {
+    final snapshot = List<CartItem>.from(items);
+    final confirmed = await showZvConfirmSheet(
+      context,
+      title: 'Empty your cart?',
+      consequence: 'All ${items.length} '
+          'item${items.length == 1 ? '' : 's'} will be removed. '
+          'You can undo this straight afterwards.',
+      confirmLabel: 'Empty cart',
+      cancelLabel: 'Keep my cart',
+      icon: Icons.delete_outline_rounded,
+    );
+    if (confirmed != true) return;
+    ref.read(cartProvider.notifier).clear();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: const Text('Cart emptied'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 6),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () => ref.read(cartProvider.notifier).restoreAll(snapshot),
+        ),
+      ));
+  }
+
+  Future<void> _edit(
+    BuildContext context,
+    WidgetRef ref,
+    Restaurant restaurant,
+    CartItem line,
+  ) async {
+    MenuItem? menuItem;
+    for (final candidate in restaurant.menu) {
+      if (candidate.id == line.itemId) {
+        menuItem = candidate;
+        break;
+      }
+    }
+    if (menuItem == null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            '${line.name} is no longer on ${restaurant.name}\'s menu. '
+            'Remove it to carry on.',
+          ),
+        ));
+      return;
+    }
+    final updated = await showMenuItemSheet(
+      context,
+      item: menuItem,
+      restaurant: restaurant,
+      editing: line,
+    );
+    if (updated == null) return;
+    ref.read(cartProvider.notifier).replaceLine(line.lineId, updated);
   }
 }
 
-class _CartItemTile extends StatelessWidget {
-  final CartItem item;
-  final VoidCallback onRemove;
-  final VoidCallback onIncrement;
-  final VoidCallback onDecrement;
+// ── Pieces ───────────────────────────────────────────────────────
 
-  const _CartItemTile({
-    required this.item,
-    required this.onRemove,
-    required this.onIncrement,
-    required this.onDecrement,
-  });
+class _FulfilmentToggle extends StatelessWidget {
+  const _FulfilmentToggle({required this.mode, required this.onChanged});
+
+  final FulfilmentMode mode;
+  final ValueChanged<FulfilmentMode> onChanged;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      color: AppColors.surface,
+      height: 48,
+      padding: const EdgeInsets.all(AppSpacing.xxs),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceMuted,
+        borderRadius: AppRadius.fullAll,
+      ),
       child: Row(
         children: [
-          // Thumbnail
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: AppColors.primarySurface,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: item.imageUrl != null && item.imageUrl!.isNotEmpty
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: CachedNetworkImage(
-                      imageUrl: item.imageUrl!,
-                      fit: BoxFit.cover,
-                      placeholder: (_, __) => const Padding(
-                          padding: EdgeInsets.all(12),
-                          child: Icon(Icons.fastfood,
-                              color: AppColors.primary, size: 20)),
-                      errorWidget: (_, __, ___) => const Padding(
-                          padding: EdgeInsets.all(12),
-                          child: Icon(Icons.fastfood,
-                              color: AppColors.primary, size: 20)),
-                    ),
-                  )
-                : const Icon(Icons.fastfood,
-                    color: AppColors.primary, size: 20),
-          ),
-          const SizedBox(width: 12),
+          _segment(context, FulfilmentMode.delivery, 'Delivery',
+              Icons.delivery_dining_outlined),
+          _segment(context, FulfilmentMode.pickup, 'Pickup',
+              Icons.storefront_outlined),
+        ],
+      ),
+    );
+  }
 
-          // Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item.name,
-                    style: AppTextStyles.bodyMedium
-                        .copyWith(fontWeight: FontWeight.w600)),
-                Text(
-                  '\$${item.total.toStringAsFixed(2)}',
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: AppColors.primary),
-                ),
-              ],
-            ),
+  Widget _segment(
+      BuildContext context, FulfilmentMode value, String label, IconData icon) {
+    final selected = mode == value;
+    return Expanded(
+      child: ZvTapScale(
+        onTap: () => onChanged(value),
+        semanticLabel: label,
+        child: AnimatedContainer(
+          duration: context.motion(AppMotion.fast),
+          curve: context.motionCurve(AppMotion.standard),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? AppColors.actionDefault : Colors.transparent,
+            borderRadius: AppRadius.fullAll,
           ),
-
-          // Qty stepper + remove button
-          Row(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              IconButton(
-                icon: const Icon(Icons.remove_rounded,
-                    size: 18, color: AppColors.textPrimary),
-                onPressed: onDecrement,
-                style: IconButton.styleFrom(
-                  backgroundColor: AppColors.surfaceMuted,
-                  minimumSize: const Size(36, 36),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child:
-                    Text('${item.quantity}', style: AppTextStyles.bodyMedium),
-              ),
-              IconButton(
-                icon: const Icon(Icons.add_rounded,
-                    size: 18, color: AppColors.textPrimary),
-                onPressed: onIncrement,
-                style: IconButton.styleFrom(
-                  backgroundColor: AppColors.surfaceMuted,
-                  minimumSize: const Size(36, 36),
-                ),
-              ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: onRemove,
-                child: Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: AppColors.error.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child:
-                      const Icon(Icons.close, size: 14, color: AppColors.error),
+              Icon(icon,
+                  size: 18,
+                  color: selected
+                      ? AppColors.textOnDark
+                      : AppColors.textSecondary),
+              const SizedBox(width: AppSpacing.xs),
+              Text(
+                label,
+                style: AppTextStyles.button.copyWith(
+                  color: selected
+                      ? AppColors.textOnDark
+                      : AppColors.textSecondary,
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DeliveryAddressCard extends StatelessWidget {
+  const _DeliveryAddressCard({required this.location, required this.onTap});
+
+  final DeliveryLocation? location;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasAddress = location != null;
+    return ZvCard(
+      onTap: onTap,
+      color: hasAddress ? AppColors.surface : AppColors.warningSurface,
+      borderColor: hasAddress ? AppColors.border : AppColors.warning,
+      child: Row(
+        children: [
+          Icon(
+            hasAddress
+                ? Icons.location_on_outlined
+                : Icons.wrong_location_outlined,
+            size: 20,
+            color: hasAddress ? AppColors.textSecondary : AppColors.warning,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  hasAddress ? 'Delivering to' : 'No delivery address yet',
+                  style: AppTextStyles.caption.copyWith(
+                    color:
+                        hasAddress ? AppColors.textSecondary : AppColors.warning,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  hasAddress
+                      ? location!.displayName
+                      : 'Set one so we know where to bring your order',
+                  style: AppTextStyles.bodyStrong,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Text(hasAddress ? 'Change' : 'Set',
+              style: AppTextStyles.button
+                  .copyWith(color: AppColors.actionDefault)),
+          const Icon(Icons.chevron_right_rounded,
+              size: 20, color: AppColors.textSecondary),
         ],
       ),
+    );
+  }
+}
+
+class _CartLineTile extends StatelessWidget {
+  const _CartLineTile({
+    super.key,
+    required this.item,
+    required this.restaurant,
+    required this.onQuantityChanged,
+    required this.onRemove,
+    this.onEdit,
+  });
+
+  final CartItem item;
+  final Restaurant? restaurant;
+  final ValueChanged<int> onQuantityChanged;
+  final VoidCallback onRemove;
+  final VoidCallback? onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final soldOut = restaurant != null &&
+        !restaurant!.menu.any((m) => m.id == item.itemId && m.isAvailable);
+
+    return ZvCard(
+      onTap: onEdit,
+      semanticLabel: '${item.name}, quantity ${item.quantity}, '
+          '${item.lineTotal.format()}',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: AppRadius.smAll,
+                child: SizedBox(
+                  width: 56,
+                  height: 56,
+                  child: ZvNetworkImage(
+                    url: item.imageUrl,
+                    fit: BoxFit.cover,
+                    borderRadius: BorderRadius.zero,
+                    fallbackIcon: Icons.restaurant_menu_rounded,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item.name,
+                        style: AppTextStyles.bodyStrong,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                    if (item.choices.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        item.choicesSummary,
+                        style: AppTextStyles.caption
+                            .copyWith(color: AppColors.textSecondary),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                    if ((item.specialInstructions ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.edit_note_rounded,
+                              size: 14, color: AppColors.textSecondary),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              item.specialInstructions!,
+                              style: AppTextStyles.caption
+                                  .copyWith(color: AppColors.textSecondary),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: AppSpacing.xxs),
+                    Text(
+                      item.quantity > 1
+                          ? '${item.unitPrice.format()} each'
+                          : item.unitPrice.format(),
+                      style: AppTextStyles.caption
+                          .copyWith(color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              ZvAnimatedCount.money(
+                value: item.lineTotal.major,
+                currency: item.lineTotal.symbol,
+                style: AppTextStyles.money,
+                semanticLabel: 'Line total for ${item.name}',
+              ),
+            ],
+          ),
+          if (soldOut) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Row(
+              children: [
+                const Icon(Icons.remove_shopping_cart_outlined,
+                    size: 16, color: AppColors.warning),
+                const SizedBox(width: AppSpacing.xxs),
+                Expanded(
+                  child: Text(
+                    'Sold out since you added it — remove it to check out.',
+                    style: AppTextStyles.caption
+                        .copyWith(color: AppColors.warning),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: AppSpacing.xs),
+          Row(
+            children: [
+              ZvStepper(
+                value: item.quantity,
+                min: 1,
+                max: 50,
+                compact: true,
+                deleteAtMin: true,
+                onDelete: onRemove,
+                semanticLabel: 'Quantity of ${item.name}',
+                onChanged: onQuantityChanged,
+              ),
+              const Spacer(),
+              if (onEdit != null)
+                ZvButton.tertiary(
+                  label: item.isCustomised ? 'Edit choices' : 'Add a note',
+                  icon: Icons.tune_rounded,
+                  onPressed: onEdit,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CartNotice extends StatelessWidget {
+  const _CartNotice({
+    required this.tone,
+    required this.icon,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final ZvTone tone;
+  final IconData icon;
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: tone.surface,
+        borderRadius: AppRadius.mdAll,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: tone.foreground),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(message, style: AppTextStyles.caption),
+                if (actionLabel != null && onAction != null) ...[
+                  const SizedBox(height: AppSpacing.xxs),
+                  ZvButton.tertiary(label: actionLabel!, onPressed: onAction),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A read-only preview of the fee breakdown so the cart is not a black box.
+/// Checkout owns the authoritative version.
+class _PreviewBreakdown extends StatelessWidget {
+  const _PreviewBreakdown({required this.quote, required this.mode});
+
+  final OrderQuote quote;
+  final FulfilmentMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    return ZvCard(
+      color: AppColors.background,
+      child: Column(
+        children: [
+          _row('Subtotal', quote.subtotal),
+          const SizedBox(height: AppSpacing.xs),
+          _row(
+            mode == FulfilmentMode.pickup ? 'Delivery (pickup)' : 'Delivery fee',
+            quote.deliveryFee,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          _row('Service fee', quote.serviceFee),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+            child: Divider(height: 1),
+          ),
+          Row(
+            children: [
+              const Text('Estimated total', style: AppTextStyles.bodyStrong),
+              const Spacer(),
+              Text(quote.totalBeforeTip.format(),
+                  style: AppTextStyles.bodyStrong),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xxs),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Before any tip or promo code. Confirmed on the next screen.',
+              style: AppTextStyles.caption
+                  .copyWith(color: AppColors.textSecondary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _row(String label, Money amount) {
+    return Row(
+      children: [
+        Text(label,
+            style:
+                AppTextStyles.body.copyWith(color: AppColors.textSecondary)),
+        const Spacer(),
+        Text(amount.isZero ? 'Free' : amount.format(),
+            style: AppTextStyles.money),
+      ],
     );
   }
 }

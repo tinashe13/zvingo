@@ -153,10 +153,14 @@ class HomeScreen extends ConsumerWidget {
       );
     final deals =
         pool.where((s) => s.hasPromotion || s.isFreeDelivery).toList();
-    final popular = [...stores]..sort((a, b) {
-        if (a.isClosed != b.isClosed) return a.isClosed ? 1 : -1;
-        return b.restaurant.rating.compareTo(a.restaurant.rating);
-      });
+
+    // The main feed keeps the order the backend ranked or sorted it into —
+    // re-sorting here would silently undo the user's chosen sort. The only
+    // change is that closed stores sink to the bottom.
+    final feed = <DiscoveryRestaurant>[
+      ...stores.where((s) => !s.isClosed),
+      ...stores.where((s) => s.isClosed),
+    ];
 
     return [
       if (hasLocation && nearby.isNotEmpty)
@@ -165,11 +169,8 @@ class HomeScreen extends ConsumerWidget {
           subtitle: 'The closest kitchens to your address',
           stores: nearby.take(10).toList(),
           onOpen: open,
-          onSeeAll: () {
-            ref.read(filtersProvider.notifier).setSortBy(SortOption.distance);
-            context.go('/map');
-          },
-          seeAllLabel: 'Map',
+          onSeeAll: () => context.go('/map'),
+          seeAllLabel: 'See on map',
         )
       else if (!hasLocation)
         SliverToBoxAdapter(
@@ -184,12 +185,10 @@ class HomeScreen extends ConsumerWidget {
               '–${fastest.first.restaurant.deliveryTimeMax} min',
           stores: fastest.take(10).toList(),
           onOpen: open,
-          onSeeAll: () {
-            ref
-                .read(filtersProvider.notifier)
-                .setSortBy(SortOption.deliveryTime);
-            context.go('/search');
-          },
+          onSeeAll: () => ref
+              .read(filtersProvider.notifier)
+              .setSortBy(SortOption.deliveryTime),
+          seeAllLabel: 'Fastest first',
         ),
       if (deals.isNotEmpty)
         _RailSection(
@@ -198,11 +197,16 @@ class HomeScreen extends ConsumerWidget {
           stores: deals.take(10).toList(),
           onOpen: open,
           onSeeAll: () => context.push('/offers'),
+          seeAllLabel: 'All offers',
         ),
       SliverToBoxAdapter(
         child: ZvSectionHeader(
-          title: 'Popular near you',
-          subtitle: '${popular.length} restaurants',
+          title: filters.sortBy == SortOption.recommended
+              ? 'Popular near you'
+              : 'All restaurants',
+          subtitle: '${feed.length} '
+              '${feed.length == 1 ? 'restaurant' : 'restaurants'} · '
+              '${filters.sortBy.label}',
           actionLabel: 'Filters',
           onAction: () => context.push('/filters'),
         ),
@@ -210,11 +214,11 @@ class HomeScreen extends ConsumerWidget {
       SliverPadding(
         padding: const EdgeInsets.only(top: AppSpacing.xs),
         sliver: ZvStaggeredSliverList(
-          itemCount: popular.length,
+          itemCount: feed.length,
           gap: 0,
           itemBuilder: (context, index) => RestaurantCard.discovery(
-            popular[index],
-            onTap: () => open(popular[index]),
+            feed[index],
+            onTap: () => open(feed[index]),
           ),
         ),
       ),
@@ -416,13 +420,13 @@ class _FulfilmentToggle extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.xxs),
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: AppColors.surfaceMuted,
           borderRadius: AppRadius.fullAll,
         ),
         child: Row(
           children: [
-            Expanded(
+            const Expanded(
               child: _ModePill(
                 label: 'Delivery',
                 icon: Icons.pedal_bike_rounded,
@@ -556,7 +560,7 @@ class _ActiveFilterStrip extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.sm,
                 ),
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: AppColors.actionDefault,
                   borderRadius: AppRadius.fullAll,
                 ),
@@ -605,14 +609,14 @@ class _SetAddressPrompt extends StatelessWidget {
         onTap: onTap,
         color: AppColors.brandGreenSurface,
         borderColor: AppColors.brandGreenSurface,
-        child: Row(
+        child: const Row(
           children: [
-            const Icon(
+            Icon(
               Icons.my_location_rounded,
               color: AppColors.brandGreen,
             ),
-            const SizedBox(width: AppSpacing.sm),
-            const Expanded(
+            SizedBox(width: AppSpacing.sm),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -626,7 +630,7 @@ class _SetAddressPrompt extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded),
+            Icon(Icons.chevron_right_rounded),
           ],
         ),
       ),
@@ -666,7 +670,7 @@ class _RailSection extends StatelessWidget {
             onAction: onSeeAll,
           ),
           SizedBox(
-            height: 212,
+            height: restaurantRailHeight(context),
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
@@ -695,20 +699,21 @@ class _HomeSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final railHeight = restaurantRailHeight(context);
     return SliverToBoxAdapter(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const _SkeletonHeader(),
-          const SizedBox(
-            height: 212,
-            child: ZvSkeletonRail(count: 3, cardWidth: 176),
+          SizedBox(
+            height: railHeight,
+            child: const ZvSkeletonRail(count: 3, cardWidth: 176),
           ),
           const SizedBox(height: AppSpacing.md),
           const _SkeletonHeader(),
-          const SizedBox(
-            height: 212,
-            child: ZvSkeletonRail(count: 3, cardWidth: 176),
+          SizedBox(
+            height: railHeight,
+            child: const ZvSkeletonRail(count: 3, cardWidth: 176),
           ),
           const SizedBox(height: AppSpacing.md),
           const _SkeletonHeader(),

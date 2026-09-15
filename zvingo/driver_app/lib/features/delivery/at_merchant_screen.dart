@@ -75,6 +75,25 @@ class _AtMerchantScreenState extends ConsumerState<AtMerchantScreen> {
       title: 'Collect the order',
       subtitle: job.merchantName,
       state: delivery.deliveryState,
+      supporting: Text(
+        'Confirming means the food is in your hands. After this the order '
+        'cannot go back to dispatch.',
+        textAlign: TextAlign.center,
+        style: AppTextStyles.onSurface(context, AppTextStyles.caption),
+      ),
+      footer: DriverSlideToConfirm(
+        text: 'Slide to confirm pickup',
+        action: SlideAction.pickup,
+        enabled: _labelMatches && !delivery.isLoading,
+        isLoading: delivery.isLoading,
+        disabledReason:
+            'Confirm the bag label matches #$orderRef before collecting.',
+        onConfirm: () async {
+          await ref.read(deliveryProvider.notifier).confirmPickup();
+          if (!context.mounted) return;
+          context.go(routeConfirmPickup);
+        },
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -125,25 +144,6 @@ class _AtMerchantScreenState extends ConsumerState<AtMerchantScreen> {
             onPressed: _release,
           ),
         ],
-      ),
-      supporting: Text(
-        'Confirming means the food is in your hands. After this the order '
-        'cannot go back to dispatch.',
-        textAlign: TextAlign.center,
-        style: AppTextStyles.onSurface(context, AppTextStyles.caption),
-      ),
-      footer: DriverSlideToConfirm(
-        text: 'Slide to confirm pickup',
-        action: SlideAction.pickup,
-        enabled: _labelMatches && !delivery.isLoading,
-        isLoading: delivery.isLoading,
-        disabledReason:
-            'Confirm the bag label matches #$orderRef before collecting.',
-        onConfirm: () async {
-          await ref.read(deliveryProvider.notifier).confirmPickup();
-          if (!context.mounted) return;
-          context.go(routeConfirmPickup);
-        },
       ),
     );
   }

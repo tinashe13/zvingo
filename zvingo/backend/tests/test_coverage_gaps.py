@@ -183,6 +183,10 @@ async def test_location_stream_stops_on_disconnect(monkeypatch):
             return True
 
     monkeypatch.setattr(module.aioredis, "from_url", lambda *args, **kwargs: Redis())
+    # These tests cover stream mechanics (disconnect, cancel, cleanup), not
+    # authorization. Both stream endpoints now require a single-use ticket;
+    # ticket authorization has its own tests in test_lead_stream_auth.py.
+    monkeypatch.setattr(module, "redeem_ticket", AsyncMock(return_value="user-1"))
     response = await module.track_driver(Request(), "driver")
     assert [item async for item in response.body_iterator] == []
 

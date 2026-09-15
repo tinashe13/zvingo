@@ -46,7 +46,9 @@ export default function MultiImageUpload({
   const toast = useOptionalToast();
   const inputRef = React.useRef<HTMLInputElement>(null);
   const valuesRef = React.useRef(values);
-  valuesRef.current = values;
+  React.useEffect(() => {
+    valuesRef.current = values;
+  }, [values]);
 
   const remaining = Math.max(0, max - values.length - pending.length);
   const busy = pending.length > 0;
@@ -56,7 +58,6 @@ export default function MultiImageUpload({
       if (disabled) return;
       setError("");
 
-      const room = Math.max(0, max - valuesRef.current.length - files.length + files.length);
       const accepted: File[] = [];
       const refusals: string[] = [];
 
@@ -69,8 +70,6 @@ export default function MultiImageUpload({
         if (reason) refusals.push(reason);
         else accepted.push(file);
       }
-      void room;
-
       if (refusals.length) {
         setError(refusals[0]!);
         toast?.error(
@@ -88,7 +87,9 @@ export default function MultiImageUpload({
       setPending((prev) => [...prev, ...queued]);
 
       // One at a time: the endpoint is per-user rate limited, and a serial
-      // queue keeps the progress bars honest.
+      // queue keeps the progress bars honest. The running list is tracked here
+      // rather than read back from props, so two quick uploads cannot race.
+      let running = [...valuesRef.current];
       for (let index = 0; index < accepted.length; index += 1) {
         const file = accepted[index]!;
         const entry = queued[index]!;
@@ -97,7 +98,9 @@ export default function MultiImageUpload({
         );
         try {
           const url = await promise;
-          onChange([...valuesRef.current, url]);
+          running = [...running, url];
+          valuesRef.current = running;
+          onChange(running);
         } catch (err) {
           const message = errorMessage(err, "That photo could not be uploaded. Please try again.");
           setError(message);

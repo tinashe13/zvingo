@@ -558,11 +558,11 @@ class _MapAttribution extends StatelessWidget {
   void _showNotice(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
-      builder: (sheetContext) => ZvSheet(
+      builder: (sheetContext) => const ZvSheet(
         title: 'Map data',
         subtitle: 'Who the map you are looking at belongs to',
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(
+          padding: EdgeInsets.fromLTRB(
             AppSpacing.md,
             0,
             AppSpacing.md,
@@ -571,7 +571,7 @@ class _MapAttribution extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
-            children: const [
+            children: [
               _AttributionRow(
                 title: 'Map data $osm',
                 detail: 'Licensed under the Open Database License (ODbL).',

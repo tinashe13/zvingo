@@ -66,11 +66,15 @@ const ICON_OPTIONS = [
   { value: "card_giftcard", label: "Gift" },
 ];
 
-function promoIcon(type: string) {
-  if (type === "free_delivery") return Truck;
-  if (type === "free_item") return Gift;
-  if (type === "percentage") return BadgePercent;
-  return Tag;
+/**
+ * Rendered as a component rather than resolved to a variable, so React never
+ * sees a "new" component type between renders.
+ */
+function PromoTypeIcon({ type, className }: { type: string; className?: string }) {
+  if (type === "free_delivery") return <Truck className={className} aria-hidden="true" />;
+  if (type === "free_item") return <Gift className={className} aria-hidden="true" />;
+  if (type === "percentage") return <BadgePercent className={className} aria-hidden="true" />;
+  return <Tag className={className} aria-hidden="true" />;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -580,7 +584,6 @@ function PromotionCard({
   onDelete: () => void;
   onCopyCode: () => void;
 }) {
-  const Icon = promoIcon(promo.promo_type);
   const meta = LIFECYCLE[lifecycle];
   const usesLeft = promo.max_uses != null ? Math.max(0, promo.max_uses - promo.current_uses) : null;
   const usedPercent =
@@ -593,7 +596,7 @@ function PromotionCard({
       <div className="flex items-start justify-between gap-3 bg-deal-surface p-4">
         <div className="min-w-0">
           <span className="flex h-10 w-10 items-center justify-center rounded-md bg-neutral-0 text-deal">
-            <Icon className="h-5 w-5" aria-hidden="true" />
+            <PromoTypeIcon type={promo.promo_type} className="h-5 w-5" />
           </span>
           <p className="type-h2 mt-3 truncate text-text-primary">{headlineFor(promo)}</p>
           <p className="type-caption mt-0.5 line-clamp-2 text-text-secondary">{promo.subtitle}</p>
@@ -811,7 +814,6 @@ function PromotionEditor({
   }
 
   const typeMeta = PROMO_TYPES.find((t) => t.value === form.promo_type);
-  const PreviewIcon = promoIcon(form.promo_type);
   const valueLabel = form.promo_type === "percentage" ? "Percentage off" : "Amount off";
   const showValue = form.promo_type === "percentage" || form.promo_type === "flat";
 
@@ -842,7 +844,7 @@ function PromotionEditor({
           <Card className="mt-2 bg-deal-surface">
             <div className="flex items-start gap-3">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-neutral-0 text-deal">
-                <PreviewIcon className="h-5 w-5" aria-hidden="true" />
+                <PromoTypeIcon type={form.promo_type} className="h-5 w-5" />
               </span>
               <div className="min-w-0">
                 <p className="type-h3 truncate text-text-primary">

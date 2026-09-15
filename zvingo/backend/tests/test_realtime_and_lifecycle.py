@@ -125,6 +125,10 @@ async def test_location_tracking_sse_message_disconnect_and_cancel(monkeypatch):
     )
     redis = Redis(pubsub)
     monkeypatch.setattr(module.aioredis, "from_url", lambda *_a, **_k: redis)
+    # These tests cover stream mechanics (disconnect, cancel, cleanup), not
+    # authorization. Both stream endpoints now require a single-use ticket;
+    # ticket authorization has its own tests in test_lead_stream_auth.py.
+    monkeypatch.setattr(module, "redeem_ticket", AsyncMock(return_value="user-1"))
     response = await module.track_driver(Request([False, False]), "driver")
     events = await collect(response)
     assert events == [{"event": "location", "data": '{"lat":1}'}]
@@ -148,6 +152,10 @@ async def test_notification_sse_messages_ping_error_and_cleanup(monkeypatch):
     )
     redis = Redis(pubsub)
     monkeypatch.setattr(module.redis, "from_url", lambda *_a, **_k: redis)
+    # These tests cover stream mechanics (disconnect, cancel, cleanup), not
+    # authorization. Both stream endpoints now require a single-use ticket;
+    # ticket authorization has its own tests in test_lead_stream_auth.py.
+    monkeypatch.setattr(module, "redeem_ticket", AsyncMock(return_value="user-1"))
     response = await module.message_stream(Request([False, False, True]), "channel")
     events = await collect(response)
     assert [event["event"] for event in events] == ["connected", "message", "ping"]

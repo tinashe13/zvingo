@@ -35,6 +35,16 @@ class NavigateToMerchantScreen extends ConsumerWidget {
       subtitle: orderLabel,
       state: delivery.deliveryState,
       fillBody: true,
+      footer: DriverSlideToConfirm(
+        text: "Slide when you're at the store",
+        action: SlideAction.arrive,
+        onConfirm: () {
+          ref
+              .read(deliveryProvider.notifier)
+              .transitionTo(DeliveryState.arrivedPickup);
+          context.go(routeAtMerchant);
+        },
+      ),
       child: Column(
         children: [
           Expanded(
@@ -58,16 +68,6 @@ class NavigateToMerchantScreen extends ConsumerWidget {
             itemsSummary: job.itemsSummary,
           ),
         ],
-      ),
-      footer: DriverSlideToConfirm(
-        text: "Slide when you're at the store",
-        action: SlideAction.arrive,
-        onConfirm: () {
-          ref
-              .read(deliveryProvider.notifier)
-              .transitionTo(DeliveryState.arrivedPickup);
-          context.go(routeAtMerchant);
-        },
       ),
     );
   }
@@ -97,7 +97,7 @@ class _PickupBrief extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
+          const Icon(
             Icons.storefront_rounded,
             color: AppColors.brandGreen,
             size: 26,

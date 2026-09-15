@@ -9,6 +9,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../core/app_colors.dart';
 import '../../core/app_spacing.dart';
+import '../../core/app_text_styles.dart';
 import '../../core/router.dart';
 import '../../providers/delivery_provider.dart';
 import '../../widgets/widgets.dart';
@@ -83,13 +84,16 @@ class _OfferScreenState extends ConsumerState<OfferScreen> {
     final delivery = ref.read(deliveryProvider);
     final notice = delivery.notice;
     final error = delivery.error;
-    context.go(routeHome);
+    // Raise the message *before* the route change. Snackbars belong to the
+    // app-level ScaffoldMessenger, so it survives the navigation — but the
+    // context used to find that messenger must still be mounted.
     if (notice != null) {
       DriverSnack.show(context, notice, icon: Icons.info_outline_rounded);
     } else if (error != null) {
       DriverSnack.error(context, error);
     }
     ref.read(deliveryProvider.notifier).clearMessages();
+    context.go(routeHome);
   }
 
   @override
@@ -230,8 +234,9 @@ class _ExpiredPanel extends StatelessWidget {
           Text(
             "It has gone to another driver. You're still online — the next one "
             'comes straight to this screen.',
-            style: AppTextStyles.body.copyWith(
-              color: AppColors.textSecondaryOf(context),
+            style: AppTextStyles.onSurface(
+              context,
+              AppTextStyles.body.copyWith(color: AppColors.textSecondary),
             ),
           ),
           Gap.xxl,
@@ -259,17 +264,15 @@ class _MapUnavailable extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
+            const Icon(
               Icons.map_outlined,
               size: 64,
-              color: AppColors.textTertiaryOf(context),
+              color: AppColors.neutral400,
             ),
             Gap.md,
             Text(
               'Route preview unavailable',
-              style: AppTextStyles.caption.copyWith(
-                color: AppColors.textSecondaryOf(context),
-              ),
+              style: AppTextStyles.onSurface(context, AppTextStyles.caption),
             ),
           ],
         ),

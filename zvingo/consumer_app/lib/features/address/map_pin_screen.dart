@@ -161,16 +161,16 @@ class _MapPinScreenState extends ConsumerState<MapPinScreen> {
                   }
                 },
               ),
-              children: const [
+              children: [
                 TileLayer(
                   urlTemplate:
                       'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
-                  subdomains: ['a', 'b', 'c', 'd'],
+                  subdomains: const ['a', 'b', 'c', 'd'],
                   userAgentPackageName: 'com.zvingo.consumer',
                 ),
                 // Attribution is a licence condition of both OpenStreetMap and
                 // CARTO, not decoration (finding X7).
-                RichAttributionWidget(
+                const RichAttributionWidget(
                   attributions: [
                     TextSourceAttribution('OpenStreetMap contributors'),
                     TextSourceAttribution('CARTO'),

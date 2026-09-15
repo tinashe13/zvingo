@@ -5,6 +5,22 @@ import 'package:consumer_app/features/restaurant/restaurant_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+/// The viewer's text-scale factor, clamped to the range `main.dart` allows.
+///
+/// Rails and carousels need an explicit height, and a hard-coded one overflows
+/// the moment someone turns their system font up. Every fixed height in the
+/// discovery surfaces is expressed as `chrome + text * zvTextScale(context)`.
+double zvTextScale(BuildContext context) =>
+    (MediaQuery.textScalerOf(context).scale(14) / 14).clamp(1.0, 2.0);
+
+/// Height a [RestaurantRailCard] needs at the current text scale.
+///
+/// Constants measured against the tallest variant (promotion + closed badge)
+/// and pinned by `test/discovery_contract_test.dart`, which fails if the card
+/// ever outgrows them.
+double restaurantRailHeight(BuildContext context, {double width = 176}) =>
+    width * 9 / 16 + 40 + 78 * zvTextScale(context);
+
 /// How a restaurant card frames its numbers.
 enum RestaurantCardMode {
   /// Delivery: fee and ETA lead, distance is secondary.

@@ -224,7 +224,10 @@ enum EtaConfidence {
 /// The ETA the tracking screen renders.
 @immutable
 class OrderEta {
-  const OrderEta._(this.confidence, {this.minutes, this.low, this.high});
+  const OrderEta._(this.confidence)
+      : minutes = null,
+        low = null,
+        high = null;
 
   const OrderEta.precise(int this.minutes)
       : confidence = EtaConfidence.precise,

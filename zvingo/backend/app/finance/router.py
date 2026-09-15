@@ -215,11 +215,36 @@ async def get_merchant_analytics(merchant_id: str, current_user: User = Depends(
     )
     today_start = utc_now().replace(hour=0, minute=0, second=0, microsecond=0)
 
+    # `merchant_id` here is a merchant USER id, but `Order.merchant_id` holds a
+    # RESTAURANT id. Comparing them directly matches nothing, so every figure
+    # below used to come back as zero and avg_prep_time was always the hardcoded
+    # fallback -- a dashboard full of confident, wrong numbers. Resolve the
+    # merchant's restaurants first and query on those ids.
+    restaurants = await Restaurant.find(
+        Restaurant.merchant_id == merchant_id
+    ).to_list()
+    restaurant_ids = [str(r.id) for r in restaurants]
+
+    if not restaurant_ids:
+        return {
+            "today_orders": 0,
+            "today_gmv": 0.0,
+            "today_gmv_minor": 0,
+            "total_orders": 0,
+            "total_gmv": 0.0,
+            "total_gmv_minor": 0,
+            "active_items": 0,
+            # None, not a number: nothing has been measured, and inventing a
+            # figure here is what the old fallback did.
+            "avg_prep_time": None,
+        }
+
+    owned = {"merchant_id": {"$in": restaurant_ids}}
+    delivered = dict(owned, state=OrderState.DELIVERED.value)
+
     # Delivered orders today
     today_delivered = await Order.find(
-        Order.merchant_id == merchant_id,
-        Order.state == OrderState.DELIVERED,
-        Order.updated_at >= today_start,
+        dict(delivered, updated_at={"$gte": today_start})
     ).to_list()
 
     today_orders = len(today_delivered)
@@ -227,30 +252,23 @@ async def get_merchant_analytics(merchant_id: str, current_user: User = Depends(
     today_gmv_minor = sum(to_minor(o.total_amount or 0) for o in today_delivered)
 
     # All-time delivered
-    all_delivered = await Order.find(
-        Order.merchant_id == merchant_id,
-        Order.state == OrderState.DELIVERED,
-    ).count()
+    all_delivered = await Order.find(delivered).count()
 
-    all_gmv_orders = await Order.find(
-        Order.merchant_id == merchant_id,
-        Order.state == OrderState.DELIVERED,
-    ).to_list()
+    all_gmv_orders = await Order.find(delivered).to_list()
     total_gmv_minor = sum(to_minor(o.total_amount or 0) for o in all_gmv_orders)
 
-    # Active menu items
-    restaurant = await Restaurant.find_one(Restaurant.merchant_id == merchant_id)
-    active_items = 0
-    if restaurant:
-        active_items = sum(1 for item in restaurant.menu if item.is_available)
+    # Active menu items across every restaurant this merchant owns
+    active_items = sum(
+        1 for r in restaurants for item in r.menu if item.is_available
+    )
 
-    # Average prep time (time from ACCEPTED to PICKED_UP)
-    avg_prep_time = 18  # default fallback
+    # Average prep time (ACCEPTED -> PICKED_UP). Stays None when nothing has
+    # been measured, so the dashboard can say so instead of showing a guess.
+    avg_prep_time = None
     prep_times = []
-    recent_orders = await Order.find(
-        Order.merchant_id == merchant_id,
-        Order.state == OrderState.DELIVERED,
-    ).sort(-Order.created_at).limit(50).to_list()
+    recent_orders = await Order.find(delivered).sort(
+        -Order.created_at
+    ).limit(50).to_list()
 
     for order in recent_orders:
         accepted_at = None

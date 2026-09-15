@@ -4,9 +4,11 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { LogIn } from "lucide-react";
 import { Button, Input, Skeleton } from "@/components/ui";
+import { clearApiCache } from "@/lib/useApi";
 import { toE164 } from "@/lib/format";
 import { AuthLink, AuthShell } from "../_auth/AuthShell";
 import {
+  clearSession,
   DEFAULT_SIGNED_IN_PATH,
   getRefreshToken,
   hasAccessToken,
@@ -78,7 +80,8 @@ export default function LoginPage() {
   // to type their password in the middle of service.
   React.useEffect(() => {
     let cancelled = false;
-    const target = safeNextPath(readQueryParam("next"));
+    const nextParam = readQueryParam("next");
+    const target = safeNextPath(nextParam);
     setNextPath(target);
 
     if (readQueryParam("reset") === "1") {
@@ -88,6 +91,16 @@ export default function LoginPage() {
 
     if (hasAccessToken()) {
       router.replace(target);
+      return;
+    }
+
+    // `?next=` means something bounced the user here mid-task — that is the
+    // case worth restoring silently. Arriving at a bare /login is a deliberate
+    // visit (signing out lands here), so the stored refresh token is dropped
+    // rather than used to sign the user straight back in.
+    if (nextParam === null) {
+      clearSession();
+      setPhase("form");
       return;
     }
 
@@ -136,6 +149,9 @@ export default function LoginPage() {
     try {
       const token = await signIn(normaliseIdentifier(identifier), password);
       persistSession(token);
+      // Drop anything the previous session left in the shared SWR cache so the
+      // dashboard cannot render the last merchant's name for a frame.
+      clearApiCache();
       router.replace(nextPath);
     } catch (error) {
       if (isAuthRequestError(error)) {

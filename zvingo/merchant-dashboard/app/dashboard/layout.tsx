@@ -256,8 +256,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Reviewing the queue silences the orders that were in it at that moment.
   // New arrivals raise the alert again, and an order that is still unanswered
   // after ALERT_REARM_MS raises it again too — the food is going cold.
-  const acknowledged = React.useRef(new Map<string, number>());
-  const [, bumpAck] = React.useReducer((n: number) => n + 1, 0);
+  const [acknowledged, setAcknowledged] = React.useState<Record<string, number>>({});
 
   const waiting = React.useMemo(
     () => (orders.data ?? []).filter((order) => WAITING_STATES.has(normaliseOrderState(order.state))),
@@ -267,13 +266,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   React.useEffect(() => {
     // Forget orders that are no longer waiting so the map cannot grow forever.
     const live = new Set(waiting.map((order) => order.id));
-    acknowledged.current.forEach((_, id) => {
-      if (!live.has(id)) acknowledged.current.delete(id);
+    setAcknowledged((prev) => {
+      const stale = Object.keys(prev).filter((id) => !live.has(id));
+      if (!stale.length) return prev;
+      const next = { ...prev };
+      stale.forEach((id) => delete next[id]);
+      return next;
     });
   }, [waiting]);
 
   const unanswered = waiting.filter((order) => {
-    const at = acknowledged.current.get(order.id);
+    const at = acknowledged[order.id];
     return at === undefined || now - at > ALERT_REARM_MS;
   });
 
@@ -284,8 +287,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const handleReview = React.useCallback(() => {
     const at = Date.now();
-    waiting.forEach((order) => acknowledged.current.set(order.id, at));
-    bumpAck();
+    setAcknowledged((prev) => {
+      const next = { ...prev };
+      waiting.forEach((order) => {
+        next[order.id] = at;
+      });
+      return next;
+    });
     // The click is a real user gesture, which is what the browser needs before
     // it will let the chime play at all.
     sound.arm();

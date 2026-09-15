@@ -327,7 +327,6 @@ export default function DashboardOverviewPage() {
                 variant="tertiary"
                 size="sm"
                 onClick={() => void ordersQuery.refresh()}
-                disabled={ordersQuery.isValidating}
               >
                 Refresh
               </Button>

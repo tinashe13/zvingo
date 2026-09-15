@@ -1,5 +1,7 @@
 import 'package:consumer_app/common/zvingo_ui.dart';
 import 'package:consumer_app/features/filter/filter_provider.dart';
+import 'package:consumer_app/features/home/widgets/restaurant_card.dart'
+    show zvTextScale;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -30,14 +32,16 @@ const List<DiscoveryCategory> kDiscoveryCategories = <DiscoveryCategory>[
 class CategoryRow extends ConsumerWidget {
   const CategoryRow({super.key});
 
-  static const double height = 92;
+  /// Icon tile (56) + gap + one caption line, which grows with text scale.
+  static double heightFor(BuildContext context) =>
+      64 + 20 * zvTextScale(context);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selected = ref.watch(filtersProvider).categories;
 
     return SizedBox(
-      height: height,
+      height: heightFor(context),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),

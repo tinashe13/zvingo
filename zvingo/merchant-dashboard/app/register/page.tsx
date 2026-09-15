@@ -215,7 +215,7 @@ export default function RegisterPage() {
     setLocationError(null);
   }
 
-  async function useMyLocation() {
+  async function detectMyLocation() {
     setLocating(true);
     setLocationError(null);
     try {
@@ -256,6 +256,82 @@ export default function RegisterPage() {
     }
   }
 
+  /** Register the merchant if that has not already happened. */
+  async function ensureAccount() {
+    if (accountExists) return;
+    const token = await registerMerchant({
+      full_name: draft.fullName.trim(),
+      phone: toE164(draft.phone) as string,
+      password: draft.password,
+      email: draft.email.trim() || undefined,
+    });
+    persistSession(token);
+    clearApiCache();
+    setAccountExists(true);
+  }
+
+  function reportRegistrationFailure(error: unknown) {
+    if (isAuthRequestError(error)) {
+      if (error.kind === "rate_limited") {
+        setRetryAfter(error.retryAfterSeconds ?? 300);
+        return;
+      }
+      if (error.kind === "conflict") {
+        const detail = error.detail ?? "";
+        const onEmail = /email/i.test(detail);
+        setStep(2);
+        setErrors({
+          [onEmail ? "email" : "phone"]: onEmail
+            ? "This email address already has a Zvingo account."
+            : "This number already has a Zvingo account.",
+        });
+        setFormError(
+          onEmail
+            ? "That email address is already registered. Sign in instead, or use a different address."
+            : "That phone number is already registered. Sign in instead, or use a different number.",
+        );
+        return;
+      }
+      setFormError(error.message);
+      return;
+    }
+    setFormError("Something went wrong creating your account. Please try again.");
+  }
+
+  /**
+   * Escape hatch for a merchant whose address will not geocode and who cannot
+   * share their location: create the account now, finish the listing from the
+   * Menu page. Better than trapping them on a step they cannot complete.
+   */
+  async function createAccountWithoutListing() {
+    if (submitting || cooldown > 0) return;
+    setFormError(null);
+    setSubmitting(true);
+    try {
+      await ensureAccount();
+      setOutcome({
+        kind: "account_only",
+        restaurantName: draft.restaurantName.trim(),
+        reason: "You chose to add your location later.",
+      });
+    } catch (error) {
+      reportRegistrationFailure(error);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  /** Retry just the listing, from the success screen, without re-registering. */
+  async function retryListing() {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      setOutcome(await createRestaurant());
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (submitting || cooldown > 0) return;
@@ -273,42 +349,10 @@ export default function RegisterPage() {
       // The account first: without a merchant token there is nothing that may
       // create a restaurant. `role` is pinned to "merchant" inside
       // registerMerchant and is never a form control.
-      if (!accountExists) {
-        const token = await registerMerchant({
-          full_name: draft.fullName.trim(),
-          phone: toE164(draft.phone) as string,
-          password: draft.password,
-          email: draft.email.trim() || undefined,
-        });
-        persistSession(token);
-        clearApiCache();
-        setAccountExists(true);
-      }
+      await ensureAccount();
       setOutcome(await createRestaurant());
     } catch (error) {
-      if (isAuthRequestError(error)) {
-        if (error.kind === "rate_limited") {
-          setRetryAfter(error.retryAfterSeconds ?? 300);
-        } else if (error.kind === "conflict") {
-          const detail = error.detail ?? "";
-          const onEmail = /email/i.test(detail);
-          setStep(2);
-          setErrors({
-            [onEmail ? "email" : "phone"]: onEmail
-              ? "This email address already has a Zvingo account."
-              : "This number already has a Zvingo account.",
-          });
-          setFormError(
-            onEmail
-              ? "That email address is already registered. Sign in instead, or use a different address."
-              : "That phone number is already registered. Sign in instead, or use a different number.",
-          );
-        } else {
-          setFormError(error.message);
-        }
-      } else {
-        setFormError("Something went wrong creating your account. Please try again.");
-      }
+      reportRegistrationFailure(error);
     } finally {
       setSubmitting(false);
     }
@@ -320,6 +364,7 @@ export default function RegisterPage() {
 
   if (outcome) {
     const complete = outcome.kind === "complete";
+    const skipped = !complete && draft.lat === null;
     return (
       <AuthShell
         eyebrow="Zvingo Partner"
@@ -329,6 +374,11 @@ export default function RegisterPage() {
             <>
               <span className="font-semibold text-neutral-900">{outcome.restaurantName}</span> now has a
               Zvingo Partner account. Three short jobs and you can take your first order.
+            </>
+          ) : skipped ? (
+            <>
+              You can sign in to Zvingo Partner right now. Creating your restaurant listing — including the
+              map pin — is the one thing left to do.
             </>
           ) : (
             <>
@@ -344,8 +394,19 @@ export default function RegisterPage() {
           </div>
 
           {!complete && (
-            <FormBanner tone="warning" title="Your restaurant listing is not saved yet">
-              {outcome.reason} You can finish it from Settings — nothing you entered is lost.
+            <FormBanner
+              tone="warning"
+              title={skipped ? "One job left: your restaurant listing" : "Your restaurant listing is not saved yet"}
+              action={
+                draft.lat !== null && draft.lng !== null ? (
+                  <Button variant="secondary" size="sm" loading={submitting} onClick={() => void retryListing()}>
+                    Try saving it again
+                  </Button>
+                ) : undefined
+              }
+            >
+              {outcome.reason} Your account is safe — you can create the listing from the Menu page, and
+              nothing you entered is lost.
             </FormBanner>
           )}
 
@@ -358,15 +419,15 @@ export default function RegisterPage() {
               </>
             ) : (
               <>
-                <NextStepLink href="/dashboard/settings">1. Finish your restaurant details</NextStepLink>
-                <NextStepLink href="/dashboard/menu">2. Add your first menu items</NextStepLink>
+                <NextStepLink href="/dashboard/menu">1. Create your restaurant listing</NextStepLink>
+                <NextStepLink href="/dashboard/settings">2. Set your opening hours and photo</NextStepLink>
               </>
             )}
           </div>
 
           <Button asChild variant="primary" size="lg" fullWidth>
-            <Link href={complete ? "/dashboard" : "/dashboard/settings"}>
-              {complete ? "Open my dashboard" : "Finish setting up in Settings"}
+            <Link href={complete ? "/dashboard" : "/dashboard/menu"}>
+              {complete ? "Open my dashboard" : "Finish setting up my restaurant"}
             </Link>
           </Button>
 
@@ -608,7 +669,7 @@ export default function RegisterPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => void useMyLocation()}
+                  onClick={() => void detectMyLocation()}
                   disabled={locating}
                   className="zv-touch inline-flex w-fit items-center gap-2 rounded-md py-2 type-caption font-bold text-neutral-900 underline decoration-neutral-300 underline-offset-4 transition-colors hover:decoration-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action disabled:text-action-disabled-fg"
                 >
@@ -673,6 +734,27 @@ export default function RegisterPage() {
                 help="Include the shop or unit number if you have one."
                 onChange={(event) => update("address", event.target.value)}
               />
+
+              {locationError && draft.lat === null && (
+                <div className="rounded-md border border-border bg-neutral-50 p-4">
+                  <p className="type-body-strong text-neutral-900">Still cannot find your spot?</p>
+                  <p className="mt-1 type-caption text-text-secondary">
+                    Create your account now and place the pin from the Menu page when you are back at the
+                    restaurant. You will not lose anything you have typed.
+                  </p>
+                  <div className="mt-3">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="md"
+                      loading={submitting}
+                      onClick={() => void createAccountWithoutListing()}
+                    >
+                      Create my account and add the pin later
+                    </Button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

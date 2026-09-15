@@ -11,6 +11,7 @@ from app.catalog.hours import InvalidHours, format_hhmm, parse_hhmm
 from app.config import settings
 from app.notification.fcm import fcm_status
 from app.notification.preferences import get_preferences, set_preferences
+from app.notification.stream_auth import issue_ticket, redeem_ticket
 import redis.asyncio as redis
 import structlog
 
@@ -83,12 +84,38 @@ async def push_status(current_user: User = Depends(get_current_user)):
     return fcm_status()
 
 
+class StreamTicketRequest(BaseModel):
+    """Which channel the caller wants to listen on."""
+
+    channel: str
+
+
+@router.post("/stream-ticket")
+async def create_stream_ticket(
+    body: StreamTicketRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Exchange a JWT for a single-use ticket to one event channel.
+
+    EventSource cannot send an Authorization header, and putting the JWT in the
+    query string would write it into nginx logs and browser history. So the
+    caller authenticates here, normally, and receives a ticket that is valid for
+    one subscription to one channel for a matter of seconds.
+    """
+    ticket, expires_in = await issue_ticket(body.channel, current_user)
+    return {"ticket": ticket, "channel": body.channel, "expires_in": expires_in}
+
+
 @router.get("/events/{channel_id}")
-async def message_stream(request: Request, channel_id: str):
+async def message_stream(request: Request, channel_id: str, ticket: str = ""):
+    """SSE stream of real-time updates for one channel.
+
+    Requires a ticket from ``POST /notification/stream-ticket``. Before this
+    existed the endpoint took a channel id and nothing else, so anyone could
+    read any merchant's live orders, any order's chat, or any driver's
+    position -- restaurant ids are published by the public catalog listing.
     """
-    SSE Endpoint for real-time updates.
-    channel_id: usually merchant_id or driver_id
-    """
+    await redeem_ticket(ticket, channel_id)
     async def event_generator():
         r = None
         pubsub = None

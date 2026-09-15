@@ -191,6 +191,13 @@ async def test_merchant_analytics_are_private_to_the_merchant_and_admins(monkeyp
         merchant_id = Field()
         find_one = AsyncMock(return_value=None)
 
+        @classmethod
+        def find(cls, *_a):
+            # Analytics resolves the merchant's restaurants before querying
+            # orders, because Order.merchant_id is a restaurant id. This test
+            # is about who may call the endpoint, not what it returns.
+            return Query([])
+
     monkeypatch.setattr(module, "Order", FakeOrder)
     monkeypatch.setattr(module, "Restaurant", FakeRestaurant)
     assert await module.get_merchant_analytics("merchant-a", user("merchant-a", "merchant"))

@@ -341,7 +341,7 @@ class StoreClosedBanner extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(
           AppSpacing.md, AppSpacing.sm, AppSpacing.md, 0),
       padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: AppColors.warningSurface,
         borderRadius: AppRadius.lgAll,
       ),
@@ -481,13 +481,13 @@ class MenuSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       padding: EdgeInsets.zero,
-      children: [
-        const ZvSkeletonBox(height: 220, radius: 0),
+      children: const [
+        ZvSkeletonBox(height: 220, radius: 0),
         Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
+          padding: EdgeInsets.all(AppSpacing.md),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
+            children: [
               ZvSkeletonBox(height: 24, width: 200),
               SizedBox(height: AppSpacing.xs),
               ZvSkeletonBox(height: 14, width: 260),
@@ -497,7 +497,7 @@ class MenuSkeleton extends StatelessWidget {
             ],
           ),
         ),
-        const ZvSkeletonList.menuItems(
+        ZvSkeletonList.menuItems(
           count: 5,
           padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
         ),

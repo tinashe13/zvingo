@@ -27,6 +27,7 @@ import {
   OrderCardSkeleton,
   OrderStatusPill,
   Sheet,
+  Skeleton,
   SkeletonRegion,
   cn,
   orderStatePresentation,
@@ -140,7 +141,7 @@ const LANES: readonly LaneConfig[] = [
   {
     id: "done",
     title: "Done today",
-    hint: "Delivered and cancelled orders from today",
+    hint: "Placed today and already finished",
     states: ["DELIVERED", "CANCELLED"],
     Icon: CheckCircle2,
     warnAfter: 0,
@@ -204,6 +205,7 @@ export default function OrdersBoardPage() {
   const now = useNow(10_000);
 
   const [limit, setLimit] = React.useState(PAGE_SIZE);
+  const [loadingMore, setLoadingMore] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const [detailId, setDetailId] = React.useState<string | null>(null);
   const [rejecting, setRejecting] = React.useState<Order | null>(null);
@@ -211,7 +213,7 @@ export default function OrdersBoardPage() {
   const [lastUpdated, setLastUpdated] = React.useState<number | null>(null);
 
   const ordersQuery = useApi<Order[]>(
-    merchantId ? `orders:board:${merchantId}:${limit}` : null,
+    merchantId ? `orders:board:${merchantId}` : null,
     () => endpoints.orders.forMerchant(merchantId, { limit }),
     {
       refreshInterval: POLL_INTERVAL_MS,
@@ -223,6 +225,19 @@ export default function OrdersBoardPage() {
   const orders = ordersQuery.data;
   const refreshOrders = ordersQuery.refresh;
   const mutateOrders = ordersQuery.mutate;
+
+  // The page size is not part of the cache key, so asking for more orders keeps
+  // the board on screen instead of dropping it back to skeletons.
+  React.useEffect(() => {
+    if (limit === PAGE_SIZE) return;
+    let cancelled = false;
+    void refreshOrders().finally(() => {
+      if (!cancelled) setLoadingMore(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [limit, refreshOrders]);
 
   /* ---- Live updates broadcast by the dashboard shell ---------------------- */
 
@@ -280,17 +295,18 @@ export default function OrdersBoardPage() {
     });
   }, [orders]);
 
-  const applyRef = React.useRef<(orderId: string, target: OrderState) => Promise<void>>(
-    async () => undefined,
+  const applyRef = React.useRef<(orderId: string, target: OrderState) => Promise<boolean>>(
+    async () => false,
   );
 
   const applyState = React.useCallback(
-    async (orderId: string, target: OrderState) => {
+    async (orderId: string, target: OrderState): Promise<boolean> => {
       try {
         const updated = await endpoints.orders.setState(orderId, target);
         mutateOrders((prev) =>
           (prev ?? []).map((order) => (order.id === orderId ? { ...order, ...updated } : order)),
         );
+        return true;
       } catch (error) {
         clearOverride(orderId);
         toast.error("That change did not save", {
@@ -298,6 +314,7 @@ export default function OrdersBoardPage() {
           action: { label: "Try again", onClick: () => void applyRef.current(orderId, target) },
         });
         void refreshOrders();
+        return false;
       }
     },
     [mutateOrders, clearOverride, toast, refreshOrders],
@@ -392,56 +409,63 @@ export default function OrdersBoardPage() {
     if (!order) return;
     setRejecting(null);
     setOverrides((prev) => ({ ...prev, [order.id]: "CANCELLED" }));
-    await applyRef.current(order.id, "CANCELLED");
-    toast.warning(`${formatOrderRef(order.id)} rejected`, {
-      description: "The order is cancelled and the customer has been refunded.",
-    });
+    const ok = await applyRef.current(order.id, "CANCELLED");
+    if (ok) {
+      toast.warning(`${formatOrderRef(order.id)} rejected`, {
+        description: "The order is cancelled and the customer has been refunded.",
+      });
+    }
   }, [rejecting, toast]);
 
   /* ---- Driver names ------------------------------------------------------- */
 
   // `GET /orders/merchant/{id}` returns `driver_id` but never `driver_name`,
-  // while `GET /orders/{id}` does. Resolve each distinct driver once and cache
-  // it, rather than fetching a detail for every card.
-  const driverNames = React.useRef(new Map<string, string>());
-  const [, bumpDrivers] = React.useReducer((n: number) => n + 1, 0);
-  const ordersRef = React.useRef<Order[] | undefined>(undefined);
-  ordersRef.current = orders;
+  // while `GET /orders/{id}` does. Resolve each distinct driver once from one of
+  // the orders they are carrying, rather than fetching a detail for every card.
+  const [driverNames, setDriverNames] = React.useState<Record<string, string>>({});
+  const attemptedDrivers = React.useRef(new Set<string>());
 
-  const driverKey = React.useMemo(
-    () =>
-      Array.from(new Set((orders ?? []).map((order) => order.driver_id).filter(Boolean) as string[]))
-        .sort()
-        .join(","),
-    [orders],
-  );
+  // `driverId:orderId` pairs — one representative order per driver.
+  const driverProbe = React.useMemo(() => {
+    const pairs = new Map<string, string>();
+    for (const order of orders ?? []) {
+      if (order.driver_id && !pairs.has(order.driver_id)) pairs.set(order.driver_id, order.id);
+    }
+    return Array.from(pairs.entries())
+      .map(([driverId, orderId]) => `${driverId}:${orderId}`)
+      .sort()
+      .join(",");
+  }, [orders]);
 
   React.useEffect(() => {
-    const ids = driverKey ? driverKey.split(",") : [];
-    const unknown = ids.filter((id) => !driverNames.current.has(id)).slice(0, DRIVER_LOOKUP_LIMIT);
+    const pairs = driverProbe ? driverProbe.split(",").map((pair) => pair.split(":")) : [];
+    const unknown = pairs
+      .filter(([driverId]) => driverId && !attemptedDrivers.current.has(driverId))
+      .slice(0, DRIVER_LOOKUP_LIMIT);
     if (!unknown.length) return;
     let cancelled = false;
 
     void (async () => {
-      for (const driverId of unknown) {
-        // Mark before awaiting so a re-render cannot queue the same lookup twice.
-        driverNames.current.set(driverId, "");
-        const carrying = ordersRef.current?.find((order) => order.driver_id === driverId);
-        if (!carrying) continue;
+      const found: Record<string, string> = {};
+      for (const [driverId, orderId] of unknown) {
+        // Mark before awaiting so a re-run cannot queue the same lookup twice.
+        attemptedDrivers.current.add(driverId as string);
         try {
-          const detail = await endpoints.orders.detail(carrying.id);
-          if (detail?.driver_name) driverNames.current.set(driverId, detail.driver_name);
+          const detail = await endpoints.orders.detail(orderId as string);
+          if (detail?.driver_name) found[driverId as string] = detail.driver_name;
         } catch {
-          // Leave it blank: the card falls back to the driver reference.
+          // Leave it out: the card falls back to the driver reference.
         }
       }
-      if (!cancelled) bumpDrivers();
+      if (!cancelled && Object.keys(found).length) {
+        setDriverNames((prev) => ({ ...prev, ...found }));
+      }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [driverKey]);
+  }, [driverProbe]);
 
   /* ---- Board rows --------------------------------------------------------- */
 
@@ -531,7 +555,6 @@ export default function OrdersBoardPage() {
             size="sm"
             leftIcon={<RefreshCw className={cn("h-4 w-4", ordersQuery.isValidating && "zv-spin")} />}
             onClick={() => void refreshOrders()}
-            disabled={ordersQuery.isValidating}
           >
             Refresh
           </Button>
@@ -549,7 +572,7 @@ export default function OrdersBoardPage() {
           <div className="zv-scroll-x flex gap-4 overflow-x-auto pb-2 max-md:flex-col max-md:overflow-x-visible">
             {LANES.slice(0, 4).map((lane) => (
               <div key={lane.id} className="w-[320px] shrink-0 max-md:w-full">
-                <div className="mb-3 h-6 w-32 rounded-sm bg-neutral-200" />
+                <Skeleton className="mb-3 h-6 w-32" />
                 <div className="flex flex-col gap-3">
                   <OrderCardSkeleton />
                   <OrderCardSkeleton />
@@ -592,7 +615,7 @@ export default function OrdersBoardPage() {
               rows={laneRows}
               oldest={oldest}
               pendingIds={pendingIds}
-              driverNames={driverNames.current}
+              driverNames={driverNames}
               onAccept={acceptOrder}
               onMarkReady={markReady}
               onReject={setRejecting}
@@ -611,8 +634,11 @@ export default function OrdersBoardPage() {
           {hasMore ? (
             <Button
               variant="secondary"
-              onClick={() => setLimit((value) => value + PAGE_SIZE)}
-              loading={ordersQuery.isValidating}
+              loading={loadingMore}
+              onClick={() => {
+                setLoadingMore(true);
+                setLimit((value) => value + PAGE_SIZE);
+              }}
             >
               Load {PAGE_SIZE} older orders
             </Button>
@@ -642,7 +668,7 @@ export default function OrdersBoardPage() {
       <OrderDetailSheet
         orderId={detailId}
         onClose={() => setDetailId(null)}
-        driverNames={driverNames.current}
+        driverNames={driverNames}
       />
     </PageContainer>
   );
@@ -695,7 +721,7 @@ interface LaneColumnProps {
   rows: BoardRow[];
   oldest: number;
   pendingIds: string[];
-  driverNames: Map<string, string>;
+  driverNames: Record<string, string>;
   onAccept: (order: Order) => void;
   onMarkReady: (order: Order) => void;
   onReject: (order: Order) => void;
@@ -759,7 +785,7 @@ function LaneColumn({
               <OrderCard
                 row={row}
                 pending={pendingIds.includes(row.order.id)}
-                driverName={row.order.driver_id ? driverNames.get(row.order.driver_id) : undefined}
+                driverName={row.order.driver_id ? driverNames[row.order.driver_id] : undefined}
                 onAccept={onAccept}
                 onMarkReady={onMarkReady}
                 onReject={onReject}
@@ -965,7 +991,7 @@ function OrderDetailSheet({
 }: {
   orderId: string | null;
   onClose: () => void;
-  driverNames: Map<string, string>;
+  driverNames: Record<string, string>;
 }) {
   const detail = useApi<Order>(
     orderId ? `order:${orderId}` : null,
@@ -980,7 +1006,7 @@ function OrderDetailSheet({
   );
 
   const order = detail.data;
-  const driverName = order?.driver_name || (order?.driver_id ? driverNames.get(order.driver_id) : "");
+  const driverName = order?.driver_name || (order?.driver_id ? driverNames[order.driver_id] : "");
 
   return (
     <Sheet

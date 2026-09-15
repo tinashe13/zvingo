@@ -21,7 +21,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'package:consumer_app/common/zvingo_ui.dart';
-import 'package:consumer_app/features/order/order_models.dart';
 import 'package:consumer_app/features/order/order_providers.dart';
 import 'package:consumer_app/features/order/order_timeline.dart';
 import 'package:consumer_app/features/order/order_tracking_transport.dart';
@@ -413,10 +412,10 @@ class _OrderLiveMapState extends ConsumerState<OrderLiveMap>
               ),
             ),
 
-            Positioned(
+            const Positioned(
               right: 0,
               bottom: 0,
-              child: const ZvMapAttribution(),
+              child: ZvMapAttribution(),
             ),
 
             if (widget.onOpenTracking != null)

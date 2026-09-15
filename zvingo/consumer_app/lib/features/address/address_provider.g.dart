@@ -6,7 +6,7 @@ part of 'address_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$locationStartupHash() => r'ec3433538d4b732fae82fbd62c00aff89d8e05fe';
+String _$locationStartupHash() => r'874abef86bc76a048661836f368fd089be5d2cec';
 
 /// Runs once when the authenticated shell mounts.
 /// Sets the delivery location from the saved default address, or falls back

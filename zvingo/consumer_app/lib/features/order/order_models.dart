@@ -345,6 +345,57 @@ class TrackedOrder {
 
   int get itemCount => items.fold<int>(0, (sum, item) => sum + item.quantity);
 
+  /// Map-style field access, by the backend's JSON key names.
+  ///
+  /// Kept so screens outside this feature that were written against the raw
+  /// `Map<String, dynamic>` order payload (e.g. the help screen's order picker)
+  /// keep compiling and behaving while they migrate to this typed model.
+  /// New code should use the named members.
+  Object? operator [](String key) {
+    switch (key) {
+      case 'id':
+      case '_id':
+        return id;
+      case 'state':
+        return state;
+      case 'total_amount':
+        return totalAmount;
+      case 'created_at':
+        return createdAt?.toIso8601String();
+      case 'driver_id':
+        return driver?.id;
+      case 'driver_name':
+        return driver?.name;
+      case 'merchant_id':
+        return merchantId;
+      case 'consumer_id':
+        return consumerId;
+      case 'delivery_instructions':
+        return deliveryInstructions;
+      case 'group_id':
+        return groupId;
+      case 'pickup_lat':
+        return pickup?.latitude;
+      case 'pickup_lng':
+        return pickup?.longitude;
+      case 'delivery_lat':
+        return destination?.latitude;
+      case 'delivery_lng':
+        return destination?.longitude;
+      case 'items':
+        return [
+          for (final item in items)
+            {
+              'name': item.name,
+              'quantity': item.quantity,
+              'price': item.price,
+            },
+        ];
+      default:
+        return null;
+    }
+  }
+
   bool get isCancelled => state == 'CANCELLED';
   bool get isDelivered => state == 'DELIVERED';
   bool get isTerminal => isTerminalOrderState(state);

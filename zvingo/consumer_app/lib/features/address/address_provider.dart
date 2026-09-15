@@ -1,5 +1,6 @@
 import 'package:consumer_app/core/delivery_location_provider.dart';
 import 'package:consumer_app/features/address/saved_address.dart';
+import 'package:consumer_app/features/auth/session_interceptor.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geocoding/geocoding.dart';
@@ -82,6 +83,12 @@ class SavedAddresses extends _$SavedAddresses {
 /// to the device's current GPS position — all in the background.
 @Riverpod(keepAlive: true)
 Future<void> locationStartup(Ref ref) async {
+  // The app shell watches this provider on mount, which makes it the earliest
+  // reliable hook in an authenticated session. Installing the refresh
+  // interceptor here means every tab's first request already has transparent
+  // token renewal behind it — nobody gets bounced to sign-in mid-order.
+  ref.watch(authSessionProvider);
+
   // 1. Use a saved default address (or the first saved address).
   final addresses = ref.read(savedAddressesProvider);
   final defaultAddr = addresses.where((a) => a.isDefault).firstOrNull ??
