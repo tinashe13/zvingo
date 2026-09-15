@@ -1,0 +1,577 @@
+"use client";
+
+/**
+ * Merchant sign-in, sign-up and password-reset plumbing.
+ *
+ * Lives in a private `app/_auth/` folder (the leading underscore keeps Next.js
+ * from routing it) because it is shared by `/login`, `/register`,
+ * `/forgot-password` and `/reset-password` only. Anything here that the rest of
+ * the dashboard will eventually need — chiefly refresh-token rotation on a 401 —
+ * belongs in `lib/api.ts`; see the M3 report for the exact patch.
+ *
+ * Contracts wired here (FastAPI routers mount at the root; nginx adds `/api`,
+ * which `lib/api.ts` already prefixes):
+ *
+ *   POST /auth/token               form: username, password        -> Token
+ *   POST /auth/register            json: UserCreate                -> Token
+ *   POST /auth/refresh             json: {refresh_token}           -> Token
+ *   POST /auth/logout              json: {refresh_token}?          -> {status}
+ *   POST /auth/reset-password/request  json: {phone}               -> {status}
+ *   POST /auth/reset-password/confirm  json: {token, new_password} -> {status}
+ *   GET  /location/geocode?q=&country=zw                           -> Match[]
+ *   POST /catalog/restaurants      json: RestaurantCreate          -> Restaurant
+ *   PUT  /catalog/restaurants/{id} json: RestaurantUpdate          -> Restaurant
+ */
+
+import {
+  apiFetch,
+  api,
+  clearAuth,
+  docId,
+  getToken,
+  isApiError,
+  setToken,
+  type Restaurant,
+} from "@/lib/api";
+
+/* -------------------------------------------------------------------------- */
+/* Token storage                                                              */
+/* -------------------------------------------------------------------------- */
+
+/** Rotating refresh credential from `Token.refresh_token`. */
+export const REFRESH_TOKEN_STORAGE_KEY = "zvingo_refresh_token";
+/** Epoch ms at which the access token stops being accepted. */
+export const TOKEN_EXPIRY_STORAGE_KEY = "zvingo_token_expires_at";
+
+/** The `Token` schema from `backend/app/auth/schemas.py`. */
+export interface AuthToken {
+  access_token: string;
+  token_type: string;
+  /** Absent when the refresh registry (Redis) was unavailable at sign-in. */
+  refresh_token?: string | null;
+  /** Access-token lifetime in seconds. */
+  expires_in?: number | null;
+}
+
+function store(): Storage | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage;
+  } catch {
+    // Private mode / blocked site data. The session still works for this tab.
+    return null;
+  }
+}
+
+export function getRefreshToken(): string | null {
+  return store()?.getItem(REFRESH_TOKEN_STORAGE_KEY) ?? null;
+}
+
+/** Epoch ms the access token expires at, or `null` when unknown. */
+export function getTokenExpiry(): number | null {
+  const raw = store()?.getItem(TOKEN_EXPIRY_STORAGE_KEY);
+  const parsed = raw ? Number(raw) : NaN;
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Persist a freshly issued pair. Both tokens are replaced together: the
+ * backend rotates refresh tokens, so the one we just spent is already dead.
+ */
+export function persistSession(token: AuthToken) {
+  setToken(token.access_token);
+  const s = store();
+  if (!s) return;
+  try {
+    if (token.refresh_token) {
+      s.setItem(REFRESH_TOKEN_STORAGE_KEY, token.refresh_token);
+    } else {
+      s.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+    }
+    if (token.expires_in && token.expires_in > 0) {
+      s.setItem(TOKEN_EXPIRY_STORAGE_KEY, String(Date.now() + token.expires_in * 1000));
+    } else {
+      s.removeItem(TOKEN_EXPIRY_STORAGE_KEY);
+    }
+  } catch {
+    /* quota / private mode — the access token in memory still works */
+  }
+}
+
+/** Forget everything about the signed-in merchant on this device. */
+export function clearSession() {
+  clearAuth();
+  const s = store();
+  try {
+    s?.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+    s?.removeItem(TOKEN_EXPIRY_STORAGE_KEY);
+  } catch {
+    /* nothing to clear */
+  }
+}
+
+export function hasAccessToken(): boolean {
+  return Boolean(getToken());
+}
+
+/* -------------------------------------------------------------------------- */
+/* Redirect targets                                                           */
+/* -------------------------------------------------------------------------- */
+
+export const DEFAULT_SIGNED_IN_PATH = "/dashboard";
+
+/**
+ * Only ever redirect to a path on this origin.
+ *
+ * `?next=` arrives from a link anyone can craft, so `//evil.example`,
+ * `https://evil.example` and `javascript:` must all fall back to the
+ * dashboard rather than becoming an open redirect.
+ */
+export function safeNextPath(raw: string | null | undefined): string {
+  if (!raw) return DEFAULT_SIGNED_IN_PATH;
+  let value = raw.trim();
+  if (!value.startsWith("/")) return DEFAULT_SIGNED_IN_PATH;
+  if (value.startsWith("//") || value.startsWith("/\\")) return DEFAULT_SIGNED_IN_PATH;
+  try {
+    value = decodeURI(value);
+  } catch {
+    return DEFAULT_SIGNED_IN_PATH;
+  }
+  // Control characters (a smuggled newline, a NUL) never belong in a path.
+  if (Array.from(value).some((ch) => ch.charCodeAt(0) < 32)) return DEFAULT_SIGNED_IN_PATH;
+  // Never bounce back to an auth screen — that is how redirect loops start.
+  const path = value.split("?")[0] ?? "";
+  if (/^\/(login|register|forgot-password|reset-password)(\/|$)/.test(path)) {
+    return DEFAULT_SIGNED_IN_PATH;
+  }
+  return value;
+}
+
+/** Read one query parameter from the current URL (client only). */
+export function readQueryParam(name: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return new URLSearchParams(window.location.search).get(name);
+  } catch {
+    return null;
+  }
+}
+
+/** Drop a parameter from the address bar without a navigation. */
+export function stripQueryParam(name: string) {
+  if (typeof window === "undefined") return;
+  try {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has(name)) return;
+    url.searchParams.delete(name);
+    window.history.replaceState(
+      window.history.state,
+      "",
+      url.pathname + (url.searchParams.size ? `?${url.searchParams}` : "") + url.hash,
+    );
+  } catch {
+    /* history API unavailable — harmless */
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Request helper                                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What a failed auth call gives a screen to render. `message` is always
+ * user-safe; `retryAfterSeconds` is only set for a 429.
+ */
+export interface AuthFailure {
+  message: string;
+  status: number;
+  kind: "credentials" | "conflict" | "validation" | "rate_limited" | "network" | "server";
+  retryAfterSeconds?: number;
+  /** Raw `detail` string from FastAPI, for field-level mapping. */
+  detail?: string;
+}
+
+export class AuthRequestError extends Error implements AuthFailure {
+  readonly name = "AuthRequestError";
+  readonly status: number;
+  readonly kind: AuthFailure["kind"];
+  readonly retryAfterSeconds?: number;
+  readonly detail?: string;
+
+  constructor(failure: AuthFailure) {
+    super(failure.message);
+    this.status = failure.status;
+    this.kind = failure.kind;
+    this.retryAfterSeconds = failure.retryAfterSeconds;
+    this.detail = failure.detail;
+  }
+}
+
+export function isAuthRequestError(value: unknown): value is AuthRequestError {
+  return value instanceof AuthRequestError;
+}
+
+const NETWORK_MESSAGE = "We could not reach Zvingo. Check your connection and try again.";
+const SERVER_MESSAGE = "Zvingo had a problem on our side. Please try again in a moment.";
+
+/**
+ * Seconds until the caller may retry, from the `Retry-After` header when the
+ * browser can see it, else from the server's own copy
+ * ("Please wait 42s and try again"). Cross-origin deployments hide the header
+ * unless CORS exposes it — see the backend requests in the M3 report.
+ */
+function retryAfterFrom(response: Response, detail: string): number | undefined {
+  const header = response.headers.get("Retry-After");
+  const fromHeader = header ? Number(header) : NaN;
+  if (Number.isFinite(fromHeader) && fromHeader > 0) return Math.ceil(fromHeader);
+  const match = /(\d+)\s*s\b/.exec(detail);
+  if (match) {
+    const seconds = Number(match[1]);
+    if (Number.isFinite(seconds) && seconds > 0) return seconds;
+  }
+  return undefined;
+}
+
+function detailOf(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "";
+  const detail = (payload as { detail?: unknown }).detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const first = detail.find(
+      (entry) => entry && typeof entry === "object" && typeof (entry as { msg?: unknown }).msg === "string",
+    ) as { msg?: string; loc?: unknown[] } | undefined;
+    if (first?.msg) {
+      const field = Array.isArray(first.loc) ? String(first.loc[first.loc.length - 1] ?? "") : "";
+      return field ? `${field.replace(/_/g, " ")}: ${first.msg}` : first.msg;
+    }
+  }
+  return "";
+}
+
+interface AuthRequestInit {
+  path: string;
+  json?: unknown;
+  form?: Record<string, string>;
+  /** Copy shown for a 400/401/409 the caller wants to phrase itself. */
+  invalidMessage?: string;
+}
+
+/**
+ * POST to a public auth endpoint and normalise every failure mode into an
+ * `AuthRequestError` a screen can render without knowing about HTTP.
+ *
+ * Uses `apiFetch` rather than `apiJson` so the 429 `Retry-After` header is
+ * still readable, and always with `skipAuthRedirect` so a wrong password on
+ * the sign-in screen does not trigger the global 401 bounce.
+ */
+async function postAuth<T>({ path, json, form, invalidMessage }: AuthRequestInit): Promise<T> {
+  let response: Response;
+  try {
+    response = await apiFetch(path, {
+      method: "POST",
+      anonymous: true,
+      skipAuthRedirect: true,
+      ...(form
+        ? {
+            rawBody: new URLSearchParams(form).toString(),
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          }
+        : { json }),
+    });
+  } catch (error) {
+    if (isApiError(error) && error.status === 401) {
+      throw new AuthRequestError({
+        status: 401,
+        kind: "credentials",
+        message: invalidMessage ?? "Those details did not work. Check them and try again.",
+      });
+    }
+    const message = isApiError(error) && error.kind === "timeout" ? error.message : NETWORK_MESSAGE;
+    throw new AuthRequestError({ status: 0, kind: "network", message });
+  }
+
+  const text = await response.text();
+  let payload: unknown = null;
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = null;
+    }
+  }
+
+  if (response.ok) return payload as T;
+
+  const detail = detailOf(payload);
+
+  if (response.status === 429) {
+    const retryAfterSeconds = retryAfterFrom(response, detail);
+    throw new AuthRequestError({
+      status: 429,
+      kind: "rate_limited",
+      retryAfterSeconds,
+      detail,
+      message: retryAfterSeconds
+        ? `Too many attempts from this device. You can try again in ${formatCountdown(retryAfterSeconds)}.`
+        : "Too many attempts from this device. Please wait a few minutes and try again.",
+    });
+  }
+
+  if (response.status >= 500) {
+    throw new AuthRequestError({ status: response.status, kind: "server", message: SERVER_MESSAGE, detail });
+  }
+
+  if (response.status === 401) {
+    throw new AuthRequestError({
+      status: 401,
+      kind: "credentials",
+      detail,
+      message: invalidMessage ?? detail ?? "Those details did not work. Check them and try again.",
+    });
+  }
+
+  if (response.status === 403) {
+    // Reached only after the password checked out (deactivated account), so
+    // the server's own copy is safe to show and is not an enumeration oracle.
+    throw new AuthRequestError({
+      status: 403,
+      kind: "credentials",
+      detail,
+      message: detail || "This account cannot sign in right now. Contact Zvingo support.",
+    });
+  }
+
+  if (response.status === 409 || (response.status === 400 && /already/i.test(detail))) {
+    throw new AuthRequestError({
+      status: response.status,
+      kind: "conflict",
+      detail,
+      message: detail || "Those details are already in use.",
+    });
+  }
+
+  throw new AuthRequestError({
+    status: response.status,
+    kind: "validation",
+    detail,
+    message: detail || invalidMessage || "Some of the details are not valid. Check the form and try again.",
+  });
+}
+
+/** `95` -> `1m 35s`, `40` -> `40s`. */
+export function formatCountdown(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.ceil(totalSeconds));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return rest ? `${minutes}m ${rest}s` : `${minutes}m`;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Auth calls                                                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Deliberately identical whether the account exists or the password is wrong.
+ * The backend removed every enumeration oracle (F4 §4); the UI must not add
+ * one back by phrasing "no such account" differently from "wrong password".
+ */
+export const INVALID_CREDENTIALS_MESSAGE =
+  "That email or phone number and password do not match. Check both and try again.";
+
+export function signIn(identifier: string, password: string): Promise<AuthToken> {
+  return postAuth<AuthToken>({
+    path: "/auth/token",
+    form: { username: identifier, password },
+    invalidMessage: INVALID_CREDENTIALS_MESSAGE,
+  });
+}
+
+export interface MerchantRegistration {
+  full_name: string;
+  phone: string;
+  password: string;
+  email?: string;
+}
+
+/**
+ * Create a merchant account.
+ *
+ * `role` is pinned to `merchant` here and is never a form control. The backend
+ * restricts self-registration to `SELF_ASSIGNABLE_ROLES`
+ * (consumer/driver/merchant) after an escalation bug that let anyone register
+ * as a platform administrator — the dashboard must not offer a role choice at
+ * all, not even a disabled one.
+ */
+export function registerMerchant(input: MerchantRegistration): Promise<AuthToken> {
+  return postAuth<AuthToken>({
+    path: "/auth/register",
+    json: {
+      full_name: input.full_name,
+      phone: input.phone,
+      password: input.password,
+      ...(input.email ? { email: input.email } : {}),
+      role: "merchant",
+    },
+  });
+}
+
+/** Exchange the stored refresh token for a new pair. Rotation: single use. */
+export async function refreshSession(): Promise<AuthToken | null> {
+  const refresh_token = getRefreshToken();
+  if (!refresh_token) return null;
+  try {
+    const token = await postAuth<AuthToken>({
+      path: "/auth/refresh",
+      json: { refresh_token },
+    });
+    persistSession(token);
+    return token;
+  } catch {
+    // Expired, already rotated, or revoked. The only honest next step is a
+    // fresh sign-in, so drop the dead credential rather than retrying it.
+    clearSession();
+    return null;
+  }
+}
+
+/** Always answers the same way, registered number or not. */
+export function requestPasswordReset(phone: string): Promise<{ status: string }> {
+  return postAuth<{ status: string }>({
+    path: "/auth/reset-password/request",
+    json: { phone },
+  });
+}
+
+export function confirmPasswordReset(token: string, newPassword: string): Promise<{ status: string }> {
+  return postAuth<{ status: string }>({
+    path: "/auth/reset-password/confirm",
+    json: { token, new_password: newPassword },
+    invalidMessage: "That reset code is not valid.",
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Restaurant creation (the second half of merchant onboarding)               */
+/* -------------------------------------------------------------------------- */
+
+export interface GeocodeMatch {
+  display_name: string;
+  lat: number;
+  lng: number;
+  type?: string;
+}
+
+/** Forward-geocode through the backend (`GET /location/geocode`). */
+export async function geocodeAddress(query: string): Promise<GeocodeMatch[]> {
+  const search = new URLSearchParams({ q: query, country: "zw" });
+  const results = await api.get<GeocodeMatch[]>(`/location/geocode?${search.toString()}`, {
+    anonymous: true,
+    skipAuthRedirect: true,
+    timeoutMs: 12_000,
+  });
+  return Array.isArray(results) ? results : [];
+}
+
+export interface NewRestaurant {
+  name: string;
+  description?: string;
+  categories: string[];
+  address: string;
+  lat: number;
+  lng: number;
+}
+
+/**
+ * Create the merchant's restaurant, then store the human-readable address.
+ *
+ * Two calls because `RestaurantCreate` has no `address` field while
+ * `RestaurantUpdate` does — see the backend requests in the M3 report. The
+ * address write is best-effort: a restaurant that exists without its display
+ * address is recoverable from Settings, losing the restaurant is not.
+ */
+export async function createRestaurantForMerchant(input: NewRestaurant): Promise<Restaurant> {
+  const created = await api.post<Restaurant>("/catalog/restaurants", {
+    name: input.name,
+    description: input.description || null,
+    categories: input.categories,
+    lat: input.lat,
+    lng: input.lng,
+  });
+  const id = docId(created);
+  if (!id || !input.address) return created;
+  try {
+    return await api.put<Restaurant>(`/catalog/restaurants/${id}`, { address: input.address });
+  } catch {
+    return created;
+  }
+}
+
+/** Where a browser geolocation fix lands, for the address step. */
+export function currentPosition(): Promise<{ lat: number; lng: number }> {
+  return new Promise((resolve, reject) => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      reject(new Error("This browser cannot share your location."));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => resolve({ lat: position.coords.latitude, lng: position.coords.longitude }),
+      (error) =>
+        reject(
+          new Error(
+            error.code === error.PERMISSION_DENIED
+              ? "Location is blocked for this site. Allow it in your browser, or search for your address instead."
+              : "We could not get your location. Search for your address instead.",
+          ),
+        ),
+      { enableHighAccuracy: true, timeout: 12_000, maximumAge: 60_000 },
+    );
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Password policy                                                            */
+/* -------------------------------------------------------------------------- */
+
+/** Mirrors `MIN_PASSWORD_LENGTH` in `backend/app/auth/schemas.py`. */
+export const PASSWORD_MIN_LENGTH = 8;
+export const PASSWORD_MAX_LENGTH = 200;
+
+export interface PasswordAssessment {
+  /** The one rule the server enforces — submission is blocked without it. */
+  meetsMinimum: boolean;
+  tooLong: boolean;
+  /** 0–3. Advisory only; never blocks submission. */
+  strength: number;
+  strengthLabel: "Too short" | "Weak" | "Fair" | "Strong";
+  /** Next thing that would make it stronger, or null when already strong. */
+  tip: string | null;
+}
+
+export function assessPassword(password: string): PasswordAssessment {
+  const value = password ?? "";
+  const meetsMinimum = value.length >= PASSWORD_MIN_LENGTH;
+  const tooLong = value.length > PASSWORD_MAX_LENGTH;
+
+  const hasNumber = /\d/.test(value);
+  const hasLetter = /[a-z]/i.test(value);
+  const hasUpperAndLower = /[a-z]/.test(value) && /[A-Z]/.test(value);
+  const hasSymbol = /[^\w\s]/.test(value);
+  const isLong = value.length >= 12;
+
+  if (!meetsMinimum) {
+    return { meetsMinimum, tooLong, strength: 0, strengthLabel: "Too short", tip: null };
+  }
+
+  const points =
+    (hasNumber && hasLetter ? 1 : 0) + (hasUpperAndLower || hasSymbol ? 1 : 0) + (isLong ? 1 : 0);
+  const strength = Math.max(1, Math.min(3, points));
+  const strengthLabel = strength === 3 ? "Strong" : strength === 2 ? "Fair" : "Weak";
+
+  let tip: string | null = null;
+  if (!hasNumber || !hasLetter) tip = "Mixing letters and numbers makes it much harder to guess.";
+  else if (!hasUpperAndLower && !hasSymbol) tip = "Add a capital letter or a symbol to make it stronger.";
+  else if (!isLong) tip = "Twelve characters or more is stronger still.";
+
+  return { meetsMinimum, tooLong, strength, strengthLabel, tip };
+}

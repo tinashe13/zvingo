@@ -14,7 +14,14 @@ class User(Document):
     role: str = "driver"
     is_active: bool = True
     created_at: datetime = Field(default_factory=utc_now)
-    
+
+    # Credential cutoff: any access/refresh token issued before this instant
+    # is rejected. Set on password reset and on "log out everywhere", which is
+    # what stops a stolen session from outliving the password that leaked it.
+    # Naive UTC, like every other datetime on this document.
+    tokens_valid_from: Optional[datetime] = None
+
+
     # Favourites
     favourite_restaurant_ids: List[str] = []
     

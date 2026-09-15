@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List
 
 class SyncRequest(BaseModel):
     driver_id: str

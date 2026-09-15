@@ -21,7 +21,7 @@ from app.finance.fee_calculator import (
 )
 from app.location.service import LocationService
 from app.order.state_machine import OrderState
-from app.rate_limiter import RateLimiter, get_rate_limiter
+from app.rate_limiter import RateLimiter
 
 
 class QueryResult:
@@ -135,18 +135,19 @@ def test_settings_cors_and_production_safety():
     production = Settings(
         **base,
         ENVIRONMENT="production",
-        SECRET_KEY="x" * 64,
+        SECRET_KEY="9f2c41ab7e05d8631c4a0fbe27d95a83704ec6218dbf5a0917c3e4d6b8a12f7e",
         PAYMENT_MOCK_MODE=False,
         PAYNOW_INTEGRATION_ID="id",
         PAYNOW_INTEGRATION_KEY="key",
         SMS_MOCK_MODE=False,
         AFRICASTALKING_API_KEY="sms-key",
+        METRICS_TOKEN="metrics-token",
     )
     assert production.cors_origins == []
 
 
 @pytest.mark.asyncio
-async def test_rate_limiter_allowed_limited_error_and_singleton(monkeypatch):
+async def test_rate_limiter_allowed_limited_and_error(monkeypatch):
     redis = FakeRedis()
     limiter = RateLimiter(redis)
     limiter.location_limit = 2
@@ -156,11 +157,6 @@ async def test_rate_limiter_allowed_limited_error_and_singleton(monkeypatch):
     assert not allowed and "max 2" in message
     redis.raise_on_zrem = RuntimeError("redis down")
     assert await limiter.check_location_update("d1") == (True, None)
-
-    import app.rate_limiter as module
-
-    monkeypatch.setattr(module, "_limiter", None)
-    assert await get_rate_limiter(redis) is await get_rate_limiter(FakeRedis())
 
 
 def test_auth_password_hash_and_token():
@@ -194,7 +190,7 @@ async def test_auth_create_and_authenticate_user(monkeypatch):
         UserCreate(
             email="a@example.com",
             phone="+263770000000",
-            password="secret",
+            password="secret-password",
             full_name="A User",
             role="driver",
         )
@@ -209,6 +205,9 @@ async def test_auth_create_and_authenticate_user(monkeypatch):
     assert await AuthService.authenticate_user("+263", "secret") is good
     FakeUser.find_one = AsyncMock(side_effect=[None, None])
     assert await AuthService.authenticate_user("missing", "secret") is None
+    # A malformed stored hash must read as "wrong password", not blow up.
+    FakeUser.find_one = AsyncMock(side_effect=[SimpleNamespace(hashed_password="not-a-hash")])
+    assert await AuthService.authenticate_user("a@example.com", "secret") is None
     FakeUser.find_one = AsyncMock(return_value=good)
     assert await AuthService.authenticate_user("a@example.com", "bad") is None
 
@@ -238,7 +237,10 @@ async def test_location_service_queries_and_geocoding(monkeypatch):
     query = QueryResult(["restaurant"])
     monkeypatch.setattr(module.Restaurant, "find", MagicMock(return_value=query))
     assert await LocationService.find_nearby_restaurants(1, 2, 3, 4) == ["restaurant"]
-    assert query.limit_value == 4
+    # Ranking needs a candidate pool wider than one page, but still bounded:
+    # 4x the page size, capped by NEARBY_POOL.
+    assert query.limit_value == 16
+    assert query.limit_value <= module.NEARBY_POOL
 
     response = FakeHTTPResponse(
         [{"display_name": "Harare", "lat": "-17.8", "lon": "31.0", "type": "city"}]
@@ -444,8 +446,16 @@ async def test_fcm_initialization_and_send(monkeypatch):
 
     monkeypatch.setattr(module, "_fcm_initialized", False)
     monkeypatch.setattr(settings, "FIREBASE_CREDENTIALS_PATH", None)
-    assert module.init_firebase() is None
+    # Unconfigured FCM degrades explicitly: init reports False, sends report
+    # False, and the reason is retrievable rather than silently swallowed.
+    assert module.init_firebase() is False
     assert await module.send_push_notification("token", "Title", "Body") is False
+    status = module.fcm_status()
+    assert status["available"] is False
+    assert "FIREBASE_CREDENTIALS_PATH" in status["reason"]
+    assert status["skipped"] >= 1
+    # A user with no token is skipped, not crashed on.
+    assert await module.send_push_notification(None, "Title", "Body") is False
 
     monkeypatch.setattr(settings, "FIREBASE_CREDENTIALS_PATH", "creds.json")
     fake_credentials = ModuleType("firebase_admin.credentials")
@@ -506,7 +516,20 @@ async def test_db_initialization(monkeypatch):
     monkeypatch.setattr(module, "init_beanie", init)
     await module.init_db()
     assert init.await_args.kwargs["database"] is database
-    assert len(init.await_args.kwargs["document_models"]) == 9
+    registered = init.await_args.kwargs["document_models"]
+    # Assert by name rather than by count: an unregistered Beanie Document
+    # raises at first use, so the check that matters is that every collection
+    # the app writes to is present. A bare count breaks whenever a model is
+    # added and says nothing about which one is missing.
+    names = {model.__name__ for model in registered}
+    assert len(registered) == len(names)
+    assert {
+        "User", "Order", "Dispatch", "Restaurant", "Promotion", "Payment",
+        "DriverEarning", "Review", "ChatMessage",
+        # Money path — see app/db/session.py.
+        "LedgerEntry", "ExchangeRate", "OrderRateLock", "RefundRequest",
+        "PaymentNotification",
+    } <= names
 
 
 @pytest.mark.asyncio

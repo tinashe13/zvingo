@@ -125,6 +125,10 @@ async def test_location_tracking_sse_message_disconnect_and_cancel(monkeypatch):
     )
     redis = Redis(pubsub)
     monkeypatch.setattr(module.aioredis, "from_url", lambda *_a, **_k: redis)
+    # These tests cover stream mechanics (disconnect, cancel, cleanup), not
+    # authorization. Both stream endpoints now require a single-use ticket;
+    # ticket authorization has its own tests in test_lead_stream_auth.py.
+    monkeypatch.setattr(module, "authorize_stream", AsyncMock(return_value="user-1"))
     response = await module.track_driver(Request([False, False]), "driver")
     events = await collect(response)
     assert events == [{"event": "location", "data": '{"lat":1}'}]
@@ -148,6 +152,10 @@ async def test_notification_sse_messages_ping_error_and_cleanup(monkeypatch):
     )
     redis = Redis(pubsub)
     monkeypatch.setattr(module.redis, "from_url", lambda *_a, **_k: redis)
+    # These tests cover stream mechanics (disconnect, cancel, cleanup), not
+    # authorization. Both stream endpoints now require a single-use ticket;
+    # ticket authorization has its own tests in test_lead_stream_auth.py.
+    monkeypatch.setattr(module, "authorize_stream", AsyncMock(return_value="user-1"))
     response = await module.message_stream(Request([False, False, True]), "channel")
     events = await collect(response)
     assert [event["event"] for event in events] == ["connected", "message", "ping"]
@@ -191,6 +199,15 @@ async def test_websocket_rejection_and_full_message_flow(monkeypatch):
     wrong = WebSocket(token=AuthService.create_access_token({"sub": "other"}))
     await module.driver_ws(wrong, "driver")
     assert wrong.closed_code == 1008
+
+    # A valid token for an account that no longer exists is refused too.
+    monkeypatch.setattr(module.User, "get", AsyncMock(return_value=None))
+    deactivated = WebSocket(token=AuthService.create_access_token({"sub": "driver"}))
+    await module.driver_ws(deactivated, "driver")
+    assert deactivated.closed_code == 1008
+    monkeypatch.setattr(
+        module.User, "get", AsyncMock(return_value=SimpleNamespace(is_active=True))
+    )
 
     token = AuthService.create_access_token({"sub": "driver"})
     messages = [

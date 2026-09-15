@@ -1,48 +1,68 @@
-import 'package:consumer_app/core/app_colors.dart';
-import 'package:consumer_app/core/app_text_styles.dart';
-import 'package:consumer_app/features/address/address_provider.dart';
-import 'package:consumer_app/features/address/address_search_sheet.dart';
-import 'package:consumer_app/features/address/saved_address.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class AddAddressScreen extends ConsumerStatefulWidget {
-  final SavedAddress? existing;
+import 'package:consumer_app/common/zvingo_ui.dart';
+import 'package:consumer_app/features/address/address_provider.dart';
+import 'package:consumer_app/features/address/address_search_sheet.dart';
+import 'package:consumer_app/features/address/map_pin_screen.dart';
+import 'package:consumer_app/features/address/saved_address.dart';
 
+/// Add or edit a delivery address.
+///
+/// The order of the screen is the order of the decisions: *where* (search, my
+/// location, or a dropped pin), then *what to call it*, then *how to get in* —
+/// which is the part that actually decides whether the food arrives.
+class AddAddressScreen extends ConsumerStatefulWidget {
   const AddAddressScreen({super.key, this.existing});
+
+  final SavedAddress? existing;
 
   @override
   ConsumerState<AddAddressScreen> createState() => _AddAddressScreenState();
 }
 
 class _AddAddressScreenState extends ConsumerState<AddAddressScreen> {
+  static const List<String> _presetLabels = ['Home', 'Work', 'Other'];
+
   final _formKey = GlobalKey<FormState>();
-  late TextEditingController _labelController;
-  late TextEditingController _addressController;
-  bool _isDefault = false;
-  bool _isSaving = false;
-  bool _isLocating = false;
+  late final TextEditingController _labelController;
+  late final TextEditingController _addressController;
+  late final TextEditingController _accessController;
+  late final TextEditingController _instructionsController;
+
+  String _selectedLabel = 'Home';
   double? _lat;
   double? _lng;
-  String _selectedLabel = 'Home';
-  final _labels = ['Home', 'Work', 'Other'];
+  bool _isDefault = false;
+  bool _saving = false;
+  bool _locating = false;
+  bool _pinAdjusted = false;
 
   bool get isEditing => widget.existing != null;
+  bool get hasPoint => _lat != null && _lng != null;
 
   @override
   void initState() {
     super.initState();
-    final e = widget.existing;
-    _labelController = TextEditingController(text: e?.label ?? '');
-    _addressController = TextEditingController(text: e?.address ?? '');
-    _isDefault = e?.isDefault ?? false;
-    _lat = e?.lat;
-    _lng = e?.lng;
-    if (e != null) {
-      _selectedLabel = _labels.contains(e.label) ? e.label : 'Other';
-      if (_selectedLabel == 'Other') {
-        _labelController.text = e.label;
+    final existing = widget.existing;
+    _labelController = TextEditingController();
+    _addressController = TextEditingController(text: existing?.address ?? '');
+    _accessController = TextEditingController(text: existing?.accessNote ?? '');
+    _instructionsController =
+        TextEditingController(text: existing?.instructions ?? '');
+    _lat = existing?.lat;
+    _lng = existing?.lng;
+    _isDefault = existing?.isDefault ?? false;
+
+    if (existing != null) {
+      final matches = _presetLabels
+          .where((l) => l.toLowerCase() == existing.label.toLowerCase());
+      if (matches.isNotEmpty) {
+        _selectedLabel = matches.first;
+      } else {
+        _selectedLabel = 'Other';
+        _labelController.text = existing.label;
       }
     }
   }
@@ -51,61 +71,100 @@ class _AddAddressScreenState extends ConsumerState<AddAddressScreen> {
   void dispose() {
     _labelController.dispose();
     _addressController.dispose();
+    _accessController.dispose();
+    _instructionsController.dispose();
     super.dispose();
   }
 
+  Future<void> _search() async {
+    final result = await AddressSearchSheet.show(
+      context,
+      initialQuery: _addressController.text.trim(),
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      _addressController.text = result.displayName;
+      _lat = result.lat;
+      _lng = result.lng;
+      _pinAdjusted = false;
+    });
+  }
+
   Future<void> _useCurrentLocation() async {
-    setState(() => _isLocating = true);
+    setState(() => _locating = true);
     try {
-      final currentAddr = await ref.read(currentLocationAddressProvider.future);
-      if (mounted) {
-        setState(() {
-          _addressController.text = currentAddr.address;
-          _lat = currentAddr.lat;
-          _lng = currentAddr.lng;
-          _isLocating = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLocating = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not get location: $e')),
-        );
-      }
+      final current = await ref.refresh(currentLocationAddressProvider.future);
+      if (!mounted) return;
+      setState(() {
+        _addressController.text = current.address;
+        _lat = current.lat;
+        _lng = current.lng;
+        _pinAdjusted = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'We could not get your location. Switch location on for Zvingo, '
+            'or search for the address instead.',
+          ),
+          action: SnackBarAction(label: 'Search', onPressed: _search),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _locating = false);
     }
   }
 
-  /// Opens the address search sheet and populates fields from the result.
-  Future<void> _openAddressSearch() async {
-    final result = await AddressSearchSheet.show(context);
-    if (result != null && mounted) {
-      setState(() {
-        _addressController.text = result.displayName;
-        _lat = result.lat;
-        _lng = result.lng;
-      });
-    }
+  Future<void> _adjustPin() async {
+    // Default the map to the city centre of Harare when nothing is set yet, so
+    // the user always has somewhere to start dragging from.
+    final start = PinnedPoint(
+      lat: _lat ?? -17.8252,
+      lng: _lng ?? 31.0335,
+    );
+    final result = await MapPinScreen.push(
+      context,
+      initial: start,
+      addressLine: _addressController.text.trim().isEmpty
+          ? null
+          : _addressController.text.trim(),
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      _lat = result.lat;
+      _lng = result.lng;
+      _pinAdjusted = true;
+    });
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    if (_lat == null || _lng == null) {
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (!hasPoint) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'Please search and select an address, or use current location.'),
+        SnackBar(
+          content: const Text(
+            'We still need the spot on the map. Search for the address, use '
+            'your current location, or drop a pin.',
+          ),
+          action: SnackBarAction(label: 'Drop a pin', onPressed: _adjustPin),
         ),
       );
       return;
     }
 
-    setState(() => _isSaving = true);
+    setState(() => _saving = true);
 
     final label = _selectedLabel == 'Other'
         ? _labelController.text.trim()
         : _selectedLabel;
+
+    String? trimmedOrNull(TextEditingController c) {
+      final value = c.text.trim();
+      return value.isEmpty ? null : value;
+    }
 
     final address = SavedAddress(
       id: widget.existing?.id ??
@@ -115,6 +174,8 @@ class _AddAddressScreenState extends ConsumerState<AddAddressScreen> {
       lat: _lat!,
       lng: _lng!,
       isDefault: _isDefault,
+      accessNote: trimmedOrNull(_accessController),
+      instructions: trimmedOrNull(_instructionsController),
     );
 
     final notifier = ref.read(savedAddressesProvider.notifier);
@@ -123,239 +184,312 @@ class _AddAddressScreenState extends ConsumerState<AddAddressScreen> {
     } else {
       await notifier.addAddress(address);
     }
-
-    // Also set as the active delivery location
     notifier.selectAddress(address);
 
-    if (mounted) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isEditing ? '${address.label} updated' : '${address.label} saved',
+        ),
+      ),
+    );
+    if (context.canPop()) {
       context.pop();
+    } else {
+      context.go('/addresses');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.white,
-      appBar: AppBar(
-        backgroundColor: AppColors.white,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => context.pop(),
+    return ZvScreen(
+      title: isEditing ? 'Edit address' : 'Add address',
+      fallbackRoute: '/addresses',
+      footer: ZvStickyFooter(
+        child: ZvButton.primary(
+          label: isEditing ? 'Save changes' : 'Save address',
+          loading: _saving,
+          onPressed: _saving ? null : _save,
         ),
-        title: Text(
-          isEditing ? 'Edit Address' : 'Add Address',
-          style: AppTextStyles.titleLarge,
-        ),
-        centerTitle: true,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Use current location button
-              OutlinedButton.icon(
-                onPressed: _isLocating ? null : _useCurrentLocation,
-                icon: _isLocating
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.my_location, size: 20),
-                label: Text(_isLocating
-                    ? 'Getting location...'
-                    : 'Use Current Location'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.info,
-                  side: const BorderSide(color: AppColors.info),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+      child: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.md,
+            AppSpacing.md,
+            AppSpacing.xxl,
+          ),
+          children: [
+            const _SectionLabel(
+              step: '1',
+              title: 'Where are we delivering?',
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            ZvTextField(
+              label: 'Address',
+              hint: 'Tap to search for a street or suburb',
+              controller: _addressController,
+              readOnly: true,
+              onTap: _search,
+              maxLines: 2,
+              minLines: 1,
+              prefixIcon: Icons.search_rounded,
+              suffix: const Icon(Icons.chevron_right_rounded,
+                  color: AppColors.neutral400),
+              validator: (value) => (value == null || value.trim().isEmpty)
+                  ? 'Search for your address to continue'
+                  : null,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              children: [
+                Expanded(
+                  child: ZvButton.secondary(
+                    label: 'My location',
+                    icon: Icons.my_location_rounded,
+                    loading: _locating,
+                    onPressed: _locating ? null : _useCurrentLocation,
                   ),
                 ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // Label selection
-              const Text('Label', style: AppTextStyles.titleSmall),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                children: _labels.map((label) {
-                  final selected = _selectedLabel == label;
-                  return ChoiceChip(
-                    label: Text(label),
-                    selected: selected,
-                    selectedColor: AppColors.primarySurface,
-                    labelStyle: AppTextStyles.bodyMedium.copyWith(
-                      color: selected
-                          ? AppColors.primary
-                          : AppColors.textSecondary,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                    ),
-                    side: BorderSide(
-                      color: selected ? AppColors.primary : AppColors.border,
-                    ),
-                    onSelected: (_) => setState(() => _selectedLabel = label),
-                  );
-                }).toList(),
-              ),
-
-              // Custom label field (visible when "Other" is selected)
-              if (_selectedLabel == 'Other') ...[
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _labelController,
-                  decoration:
-                      _inputDecoration('Custom label (e.g. Gym, School)'),
-                  validator: (v) {
-                    if (_selectedLabel == 'Other' &&
-                        (v == null || v.trim().isEmpty)) {
-                      return 'Enter a label';
-                    }
-                    return null;
-                  },
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: ZvButton.secondary(
+                    label: hasPoint ? 'Adjust pin' : 'Drop a pin',
+                    icon: Icons.push_pin_outlined,
+                    onPressed: _adjustPin,
+                  ),
                 ),
               ],
-
-              const SizedBox(height: 20),
-
-              // Address field — tappable, opens the search sheet
-              const Text('Address', style: AppTextStyles.titleSmall),
-              const SizedBox(height: 8),
-              GestureDetector(
-                onTap: _openAddressSearch,
-                child: AbsorbPointer(
-                  child: TextFormField(
-                    controller: _addressController,
-                    decoration: _inputDecoration('Tap to search for an address')
-                        .copyWith(
-                      suffixIcon: const Icon(Icons.search,
-                          color: AppColors.primary, size: 22),
-                    ),
-                    maxLines: 2,
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) {
-                        return 'Select an address';
-                      }
-                      return null;
-                    },
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _PinStatus(
+              hasPoint: hasPoint,
+              adjusted: _pinAdjusted,
+              lat: _lat,
+              lng: _lng,
+            ),
+            const SizedBox(height: AppSpacing.xxl),
+            const _SectionLabel(step: '2', title: 'What should we call it?'),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xs,
+              children: _presetLabels.map((label) {
+                final selected = _selectedLabel == label;
+                return ChoiceChip(
+                  label: Text(label),
+                  avatar: Icon(
+                    _iconForLabel(label),
+                    size: 16,
+                    color: selected
+                        ? AppColors.textOnDark
+                        : AppColors.textSecondary,
                   ),
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              // Coordinates status
-              if (_lat != null && _lng != null)
-                Row(
-                  children: [
-                    const Icon(Icons.check_circle,
-                        color: AppColors.success, size: 16),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Location pinpointed',
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: AppColors.success),
-                    ),
-                  ],
-                )
-              else
-                Row(
-                  children: [
-                    const Icon(Icons.info_outline,
-                        color: AppColors.textHint, size: 16),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        'Search for an address or use current location',
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: AppColors.textHint),
-                      ),
-                    ),
-                  ],
-                ),
-
-              const SizedBox(height: 20),
-
-              // Default toggle
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Set as default address',
-                    style: AppTextStyles.bodyMedium),
-                subtitle: const Text(
-                  'This address will be selected automatically',
-                  style: AppTextStyles.bodySmall,
-                ),
-                value: _isDefault,
-                activeColor: AppColors.primary,
-                onChanged: (v) => setState(() => _isDefault = v),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Save button
-              SizedBox(
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: _isSaving ? null : _save,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: AppColors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    elevation: 2,
-                  ),
-                  child: _isSaving
-                      ? const SizedBox(
-                          height: 22,
-                          width: 22,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2.5,
-                          ),
-                        )
-                      : Text(
-                          isEditing ? 'Update Address' : 'Save Address',
-                          style: AppTextStyles.button,
-                        ),
-                ),
+                  selected: selected,
+                  onSelected: (_) => setState(() => _selectedLabel = label),
+                );
+              }).toList(),
+            ),
+            if (_selectedLabel == 'Other') ...[
+              const SizedBox(height: AppSpacing.sm),
+              ZvTextField(
+                label: 'Name this address',
+                hint: 'Gym, Mum\'s house, the office…',
+                controller: _labelController,
+                textCapitalization: TextCapitalization.sentences,
+                maxLength: 24,
+                validator: (value) {
+                  if (_selectedLabel != 'Other') return null;
+                  return (value == null || value.trim().isEmpty)
+                      ? 'Give this address a name'
+                      : null;
+                },
               ),
             ],
-          ),
+            const SizedBox(height: AppSpacing.xxl),
+            const _SectionLabel(
+              step: '3',
+              title: 'How does the driver find you?',
+              subtitle: 'Optional, but it is what turns a phone call into a '
+                  'doorstep delivery.',
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            ZvTextField(
+              label: 'Flat, floor or building',
+              hint: 'Flat 4B, Gold Crest Block C',
+              controller: _accessController,
+              optionalLabel: true,
+              maxLength: 60,
+              prefixIcon: Icons.meeting_room_outlined,
+              textCapitalization: TextCapitalization.sentences,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            ZvTextField(
+              label: 'Delivery instructions',
+              hint: 'Black gate opposite the tuckshop. Ring twice, the dog is '
+                  'friendly.',
+              controller: _instructionsController,
+              optionalLabel: true,
+              maxLines: 3,
+              minLines: 2,
+              maxLength: 200,
+              prefixIcon: Icons.notes_rounded,
+              textCapitalization: TextCapitalization.sentences,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            ZvCard(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.xs,
+              ),
+              child: SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _isDefault,
+                onChanged: (value) => setState(() => _isDefault = value),
+                title: const Text('Make this my default',
+                    style: AppTextStyles.bodyStrong),
+                subtitle: Text(
+                  'New orders start here unless you change them.',
+                  style: AppTextStyles.caption
+                      .copyWith(color: AppColors.textSecondary),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  InputDecoration _inputDecoration(String hint) {
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
-      filled: true,
-      fillColor: AppColors.background,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.border),
+  static IconData _iconForLabel(String label) => switch (label.toLowerCase()) {
+        'home' => Icons.home_outlined,
+        'work' => Icons.work_outline_rounded,
+        _ => Icons.place_outlined,
+      };
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({
+    required this.step,
+    required this.title,
+    this.subtitle,
+  });
+
+  final String step;
+  final String title;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          decoration: const BoxDecoration(
+            color: AppColors.actionDefault,
+            shape: BoxShape.circle,
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            step,
+            style: AppTextStyles.caption.copyWith(color: AppColors.textOnDark),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: AppTextStyles.h3),
+              if (subtitle != null) ...[
+                const SizedBox(height: AppSpacing.xxxs),
+                Text(
+                  subtitle!,
+                  style: AppTextStyles.caption
+                      .copyWith(color: AppColors.textSecondary),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Says, in words and not just colour, whether we have a precise point yet.
+class _PinStatus extends StatelessWidget {
+  const _PinStatus({
+    required this.hasPoint,
+    required this.adjusted,
+    required this.lat,
+    required this.lng,
+  });
+
+  final bool hasPoint;
+  final bool adjusted;
+  final double? lat;
+  final double? lng;
+
+  @override
+  Widget build(BuildContext context) {
+    final tone = hasPoint ? ZvTone.success : ZvTone.warning;
+    final title = !hasPoint
+        ? 'No map point yet'
+        : adjusted
+            ? 'Pin placed by you'
+            : 'Located from the address';
+    final detail = !hasPoint
+        ? 'Search, use your location, or drop a pin so the driver knows where '
+            'to ride.'
+        : '${lat!.toStringAsFixed(5)}, ${lng!.toStringAsFixed(5)}'
+            '${adjusted ? '' : ' — adjust the pin if your gate is elsewhere.'}';
+
+    return ZvAnimatedSwap(
+      valueKey: '$hasPoint$adjusted',
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: tone.surface,
+          borderRadius: AppRadius.mdAll,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              hasPoint
+                  ? Icons.check_circle_rounded
+                  : Icons.error_outline_rounded,
+              size: 20,
+              color: tone.foreground,
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: AppTextStyles.bodyStrong
+                        .copyWith(color: tone.foreground),
+                  ),
+                  const SizedBox(height: AppSpacing.xxxs),
+                  Text(
+                    detail,
+                    style: AppTextStyles.tabular(AppTextStyles.caption)
+                        .copyWith(color: tone.foreground),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.border),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.error),
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
   }
 }

@@ -14,6 +14,68 @@ logger = structlog.get_logger()
 AVG_SPEED_KMH = 25.0
 
 
+from app.finance.money import to_minor
+
+
+#: Wire codes for the driver app's payment badge. 0 was historically "cash",
+#: which no longer exists as a method; it now means "unsettled, collect at the
+#: door" so an old client still errs toward asking rather than assuming paid.
+PAYMENT_METHOD_CODES = {
+    "ECOCASH": 1,
+    "ONEMONEY": 2,
+    "INNBUCKS": 3,
+    "CARD": 4,
+}
+UNSETTLED_PAYMENT_CODE = 0
+
+
+async def _resolve_payment(order_id) -> tuple[int, str, bool]:
+    """(wire code, display name, is_prepaid) for an order's payment.
+
+    Falls back to "unsettled" when no payment record can be read, so a lookup
+    failure tells the driver to check rather than silently claiming the order
+    is already paid.
+    """
+    try:
+        from app.payment.models import Payment, PaymentStatus
+
+        # Dict query rather than Payment.order_id == ...: the field expression
+        # requires Beanie to be initialised, and a raise here would be caught
+        # below and silently reported as "payment unknown".
+        payment = await Payment.find_one({"order_id": str(order_id)})
+        if payment is None:
+            return UNSETTLED_PAYMENT_CODE, "Unpaid", False
+
+        method = getattr(payment.method, "value", payment.method)
+        method = str(method).upper()
+        status = getattr(payment.status, "value", payment.status)
+        prepaid = str(status).upper() == PaymentStatus.PAID.value
+
+        return (
+            PAYMENT_METHOD_CODES.get(method, UNSETTLED_PAYMENT_CODE),
+            method.title() if prepaid else "Unpaid",
+            prepaid,
+        )
+    except Exception as e:  # pragma: no cover - defensive
+        logger.warning("Could not resolve payment for offer", error=str(e))
+        return UNSETTLED_PAYMENT_CODE, "Unknown", False
+
+
+def _offer_timeout_seconds() -> int:
+    """How long a driver has to answer an offer.
+
+    Read from the dispatch engine rather than duplicated, so the countdown the
+    driver sees always matches the deadline the server actually enforces.
+    Imported lazily because dispatch imports notification.
+    """
+    try:
+        from app.dispatch.service import OFFER_TIMEOUT_SECONDS
+
+        return int(OFFER_TIMEOUT_SECONDS)
+    except Exception:
+        return 45
+
+
 def haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     """Compute distance in km between two lat/lng points."""
     R = 6371.0
@@ -49,8 +111,9 @@ class NotificationService:
 
         # ── FCM push notification ─────────────────────────────
         from app.auth.models import User
+        from app.notification.preferences import should_notify
         user = await User.get(driver_id)
-        if user and user.fcm_token:
+        if user and user.fcm_token and await should_notify(driver_id, "driver_offers"):
             from app.notification.fcm import send_push_notification
             merchant_name = offer_data.get("merchant_name", "A restaurant")
             fee = offer_data.get("delivery_fee_cents", 0) / 100
@@ -62,7 +125,7 @@ class NotificationService:
                       "payload": json.dumps(offer_data)},
             )
         else:
-            logger.info("No FCM token for driver, SSE only", driver_id=driver_id)
+            logger.info("No FCM push for driver, SSE only", driver_id=driver_id)
 
         # ── Redis: pub/sub + pending-offer cache ─────────────
         # Publish fires the offer to any currently connected WebSocket.
@@ -70,7 +133,7 @@ class NotificationService:
         # after the publish (race condition window) can still pick it up.
         # TTL matches the offer timeout so stale offers are never delivered.
         r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
-        offer_ttl = offer_data.get("timeout_seconds", 45)
+        offer_ttl = offer_data.get("timeout_seconds", _offer_timeout_seconds())
         offer_json = json.dumps({"event": "offer", **offer_data})
         try:
             await r.publish(f"driver_{driver_id}", offer_json)
@@ -149,19 +212,35 @@ class NotificationService:
         else:
             items_summary = "Order"
 
-        # Delivery fee in cents — auto-calculate if the order has no fee set
-        if order.delivery_fee and order.delivery_fee > 0:
-            delivery_fee_cents = int(order.delivery_fee * 100)
-        else:
-            from app.finance.fee_calculator import calculate_delivery_fee
-            gross_fee, _ = calculate_delivery_fee(delivery_dist_km)
-            delivery_fee_cents = int(gross_fee * 100)
+        # Money comes from the single authoritative breakdown, never recomputed
+        # here. Order.total_amount is the basket SUBTOTAL before fees, tip and
+        # discount -- this function previously treated it as a grand total and
+        # subtracted the fees back out of it, so the figures on the offer card
+        # (the numbers a driver decides on in about three seconds) were wrong.
+        from app.finance.fee_calculator import (
+            breakdown_for_order,
+            calculate_delivery_fee,
+        )
 
-        tip_cents = int(order.tip_amount * 100) if order.tip_amount else 0
-        total_cents = int(order.total_amount * 100) if order.total_amount else 0
-        order_subtotal_cents = total_cents - delivery_fee_cents - tip_cents
-        if order_subtotal_cents < 0:
-            order_subtotal_cents = 0
+        breakdown = breakdown_for_order(order)
+        delivery_fee_cents = breakdown.delivery_fee_minor
+        total_cents = breakdown.customer_total_minor
+        if delivery_fee_cents <= 0:
+            # Order carries no fee yet (offered before checkout priced it): fall
+            # back to the distance model rather than showing zero. The fallback
+            # has to land in the total as well, or the card shows a fee that the
+            # total does not account for and the figures visibly disagree.
+            gross_fee, _ = calculate_delivery_fee(delivery_dist_km)
+            delivery_fee_cents = to_minor(gross_fee)
+            total_cents += delivery_fee_cents
+
+        tip_cents = breakdown.tip_minor
+        order_subtotal_cents = breakdown.subtotal_minor
+
+        # What, if anything, the driver has to collect at the door.
+        payment_method_code, payment_method_name, is_prepaid = (
+            await _resolve_payment(order_id)
+        )
 
         # Build short ID from order_id
         short_id = f"ZV{str(order_id)[-6:].upper()}"
@@ -185,11 +264,19 @@ class NotificationService:
             "pickup_distance_km": round(pickup_dist_km, 1),
             "estimated_time_minutes": total_time_min,
             "pickup_time_minutes": pickup_time_min,
-            "payment_method": 0,  # 0=cash, 1=ecocash — extend later
+            # Resolved from the order's actual Payment, never assumed. This
+            # was hardcoded to 0 ("cash"), so every offer told the driver to
+            # collect money -- including on orders already settled by mobile
+            # money, and cash is not even a supported method. A driver asking
+            # a customer to pay twice is not a display bug.
+            "payment_method": payment_method_code,
+            "payment_method_name": payment_method_name,
+            "is_prepaid": is_prepaid,
+            "collect_amount_cents": 0 if is_prepaid else total_cents,
             "order_type": "delivery",
             "items_summary": items_summary,
             "item_count": item_count,
-            "timeout_seconds": 45,
+            "timeout_seconds": _offer_timeout_seconds(),
             "timestamp": utc_now().isoformat(),
         }
 
@@ -229,10 +316,11 @@ class NotificationService:
         finally:
             await r.close()
 
-        # Also send FCM push to consumer
+        # Also send FCM push to consumer, subject to their preferences.
         from app.auth.models import User
+        from app.notification.preferences import should_notify
         user = await User.get(consumer_id)
-        if user and user.fcm_token:
+        if user and user.fcm_token and await should_notify(consumer_id, "order_updates"):
             from app.notification.fcm import send_push_notification
             titles = {
                 "order_accepted": "Driver on the way!",

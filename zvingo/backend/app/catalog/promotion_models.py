@@ -1,6 +1,7 @@
 from typing import Dict, Optional, List
 from beanie import Document, Indexed
 from pydantic import BaseModel, Field
+from pymongo import IndexModel
 from datetime import datetime
 from app.time_utils import utc_now
 import uuid
@@ -43,6 +44,9 @@ class Promotion(Document):
     # `redeemed_by` is retained for documents written before this field existed.
     redemptions_by_user: Dict[str, int] = {}
 
+    # Acquisition promos: only redeemable by a consumer with no prior orders.
+    first_order_only: bool = False
+
     # Promo code (optional — for code-based promos)
     code: Optional[str] = None
 
@@ -54,5 +58,12 @@ class Promotion(Document):
         indexes = [
             [("merchant_id", 1)],
             [("is_active", 1), ("ends_at", 1)],
-            [("code", 1)],
+            # Promo codes are looked up by code on every validate and every
+            # redemption. Sparse, because most promos have no code.
+            # NOTE: not declared unique — Beanie builds indexes at startup, and
+            # a unique build over existing duplicate codes would fail the whole
+            # boot. Uniqueness is enforced in the router on create/update;
+            # promote this to unique once the collection is known to be clean.
+            IndexModel([("code", 1)], sparse=True, name="code_lookup"),
+            [("restaurant_id", 1), ("is_active", 1)],
         ]

@@ -1,32 +1,33 @@
-import 'package:consumer_app/common/widgets/app_ui.dart';
-import 'package:consumer_app/core/api_client.dart';
-import 'package:consumer_app/core/app_colors.dart';
-import 'package:consumer_app/core/app_text_styles.dart';
-import 'package:consumer_app/features/order/order_live_map.dart';
+/// Order history — what is arriving now, and everything that already did.
+///
+/// Active orders get the live map and a tap into full tracking. Past orders get
+/// a receipt, a rating (once, matching the backend's one-review-per-order rule)
+/// and **one-tap reorder** via `POST /orders/{id}/reorder`.
+///
+/// Reorder places a real order immediately, so the confirmation snackbar
+/// carries **Undo**, which cancels it while it is still `CREATED` (§5.5:
+/// "a snackbar confirmation with Undo where reversible").
+library;
+
+/// The order list moved to `order_providers.dart` when it became typed, but
+/// `features/account/help_screen.dart` imports it from here. Re-exported so
+/// that screen keeps working; it can import `order_providers.dart` directly
+/// whenever its owner touches it next.
+export 'package:consumer_app/features/order/order_providers.dart'
+    show consumerOrdersProvider;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:hive/hive.dart';
-import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:intl/intl.dart';
 
-part 'orders_screen.g.dart';
-
-@riverpod
-Future<List<Map<String, dynamic>>> consumerOrders(Ref ref) async {
-  final dio = ref.watch(apiClientProvider);
-  final token = Hive.box('settings').get('access_token');
-  if (token == null) return [];
-  try {
-    final meResponse = await dio.get('/auth/me');
-    final userId = meResponse.data['id'];
-    final response = await dio.get('/orders/consumer/$userId');
-    return (response.data as List)
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList();
-  } catch (_) {
-    return [];
-  }
-}
+import 'package:consumer_app/common/zvingo_ui.dart';
+import 'package:consumer_app/features/order/order_live_map.dart';
+import 'package:consumer_app/features/order/order_models.dart';
+import 'package:consumer_app/features/order/order_providers.dart';
+import 'package:consumer_app/features/order/order_rating_sheet.dart';
+import 'package:consumer_app/features/order/order_receipt_sheet.dart';
+import 'package:consumer_app/features/order/order_timeline.dart';
 
 class OrdersScreen extends ConsumerStatefulWidget {
   const OrdersScreen({super.key});
@@ -38,172 +39,50 @@ class OrdersScreen extends ConsumerStatefulWidget {
 class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   bool _showActive = true;
   String? _selectedOrderId;
-
-  static const _activeStates = {
-    'CREATED',
-    'OFFERED',
-    'ACCEPTED',
-    'PREPARING',
-    'ARRIVED_AT_MERCHANT',
-    'READY_FOR_PICKUP',
-    'PICKED_UP',
-    'EN_ROUTE',
-    'ARRIVED_AT_CUSTOMER',
-  };
+  String? _busyOrderId;
 
   @override
   Widget build(BuildContext context) {
     final ordersAsync = ref.watch(consumerOrdersProvider);
+
     return Scaffold(
       body: SafeArea(
+        bottom: false,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const AppPageTitle(
               eyebrow: 'Your activity',
               title: 'Orders',
-              subtitle:
-                  'Track what is arriving and quickly reorder favourites.',
+              subtitle: 'Track what is arriving and reorder a favourite.',
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceMuted,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  children: [
-                    _tab('Active', _showActive,
-                        () => setState(() => _showActive = true)),
-                    _tab('Past', !_showActive,
-                        () => setState(() => _showActive = false)),
-                  ],
-                ),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              child: _SegmentedTabs(
+                showActive: _showActive,
+                onChanged: (value) => setState(() => _showActive = value),
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: AppSpacing.md),
             Expanded(
               child: ordersAsync.when(
                 loading: () => const _OrdersSkeleton(),
-                error: (_, __) => AppEmptyState(
-                  icon: Icons.wifi_off_rounded,
-                  title: 'Orders unavailable',
-                  message: 'Check your connection and try loading them again.',
-                  action: ElevatedButton(
-                    onPressed: () => ref.invalidate(consumerOrdersProvider),
-                    child: const Text('Try again'),
-                  ),
+                error: (error, _) => ZvErrorState(
+                  error: error,
+                  title: "We couldn't load your orders",
+                  onRetry: () => ref.invalidate(consumerOrdersProvider),
                 ),
                 data: (orders) {
-                  final filtered = orders.where((order) {
-                    final state = _state(order);
-                    return _showActive
-                        ? _activeStates.contains(state)
-                        : {'DELIVERED', 'CANCELLED'}.contains(state);
-                  }).toList();
-                  if (filtered.isEmpty) {
-                    return AppEmptyState(
-                      icon: _showActive
-                          ? Icons.delivery_dining_rounded
-                          : Icons.receipt_long_rounded,
-                      title: _showActive
-                          ? 'Nothing on the way'
-                          : 'No past orders yet',
-                      message: _showActive
-                          ? 'When you place an order, live tracking will appear here.'
-                          : 'Your completed orders will be ready to reorder from here.',
-                      action: _showActive
-                          ? ElevatedButton(
-                              onPressed: () => context.go('/home'),
-                              child: const Text('Find food'),
-                            )
-                          : null,
-                    );
-                  }
-                  if (!_showActive) {
-                    return RefreshIndicator(
-                      onRefresh: () async =>
-                          ref.invalidate(consumerOrdersProvider),
-                      child: ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 118),
-                        itemCount: filtered.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (_, index) => _OrderCard(
-                          order: filtered[index],
-                          active: false,
-                          onTap: () {},
-                        ),
-                      ),
-                    );
-                  }
-
-                  final selectedId = filtered.any(
-                    (order) => order['id']?.toString() == _selectedOrderId,
-                  )
-                      ? _selectedOrderId!
-                      : filtered.first['id'].toString();
-                  final selectedOrder = filtered.firstWhere(
-                    (order) => order['id']?.toString() == selectedId,
-                  );
-
+                  final filtered = orders
+                      .where((o) => _showActive ? o.isActive : o.isTerminal)
+                      .toList(growable: false);
+                  if (filtered.isEmpty) return _emptyState();
                   return RefreshIndicator(
                     onRefresh: () async =>
                         ref.invalidate(consumerOrdersProvider),
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 118),
-                      children: [
-                        OrderLiveMap(
-                          key: ValueKey(selectedId),
-                          orderId: selectedId,
-                          initialState: _state(selectedOrder),
-                          onOpenTracking: () =>
-                              context.push('/order/$selectedId'),
-                        ),
-                        const SizedBox(height: 24),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                filtered.length == 1
-                                    ? 'Current order'
-                                    : 'Your active orders',
-                                style: AppTextStyles.titleMedium,
-                              ),
-                            ),
-                            if (filtered.length > 1)
-                              Text(
-                                'Tap to switch map',
-                                style: AppTextStyles.bodySmall.copyWith(
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 11),
-                        ...filtered.map((order) {
-                          final id = order['id']?.toString() ?? '';
-                          final selected = id == selectedId;
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: _OrderCard(
-                              order: order,
-                              active: true,
-                              selected: selected,
-                              onTap: () {
-                                if (id.isEmpty) return;
-                                if (!selected) {
-                                  setState(() => _selectedOrderId = id);
-                                } else {
-                                  context.push('/order/$id');
-                                }
-                              },
-                            ),
-                          );
-                        }),
-                      ],
-                    ),
+                    child: _showActive
+                        ? _buildActive(filtered)
+                        : _buildPast(filtered),
                   );
                 },
               ),
@@ -214,134 +93,385 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
     );
   }
 
-  Widget _tab(String label, bool selected, VoidCallback onTap) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(13),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          height: 44,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: selected ? AppColors.selectedDark : Colors.transparent,
-            borderRadius: BorderRadius.circular(13),
+  Widget _emptyState() {
+    return ListView(
+      // Keeps pull-to-refresh working on an empty list.
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        SizedBox(height: MediaQuery.sizeOf(context).height * 0.06),
+        ZvEmptyState(
+          icon: _showActive
+              ? Icons.delivery_dining_rounded
+              : Icons.receipt_long_rounded,
+          title: _showActive ? 'Nothing on the way' : 'No past orders yet',
+          message: _showActive
+              ? 'When you place an order, live tracking and your courier’s '
+                  'position appear right here.'
+              : 'Orders you have received or cancelled land here, ready to '
+                  'reorder in one tap.',
+          actionLabel: _showActive ? 'Find food' : 'Browse restaurants',
+          onAction: () => context.go('/home'),
+          secondaryActionLabel: _showActive ? 'See past orders' : null,
+          onSecondaryAction:
+              _showActive ? () => setState(() => _showActive = false) : null,
+        ),
+      ],
+    );
+  }
+
+  // ── Active ──────────────────────────────────────────────────────────────
+
+  Widget _buildActive(List<TrackedOrder> orders) {
+    final selectedId = orders.any((o) => o.id == _selectedOrderId)
+        ? _selectedOrderId!
+        : orders.first.id;
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        0,
+        AppSpacing.md,
+        118,
+      ),
+      children: [
+        ZvEntrance(
+          index: 0,
+          child: OrderLiveMap(
+            key: ValueKey(selectedId),
+            orderId: selectedId,
+            height: 326,
+            onOpenTracking: () => context.push('/order/$selectedId'),
           ),
-          child: Text(label,
-              style: AppTextStyles.labelLarge.copyWith(
-                  color: selected ? AppColors.white : AppColors.textSecondary)),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                orders.length == 1 ? 'Current order' : 'Your active orders',
+                style: AppTextStyles.h3,
+              ),
+            ),
+            if (orders.length > 1)
+              Text(
+                'Tap to switch map',
+                style: AppTextStyles.caption
+                    .copyWith(color: AppColors.textSecondary),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        for (var i = 0; i < orders.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.listGap),
+            child: ZvEntrance(
+              index: i + 1,
+              child: _ActiveOrderCard(
+                order: orders[i],
+                selected: orders[i].id == selectedId,
+                // Only the order on the map runs a live tracker: every tracker
+                // opens its own event stream, so watching all of them would
+                // mean N duplicate connections for one screen.
+                live: orders[i].id == selectedId,
+                onTap: () {
+                  if (orders[i].id == selectedId) {
+                    context.push('/order/${orders[i].id}');
+                  } else {
+                    setState(() => _selectedOrderId = orders[i].id);
+                  }
+                },
+                onTrack: () => context.push('/order/${orders[i].id}'),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  // ── Past ────────────────────────────────────────────────────────────────
+
+  Widget _buildPast(List<TrackedOrder> orders) {
+    return ZvStaggeredListView.builder(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        0,
+        AppSpacing.md,
+        118,
+      ),
+      itemCount: orders.length,
+      itemBuilder: (context, index) {
+        final order = orders[index];
+        return _PastOrderCard(
+          order: order,
+          busy: _busyOrderId == order.id,
+          onOpen: () => context.push('/order/${order.id}'),
+          onReceipt: () => _openReceipt(order),
+          onReorder: () => _reorder(order),
+          onRate: () => _rate(order),
+        );
+      },
+    );
+  }
+
+  Future<void> _openReceipt(TrackedOrder order) async {
+    final restaurant = order.merchantId == null
+        ? null
+        : await ref.read(orderRestaurantProvider(order.merchantId!).future);
+    if (!mounted) return;
+    await showOrderReceiptSheet(context, order: order, restaurant: restaurant);
+  }
+
+  Future<void> _rate(TrackedOrder order) async {
+    final restaurant = order.merchantId == null
+        ? null
+        : await ref.read(orderRestaurantProvider(order.merchantId!).future);
+    if (!mounted) return;
+    final submitted = await showOrderRatingSheet(
+      context,
+      order: order,
+      restaurantName: restaurant?.name,
+    );
+    if (submitted && mounted) ref.invalidate(orderReviewProvider(order.id));
+  }
+
+  /// One tap places the order. The snackbar's Undo cancels it again while it
+  /// is still cancellable, so a mis-tap is never a lost US$12.
+  Future<void> _reorder(TrackedOrder order) async {
+    setState(() => _busyOrderId = order.id);
+    try {
+      final newId = await ref.read(orderActionsProvider).reorder(order.id);
+      if (!mounted) return;
+      setState(() => _busyOrderId = null);
+      final messenger = ScaffoldMessenger.of(context);
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              'Order placed again · '
+              '${order.currencySymbol}${NumberFormat('#,##0.00').format(order.totalAmount)}',
+            ),
+            duration: const Duration(seconds: 8),
+            action: SnackBarAction(
+              label: 'Undo',
+              onPressed: () => _undoReorder(newId),
+            ),
+          ),
+        );
+      context.push('/order/$newId');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _busyOrderId = null);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              orderErrorMessage(
+                error,
+                fallback: "We couldn't place that order again. Please try "
+                    'again in a moment.',
+              ),
+            ),
+            backgroundColor: AppColors.error,
+          ),
+        );
+    }
+  }
+
+  Future<void> _undoReorder(String orderId) async {
+    try {
+      await ref.read(orderActionsProvider).cancel(orderId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('Reorder cancelled')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              orderErrorMessage(
+                error,
+                fallback: 'That order is already being prepared, so it could '
+                    'not be undone. Open it to cancel.',
+              ),
+            ),
+            backgroundColor: AppColors.error,
+          ),
+        );
+    }
+  }
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+
+class _SegmentedTabs extends StatelessWidget {
+  const _SegmentedTabs({required this.showActive, required this.onChanged});
+
+  final bool showActive;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.xxs),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceMuted,
+        borderRadius: AppRadius.mdAll,
+      ),
+      child: Row(
+        children: [
+          _tab(context, 'Active', showActive, () => onChanged(true)),
+          _tab(context, 'Past', !showActive, () => onChanged(false)),
+        ],
+      ),
+    );
+  }
+
+  Widget _tab(
+    BuildContext context,
+    String label,
+    bool selected,
+    VoidCallback onTap,
+  ) {
+    return Expanded(
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: '$label orders',
+        excludeSemantics: true,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: AppRadius.mdAll,
+          child: AnimatedContainer(
+            duration: context.motion(AppMotion.fast),
+            curve: context.motionCurve(AppMotion.standard),
+            height: AppSpacing.minTapTarget,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected ? AppColors.actionDefault : Colors.transparent,
+              borderRadius: AppRadius.mdAll,
+            ),
+            child: Text(
+              label,
+              style: AppTextStyles.button.copyWith(
+                color:
+                    selected ? AppColors.textOnDark : AppColors.textSecondary,
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-String _state(Map<String, dynamic> order) =>
-    (order['state'] ?? 'CREATED').toString().replaceFirst('OrderState.', '');
+// ── Cards ─────────────────────────────────────────────────────────────────
 
-class _OrderCard extends StatelessWidget {
-  const _OrderCard(
-      {required this.order,
-      required this.active,
-      required this.onTap,
-      this.selected = false});
-  final Map<String, dynamic> order;
-  final bool active;
-  final VoidCallback onTap;
+/// An in-flight order. Reads the live tracker so the headline and ETA on this
+/// card match the tracking screen exactly.
+class _ActiveOrderCard extends ConsumerWidget {
+  const _ActiveOrderCard({
+    required this.order,
+    required this.selected,
+    required this.live,
+    required this.onTap,
+    required this.onTrack,
+  });
+
+  final TrackedOrder order;
   final bool selected;
 
+  /// Whether this card subscribes to the live tracker. Only the card whose
+  /// order is on the map does; the rest render the last list snapshot, which
+  /// pull-to-refresh updates.
+  final bool live;
+
+  final VoidCallback onTap;
+  final VoidCallback onTrack;
+
   @override
-  Widget build(BuildContext context) {
-    final state = _state(order);
-    final total = (order['total_amount'] as num?)?.toDouble() ?? 0;
-    final items = (order['items'] as List?) ?? const [];
-    final id = order['id']?.toString() ?? '';
-    final shortId =
-        id.substring(id.length > 6 ? id.length - 6 : 0).toUpperCase();
-    final status = _statusFor(state);
-    return AppSurface(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tracked =
+        live ? ref.watch(orderTrackingProvider(order.id)).valueOrNull : null;
+    final current = tracked?.order ?? order;
+    final headline = orderHeadline(
+      current.state,
+      driverFirstName: current.driver?.firstName,
+    );
+    final eta = tracked?.eta;
+    final restaurant = current.merchantId == null
+        ? null
+        : ref.watch(orderRestaurantProvider(current.merchantId!)).valueOrNull;
+
+    return ZvCard(
       onTap: onTap,
-      color: selected ? AppColors.primarySurface : AppColors.surface,
-      padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+      color: selected ? AppColors.surfaceMuted : AppColors.surface,
+      semanticLabel:
+          '${headline.title}. ${restaurant?.name ?? current.shortReference}. '
+          '${selected ? 'Selected. Tap to open tracking' : 'Tap to show on the map'}',
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: status.surface,
-              borderRadius: BorderRadius.circular(14),
+              color: headline.surface,
+              borderRadius: AppRadius.mdAll,
             ),
-            child: Icon(status.icon, color: status.color, size: 22),
+            child: Icon(headline.icon, color: headline.color, size: 22),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        status.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.titleSmall,
-                      ),
-                    ),
-                    const SizedBox(width: 7),
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: status.color,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ],
+                ZvAnimatedSwap(
+                  valueKey: headline.title,
+                  child: Text(headline.title, style: AppTextStyles.h3),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: AppSpacing.xxxs),
                 Text(
-                  items.isEmpty
-                      ? 'Order #$shortId'
-                      : items
-                          .map((item) =>
-                              '${item['quantity'] ?? 1}× ${item['name'] ?? ''}')
-                          .join(' · '),
+                  restaurant?.name ?? current.itemsSummary,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+                  style: AppTextStyles.caption
+                      .copyWith(color: AppColors.textSecondary),
                 ),
-                const SizedBox(height: 5),
-                Text(
-                  active ? status.detail : 'Order #$shortId',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: active ? status.color : AppColors.textTertiary,
-                    fontWeight: FontWeight.w700,
+                if (eta != null &&
+                    eta.hasValue &&
+                    eta.confidence != EtaConfidence.unknown) ...[
+                  const SizedBox(height: AppSpacing.xxs),
+                  ZvAnimatedSwap(
+                    valueKey: eta.label,
+                    child: Text(
+                      eta.label,
+                      style: AppTextStyles.tabular(
+                        AppTextStyles.caption
+                            .copyWith(color: AppColors.textPrimary),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: AppSpacing.xs),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '\$${total.toStringAsFixed(2)}',
-                style: AppTextStyles.labelLarge,
+                '${current.currencySymbol}${NumberFormat('#,##0.00').format(current.totalAmount)}',
+                style: AppTextStyles.money,
               ),
-              const SizedBox(height: 10),
-              Icon(
-                selected ? Icons.map_rounded : Icons.chevron_right_rounded,
-                color:
-                    selected ? AppColors.textPrimary : AppColors.textTertiary,
-                size: 20,
+              const SizedBox(height: AppSpacing.xs),
+              ZvIconButton(
+                icon: selected ? Icons.north_east_rounded : Icons.map_outlined,
+                tooltip: selected ? 'Open live tracking' : 'Show on the map',
+                onPressed: selected ? onTrack : onTap,
               ),
             ],
           ),
@@ -351,76 +481,163 @@ class _OrderCard extends StatelessWidget {
   }
 }
 
-({String title, String detail, IconData icon, Color color, Color surface})
-    _statusFor(String state) {
-  switch (state) {
-    case 'CREATED':
-    case 'OFFERED':
-      return (
-        title: 'Order received',
-        detail: 'Waiting for the restaurant',
-        icon: Icons.receipt_long_rounded,
-        color: AppColors.warning,
-        surface: AppColors.warningSurface
-      );
-    case 'ACCEPTED':
-    case 'ARRIVED_AT_MERCHANT':
-    case 'READY_FOR_PICKUP':
-      return (
-        title: 'Being prepared',
-        detail: 'Your order is in the kitchen',
-        icon: Icons.restaurant_rounded,
-        color: AppColors.brandGreen,
-        surface: AppColors.brandGreenSurface
-      );
-    case 'PICKED_UP':
-      return (
-        title: 'On the way',
-        detail: 'Your courier has the order',
-        icon: Icons.delivery_dining_rounded,
-        color: AppColors.info,
-        surface: const Color(0xFFEAF2FF)
-      );
-    case 'ARRIVED_AT_CUSTOMER':
-      return (
-        title: 'Courier has arrived',
-        detail: 'Meet your courier outside',
-        icon: Icons.location_on_rounded,
-        color: AppColors.info,
-        surface: const Color(0xFFEAF2FF)
-      );
-    case 'DELIVERED':
-      return (
-        title: 'Delivered',
-        detail: 'Thanks for ordering with Zvingo',
-        icon: Icons.check_circle_rounded,
-        color: AppColors.success,
-        surface: AppColors.brandGreenSurface
-      );
-    default:
-      return (
-        title: 'Cancelled',
-        detail: 'This order was cancelled',
-        icon: Icons.cancel_rounded,
-        color: AppColors.error,
-        surface: AppColors.errorSurface
-      );
+/// A delivered or cancelled order: receipt, rating, reorder.
+class _PastOrderCard extends ConsumerWidget {
+  const _PastOrderCard({
+    required this.order,
+    required this.busy,
+    required this.onOpen,
+    required this.onReceipt,
+    required this.onReorder,
+    required this.onRate,
+  });
+
+  final TrackedOrder order;
+  final bool busy;
+  final VoidCallback onOpen;
+  final VoidCallback onReceipt;
+  final VoidCallback onReorder;
+  final VoidCallback onRate;
+
+  static final DateFormat _date = DateFormat('d MMM');
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final restaurant = order.merchantId == null
+        ? null
+        : ref.watch(orderRestaurantProvider(order.merchantId!)).valueOrNull;
+    final review = order.isDelivered
+        ? ref.watch(orderReviewProvider(order.id)).valueOrNull
+        : null;
+    final placed = order.createdAt;
+
+    return ZvCard(
+      onTap: onOpen,
+      semanticLabel: 'Order ${order.shortReference}, '
+          '${order.isDelivered ? 'delivered' : 'cancelled'}. Tap for details',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ZvNetworkImage(
+                url: restaurant?.imageUrl,
+                width: 48,
+                height: 48,
+                borderRadius: AppRadius.mdAll,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      restaurant?.name ?? 'Order ${order.shortReference}',
+                      style: AppTextStyles.h3,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: AppSpacing.xxxs),
+                    Text(
+                      order.itemsSummary,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.caption
+                          .copyWith(color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Text(
+                '${order.currencySymbol}${NumberFormat('#,##0.00').format(order.totalAmount)}',
+                style: AppTextStyles.money,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              ZvStatusChip.orderState(order.state, compact: true),
+              const SizedBox(width: AppSpacing.xs),
+              if (placed != null)
+                Text(
+                  _date.format(placed),
+                  style: AppTextStyles.tabular(
+                    AppTextStyles.caption
+                        .copyWith(color: AppColors.textTertiary),
+                  ),
+                ),
+              if (review != null) ...[
+                const SizedBox(width: AppSpacing.xs),
+                const Icon(Icons.star_rounded,
+                    size: 15, color: AppColors.rating),
+                Text(
+                  'You rated ${review.restaurantRating}',
+                  style: AppTextStyles.caption
+                      .copyWith(color: AppColors.textSecondary),
+                ),
+              ],
+            ],
+          ),
+          const Divider(height: AppSpacing.lg),
+          Row(
+            children: [
+              Expanded(
+                child: ZvButton.secondary(
+                  label: 'Reorder',
+                  icon: Icons.refresh_rounded,
+                  loading: busy,
+                  onPressed: busy ? null : onReorder,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              ZvIconButton(
+                icon: Icons.receipt_long_rounded,
+                tooltip: 'View receipt for ${order.shortReference}',
+                onPressed: onReceipt,
+              ),
+              if (order.isDelivered && review == null) ...[
+                const SizedBox(width: AppSpacing.xs),
+                ZvIconButton(
+                  icon: Icons.star_outline_rounded,
+                  tooltip: 'Rate order ${order.shortReference}',
+                  onPressed: onRate,
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 
+/// Layout-matched loading state (§4.3).
 class _OrdersSkeleton extends StatelessWidget {
   const _OrdersSkeleton();
+
   @override
-  Widget build(BuildContext context) => ListView.separated(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 118),
-        itemCount: 3,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (_, __) => Container(
-          height: 172,
-          decoration: BoxDecoration(
-            color: AppColors.surfaceMuted,
-            borderRadius: BorderRadius.circular(20),
-          ),
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        0,
+        AppSpacing.md,
+        118,
+      ),
+      children: [
+        const ZvShimmer(
+          child: ZvSkeletonBox(height: 326, radius: AppRadius.xl),
         ),
-      );
+        const SizedBox(height: AppSpacing.xl),
+        for (var i = 0; i < 3; i++)
+          const Padding(
+            padding: EdgeInsets.only(bottom: AppSpacing.listGap),
+            child: ZvCard(child: ZvListTileSkeleton()),
+          ),
+      ],
+    );
+  }
 }

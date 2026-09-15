@@ -68,8 +68,16 @@ class HomeNotifier extends StateNotifier<HomeState> {
           ],
         ));
 
-  void toggleDashing() {
-    state = state.copyWith(isDashing: !state.isDashing);
+  /// Mirror the real shift state.
+  ///
+  /// This used to be `toggleDashing()`, which flipped a local boolean whether
+  /// or not the shift actually started. A driver whose `goOnline` failed — no
+  /// signal, location denied — saw "You're online" and sat waiting for offers
+  /// that were never coming. The truth lives in `deliveryProvider.isOnline`;
+  /// this only reflects it.
+  void setDashing(bool isDashing) {
+    if (state.isDashing == isDashing) return;
+    state = state.copyWith(isDashing: isDashing);
   }
 
   void selectZone(String zone) {

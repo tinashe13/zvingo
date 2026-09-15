@@ -1,20 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:consumer_app/core/app_colors.dart';
 
+import 'zv_inputs.dart';
+
+/// Legacy alias kept so existing screens keep compiling.
+///
+/// **New code should use `ZvTextField`** — it carries the full §5.3 contract
+/// (focus fill swap, error message below the field, optional-label marker,
+/// helper copy, password visibility toggle).
 class CustomTextField extends StatelessWidget {
-  final String label;
-  final String? hint;
-  final TextEditingController? controller;
-  final bool obscureText;
-  final TextInputType keyboardType;
-  final String? Function(String?)? validator;
-  final Widget? prefixIcon;
-  final Widget? suffixIcon;
-  final TextInputAction? textInputAction;
-  final Iterable<String>? autofillHints;
-  final ValueChanged<String>? onFieldSubmitted;
-  final TextCapitalization textCapitalization;
-
   const CustomTextField({
     super.key,
     required this.label,
@@ -31,43 +24,57 @@ class CustomTextField extends StatelessWidget {
     this.textCapitalization = TextCapitalization.none,
   });
 
+  /// Label rendered above the field.
+  final String label;
+
+  /// Placeholder inside the field.
+  final String? hint;
+
+  /// External controller.
+  final TextEditingController? controller;
+
+  /// Masks input and adds a visibility toggle.
+  final bool obscureText;
+
+  /// Keyboard type.
+  final TextInputType keyboardType;
+
+  /// Form validation callback.
+  final String? Function(String?)? validator;
+
+  /// Leading widget inside the field.
+  final Widget? prefixIcon;
+
+  /// Trailing widget inside the field.
+  final Widget? suffixIcon;
+
+  /// Keyboard action button.
+  final TextInputAction? textInputAction;
+
+  /// Platform autofill hints.
+  final Iterable<String>? autofillHints;
+
+  /// Fires on keyboard submit.
+  final ValueChanged<String>? onFieldSubmitted;
+
+  /// Auto-capitalisation behaviour.
+  final TextCapitalization textCapitalization;
+
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textTertiary,
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          obscureText: obscureText,
-          keyboardType: keyboardType,
-          validator: validator,
-          textInputAction: textInputAction,
-          autofillHints: autofillHints,
-          onFieldSubmitted: onFieldSubmitted,
-          textCapitalization: textCapitalization,
-          style: const TextStyle(
-            fontSize: 16,
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w500,
-          ),
-          decoration: InputDecoration(
-            hintText: hint,
-            prefixIcon: prefixIcon,
-            suffixIcon: suffixIcon,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          ),
-        ),
-      ],
+    return ZvTextField(
+      label: label,
+      hint: hint,
+      controller: controller,
+      obscureText: obscureText,
+      keyboardType: keyboardType,
+      validator: validator,
+      textInputAction: textInputAction,
+      autofillHints: autofillHints,
+      onSubmitted: onFieldSubmitted,
+      textCapitalization: textCapitalization,
+      prefixIcon: prefixIcon is Icon ? (prefixIcon as Icon).icon : null,
+      suffix: obscureText ? null : suffixIcon,
     );
   }
 }

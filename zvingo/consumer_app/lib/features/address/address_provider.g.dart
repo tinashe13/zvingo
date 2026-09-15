@@ -6,7 +6,7 @@ part of 'address_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$locationStartupHash() => r'c633672b541e4b294c5ccf39d6e05a9f3984f4d8';
+String _$locationStartupHash() => r'874abef86bc76a048661836f368fd089be5d2cec';
 
 /// Runs once when the authenticated shell mounts.
 /// Sets the delivery location from the saved default address, or falls back
@@ -24,11 +24,9 @@ final locationStartupProvider = FutureProvider<void>.internal(
   allTransitiveDependencies: null,
 );
 
-@Deprecated('Will be removed in 3.0. Use Ref instead')
-// ignore: unused_element
 typedef LocationStartupRef = FutureProviderRef<void>;
 String _$currentLocationAddressHash() =>
-    r'0b905a69deba13d674ee4a6fb03ef85465898543';
+    r'1e543148446a680200d1084d26fb87b9f23bfab9';
 
 /// Gets the user's current location and reverse geocodes it
 ///
@@ -45,8 +43,6 @@ final currentLocationAddressProvider =
   allTransitiveDependencies: null,
 );
 
-@Deprecated('Will be removed in 3.0. Use Ref instead')
-// ignore: unused_element
 typedef CurrentLocationAddressRef = AutoDisposeFutureProviderRef<SavedAddress>;
 String _$savedAddressesHash() => r'94d6c00d48d7ce655f34b99b56060fbc5de5ec4c';
 
@@ -65,4 +61,4 @@ final savedAddressesProvider =
 
 typedef _$SavedAddresses = Notifier<List<SavedAddress>>;
 // ignore_for_file: type=lint
-// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

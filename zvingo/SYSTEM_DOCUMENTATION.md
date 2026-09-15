@@ -1359,6 +1359,24 @@ stateDiagram-v2
 
 ## 18. Tech Debt & Known Issues
 
+> **⚠️ This section is stale as of the September 2026 hardening pass.**
+>
+> Much of what follows was fixed during that pass, and several entries were never
+> accurate in the first place — the WebSocket authentication hole, the `/sync`
+> ownership check and the unauthenticated upload were all already closed, the
+> "placeholder" pickup screen was fully implemented, driver schedule and vehicle
+> endpoints did persist, and `datetime.utcnow()` has zero occurrences repo-wide.
+>
+> Equally, the worst defects on the platform were **not** in this table: anyone
+> could register themselves as a platform administrator, the payment webhook
+> accepted forged notifications, every mobile-money payment undercharged by the
+> whole delivery fee, and the event streams were readable by anyone who knew a
+> restaurant id.
+>
+> **For the current state see [`docs/OPEN_ITEMS.md`](docs/OPEN_ITEMS.md).**
+> Treat the code as the authority over this table.
+
+
 ### Feature Completion Criteria
 
 A feature is only marked **FUNCTIONAL** if ALL of the following are true:

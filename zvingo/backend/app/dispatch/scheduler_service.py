@@ -21,10 +21,14 @@ from app.config import settings
 from app.dispatch.service import dispatch_service
 from app.location.models import Location
 from app.order.models import Order
+from app.order.service import OrderService
 from app.order.state_machine import OrderState
 from app.time_utils import utc_now
 
 logger = structlog.get_logger()
+
+#: Most scheduled orders released in one poll.
+BATCH_SIZE = int(getattr(settings, "SCHEDULED_RELEASE_BATCH_SIZE", None) or 200)
 
 
 class ScheduledOrderService:
@@ -34,7 +38,11 @@ class ScheduledOrderService:
         self._task: Optional[asyncio.Task] = None
 
     async def due_orders(self) -> List[Order]:
-        """Scheduled orders whose dispatch window has opened."""
+        """Scheduled orders whose dispatch window has opened.
+
+        Bounded: a backlog is worked through over several polls rather than
+        pulled into memory in one go.
+        """
         release_before = utc_now() + timedelta(
             minutes=settings.SCHEDULED_DISPATCH_LEAD_MINUTES
         )
@@ -45,7 +53,7 @@ class ScheduledOrderService:
                 "scheduled_dispatched": {"$ne": True},
                 "is_pickup": {"$ne": True},
             }
-        ).to_list()
+        ).limit(BATCH_SIZE).to_list()
 
     async def _resolve_pickup(self, order: Order) -> Optional[tuple]:
         """Pickup coordinates for an order, re-resolved from the restaurant if unset."""
@@ -88,10 +96,19 @@ class ScheduledOrderService:
                     continue
 
                 lat, lng = pickup
-                # Mark before dispatching: a crash mid-dispatch should leave the
-                # order to the retry loop rather than re-releasing it here.
-                order.scheduled_dispatched = True
-                await order.save()
+                # Claim before dispatching. The claim is conditional, so if
+                # another worker (or a restarted poller) already released this
+                # order we stop here instead of offering it twice; and a crash
+                # mid-dispatch leaves it to the retry loop rather than
+                # re-releasing it on the next poll.
+                if not await OrderService.claim_scheduled_release(
+                    order, pickup=order.pickup_location
+                ):
+                    logger.info(
+                        "Scheduled order already released elsewhere",
+                        order_id=str(order.id),
+                    )
+                    continue
 
                 await dispatch_service.dispatch_order(str(order.id), lat, lng)
                 released += 1

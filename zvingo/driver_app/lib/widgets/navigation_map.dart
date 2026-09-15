@@ -5,7 +5,12 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:dio/dio.dart';
+import '../core/app_config.dart';
 import '../core/app_colors.dart';
+import '../core/app_spacing.dart';
+import '../core/app_text_styles.dart';
+import 'floating_map_button.dart';
+import 'map_attribution.dart';
 
 class _RouteStep {
   final String instruction;
@@ -73,7 +78,12 @@ class _NavigationMapState extends State<NavigationMap> {
   double _totalDurationSecs = 0;
 
   static const double _recalcThresholdMeters = 80.0;
-  static const String _orsApiKey = '5b3ce3597851110001cf6248a8de9b06';
+
+  /// True when turn-by-turn directions are unavailable because no
+  /// OpenRouteService key was supplied at build time. The map still works —
+  /// it falls back to a straight line to the destination — but the driver is
+  /// told, rather than being left wondering why there are no instructions.
+  bool _routingUnavailable = !AppConfig.hasRoutingKey;
 
   @override
   void initState() {
@@ -164,11 +174,31 @@ class _NavigationMapState extends State<NavigationMap> {
 
   Future<void> _fetchRoute(LatLng from) async {
     if (_isLoadingRoute) return;
+
+    // No routing credential: draw the direct line so the driver still sees
+    // bearing and distance, and surface why instructions are missing.
+    if (!AppConfig.hasRoutingKey) {
+      const calc = Distance();
+      if (!mounted) return;
+      setState(() {
+        _routingUnavailable = true;
+        _routePoints = [from, widget.destination];
+        _steps = const [];
+        _currentStepIndex = 0;
+        _totalDistanceMeters =
+            calc.as(LengthUnit.Meter, from, widget.destination).toDouble();
+        // Rough 30 km/h urban average, stated as an estimate in the UI.
+        _totalDurationSecs = _totalDistanceMeters / (30000 / 3600);
+        _isLoadingRoute = false;
+      });
+      return;
+    }
+
     if (mounted) setState(() => _isLoadingRoute = true);
 
     try {
       final url = 'https://api.openrouteservice.org/v2/directions/driving-car'
-          '?api_key=$_orsApiKey'
+          '?api_key=${AppConfig.orsApiKey}'
           '&start=${from.longitude},${from.latitude}'
           '&end=${widget.destination.longitude},${widget.destination.latitude}';
 
@@ -402,7 +432,7 @@ class _NavigationMapState extends State<NavigationMap> {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.primary.withOpacity(0.4),
+                        color: AppColors.primary.withValues(alpha: 0.4),
                         blurRadius: 12,
                         spreadRadius: 2,
                       ),
@@ -437,14 +467,17 @@ class _NavigationMapState extends State<NavigationMap> {
           Positioned(
             bottom: 12,
             right: 12,
-            child: FloatingActionButton(
-              mini: true,
-              backgroundColor: Colors.white,
-              elevation: 4,
+            child: FloatingMapButton(
+              icon: Icons.my_location_rounded,
+              tooltip: 'Centre on my location',
               onPressed: _recenter,
-              child: const Icon(Icons.my_location, color: AppColors.textPrimary),
             ),
           ),
+
+        // ── Attribution ───────────────────────────────────────────────────
+        // Required by the OpenStreetMap and CARTO licences. Last child so it
+        // paints above the tiles and markers.
+        const MapAttribution(),
       ],
     );
   }
@@ -490,7 +523,28 @@ class _NavigationMapState extends State<NavigationMap> {
       );
     }
 
-    // ③ Turn-by-turn instruction
+    // ③ Routing key missing — direct-line fallback, stated plainly
+    if (_routingUnavailable) {
+      return _bannerShell(
+        child: Row(
+          children: [
+            Icon(Icons.explore_outlined,
+                size: 20, color: AppColors.warningOf(context)),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Text(
+                'Showing the direct line — turn-by-turn directions are not '
+                'set up on this build.',
+                style: AppTextStyles.caption
+                    .copyWith(color: AppColors.warningOf(context)),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // ④ Turn-by-turn instruction
     if (step != null) {
       return _bannerShell(
         padding:
@@ -558,12 +612,10 @@ class _NavigationMapState extends State<NavigationMap> {
     return Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(
-              color: Colors.black26, blurRadius: 8, offset: Offset(0, 2))
-        ],
+        color: AppColors.surfaceOf(context),
+        borderRadius: AppSpacing.brLg,
+        border: Border.all(color: AppColors.borderOf(context)),
+        boxShadow: AppSpacing.shadowMdOf(context),
       ),
       child: child,
     );
@@ -571,32 +623,36 @@ class _NavigationMapState extends State<NavigationMap> {
 
   Widget _buildEtaChip() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: const BoxDecoration(
         color: AppColors.neutral900,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [
-          BoxShadow(color: Colors.black38, blurRadius: 8)
-        ],
+        borderRadius: AppSpacing.brMd,
+        boxShadow: AppSpacing.shadowMd,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             _fmtDist(_totalDistanceMeters),
-            style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 14),
+            style: AppTextStyles.money.copyWith(color: AppColors.textOnDark),
           ),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8),
-            child: Text('·',
-                style: TextStyle(color: Colors.white54, fontSize: 16)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+            child: Text(
+              '\u00b7',
+              style: AppTextStyles.money
+                  .copyWith(color: AppColors.textOnDark.withValues(alpha: 0.4)),
+            ),
           ),
           Text(
-            _fmtEta(_totalDurationSecs),
-            style: const TextStyle(color: Colors.white70, fontSize: 14),
+            _routingUnavailable
+                ? '~${_fmtEta(_totalDurationSecs)}'
+                : _fmtEta(_totalDurationSecs),
+            style: AppTextStyles.money
+                .copyWith(color: AppColors.textOnDark.withValues(alpha: 0.75)),
           ),
         ],
       ),

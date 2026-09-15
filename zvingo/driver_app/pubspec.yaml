@@ -26,7 +26,12 @@ dependencies:
   hive_flutter: ^1.1.0
 
   # UI/Assets
-  google_fonts: ^6.2.1
+  # NOTE: google_fonts was removed. 6.x does not compile on Flutter 3.47
+  # (`FontWeight` const map keys lost their primitive `==`), and fetching
+  # fonts over the network is the wrong trade-off for a driver app used on
+  # patchy mobile data and offline. Typography now resolves through
+  # AppTheme.fontFamily ('Inter', falling back to Roboto); bundle Inter as an
+  # asset here to make the token literal.
   cupertino_icons: ^1.0.8
   intl: ^0.19.0
   flutter_map: ^6.1.0
@@ -49,3 +54,16 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Inter-ExtraBold.ttf
+          weight: 800

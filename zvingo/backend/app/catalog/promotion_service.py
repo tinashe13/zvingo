@@ -1,8 +1,16 @@
-"""Promotion redemption logic.
+"""Promotion validation and redemption.
 
-Computes discounts from a promo code and records per-user usage. Kept separate
-from the catalog router so order creation can reuse it without a circular
-import.
+Two separate concerns live here:
+
+* **Validation** (`compute_discount`) is a pure read — it answers "what would
+  this code be worth?" and is safe to call from a cart preview.
+* **Redemption** (`record_redemption`) is a *claim*. It runs as a single
+  conditional MongoDB `findAndModify`, so two concurrent checkouts racing for
+  the last use of a limited promo cannot both win. Read-modify-write would
+  happily hand out the same last redemption twice.
+
+Kept out of the catalog router so order creation can reuse it without a
+circular import.
 """
 
 import structlog
@@ -22,6 +30,18 @@ class PromotionError(Exception):
 
 async def _find_promo(code: str) -> Optional[Promotion]:
     return await Promotion.find_one(Promotion.code == code)
+
+
+def _promotion_collection():
+    """The raw promotions collection, or None when Beanie is not initialised.
+
+    Returning None (instead of raising) keeps unit tests and any caller running
+    before `init_db` on the slower, non-atomic path rather than crashing.
+    """
+    try:
+        return Promotion.get_pymongo_collection()
+    except Exception:  # pragma: no cover - only hit before init_beanie
+        return None
 
 
 async def resolve_restaurant_id(merchant_id: Optional[str]) -> Optional[str]:
@@ -65,6 +85,24 @@ def _uses_by(promo: Promotion, consumer_id: str) -> int:
     return 1 if consumer_id in (promo.redeemed_by or []) else 0
 
 
+async def _has_previous_order(consumer_id: str) -> bool:
+    """True when this consumer has placed an order before.
+
+    Used by `first_order_only` promos. A lookup failure fails *closed* (treated
+    as "has ordered"), so an acquisition promo is never handed to a repeat
+    customer because the database blinked.
+    """
+    try:
+        from app.order.models import Order
+
+        return await Order.find(Order.consumer_id == consumer_id).count() > 0
+    except Exception as e:
+        logger.warning(
+            "First-order check failed; rejecting promo", consumer_id=consumer_id, error=str(e)
+        )
+        return True
+
+
 def free_item_discount(promo: Promotion, items: Sequence[Any]) -> float:
     """Unit price of the cheapest cart line that matches the promo's free item.
 
@@ -104,6 +142,16 @@ async def compute_discount(
     applied. Does NOT mutate state; call ``record_redemption`` after the order
     is successfully created.
 
+    Rules, in the order they are checked:
+
+    1. the code exists and is active
+    2. it is scoped to this restaurant (or to no restaurant at all)
+    3. `starts_at` <= now <= `ends_at`
+    4. the cart meets `min_order_usd`
+    5. the global `max_uses` cap has room
+    6. this consumer is under `max_uses_per_user`
+    7. `first_order_only` promos require a consumer with no prior orders
+
     `restaurant_id` is the resolved Restaurant document id the order is
     actually being placed against (see `resolve_restaurant_id`). When the
     promo is scoped to a specific restaurant, redemption against any other
@@ -137,10 +185,16 @@ async def compute_discount(
     if _uses_by(promo, consumer_id) >= max(promo.max_uses_per_user, 1):
         raise PromotionError("You have already used this promo code")
 
+    if getattr(promo, "first_order_only", False) and await _has_previous_order(
+        consumer_id
+    ):
+        raise PromotionError("This promo code is for first orders only")
+
     if promo.promo_type == "percentage":
-        discount = round(order_subtotal_usd * (promo.discount_value / 100.0), 2)
+        percent = max(0.0, min(float(promo.discount_value), 100.0))
+        discount = round(order_subtotal_usd * (percent / 100.0), 2)
     elif promo.promo_type == "flat":
-        discount = round(promo.discount_value, 2)
+        discount = round(max(0.0, promo.discount_value), 2)
     elif promo.promo_type == "free_delivery":
         # Free delivery is applied to the delivery fee by the caller; here we
         # return 0 and let the caller handle the fee waiver via is_free_delivery.
@@ -160,19 +214,92 @@ async def compute_discount(
     return max(0.0, round(discount, 2))
 
 
-async def record_redemption(code: str, consumer_id: str) -> None:
-    """Increment usage counters after an order with this promo is placed."""
-    promo = await _find_promo(code)
-    if not promo:
-        logger.warning("Record redemption for missing promo", code=code)
+def _claim_filter(code: str, consumer_id: str) -> dict:
+    """Mongo filter that only matches a promo which still has room to redeem.
+
+    Both caps are expressed as `$expr` comparisons against the document's own
+    fields, so the check and the increment happen in one atomic operation.
+    """
+    user_key = f"$redemptions_by_user.{consumer_id}"
+    return {
+        "code": code,
+        "is_active": True,
+        "$expr": {
+            "$and": [
+                {
+                    "$or": [
+                        {"$eq": [{"$ifNull": ["$max_uses", None]}, None]},
+                        {"$lt": ["$current_uses", "$max_uses"]},
+                    ]
+                },
+                {
+                    "$lt": [
+                        {
+                            "$max": [
+                                {"$ifNull": [user_key, 0]},
+                                {
+                                    "$cond": [
+                                        {
+                                            "$in": [
+                                                consumer_id,
+                                                {"$ifNull": ["$redeemed_by", []]},
+                                            ]
+                                        },
+                                        1,
+                                        0,
+                                    ]
+                                },
+                            ]
+                        },
+                        {"$max": [{"$ifNull": ["$max_uses_per_user", 1]}, 1]},
+                    ]
+                },
+            ]
+        },
+    }
+
+
+async def record_redemption(code: str, consumer_id: str) -> bool:
+    """Atomically claim one redemption of `code` for `consumer_id`.
+
+    Returns True when the claim succeeded. False means the promo ran out (or
+    this consumer hit their per-user cap) between validation and checkout —
+    the caller should drop the discount rather than honour it.
+    """
+    collection = _promotion_collection()
+    if collection is None:
+        logger.warning("Promotions collection unavailable", code=code)
+        return False
+
+    user_key = f"redemptions_by_user.{consumer_id}"
+    result = await collection.find_one_and_update(
+        _claim_filter(code, consumer_id),
+        {
+            "$inc": {"current_uses": 1, user_key: 1},
+            "$addToSet": {"redeemed_by": consumer_id},
+            "$set": {"updated_at": utc_now()},
+        },
+    )
+    if result is None:
+        logger.warning(
+            "Promo redemption rejected (exhausted, inactive, or unknown code)",
+            code=code,
+            consumer_id=consumer_id,
+        )
+        return False
+    return True
+
+
+async def release_redemption(code: str, consumer_id: str) -> None:
+    """Give a claimed redemption back, e.g. when order creation then failed."""
+    collection = _promotion_collection()
+    if collection is None:
         return
-    promo.current_uses += 1
-    counts = dict(promo.redemptions_by_user or {})
-    counts[consumer_id] = _uses_by(promo, consumer_id) + 1
-    promo.redemptions_by_user = counts
-    if consumer_id not in promo.redeemed_by:
-        promo.redeemed_by.append(consumer_id)
-    await promo.save()
+    user_key = f"redemptions_by_user.{consumer_id}"
+    await collection.update_one(
+        {"code": code, "current_uses": {"$gt": 0}},
+        {"$inc": {"current_uses": -1, user_key: -1}},
+    )
 
 
 async def is_free_delivery(code: str) -> bool:
@@ -181,7 +308,14 @@ async def is_free_delivery(code: str) -> bool:
         return False
     try:
         promo = await _find_promo(code)
-        return bool(promo and promo.promo_type == "free_delivery" and promo.is_active)
+        if not promo or promo.promo_type != "free_delivery" or not promo.is_active:
+            return False
+        now = utc_now()
+        if promo.starts_at and now < promo.starts_at:
+            return False
+        if promo.ends_at and now > promo.ends_at:
+            return False
+        return True
     except Exception:
         return False
 

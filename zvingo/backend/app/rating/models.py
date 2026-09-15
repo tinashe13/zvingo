@@ -1,6 +1,6 @@
 """Ratings & reviews for orders, drivers, and restaurants."""
 
-from typing import Optional
+from typing import List, Optional
 from datetime import datetime
 from app.time_utils import utc_now
 from beanie import Document, Indexed
@@ -31,6 +31,8 @@ class Review(Document):
     restaurant_rating: int = Field(ge=1, le=5)
     driver_rating: Optional[int] = Field(default=None, ge=1, le=5)
     comment: Optional[str] = None
+    #: Structured quick-feedback chips picked in the review sheet.
+    tags: List[str] = []
 
     created_at: datetime = Field(default_factory=utc_now)
 

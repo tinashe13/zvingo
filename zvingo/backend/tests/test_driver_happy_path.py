@@ -69,7 +69,15 @@ async def test_driver_schedule_save_and_read():
     import app.driver.router as module
 
     current = driver_user("driver-1", schedule=[])
-    assert await module.get_schedule(current) == {"days": []}
+    empty = await module.get_schedule(current)
+    assert empty["days"] == []
+    # The schedule contract carries the timezone and shift windows the UI needs.
+    assert empty["timezone"] == "Africa/Harare"
+    assert empty["slot_windows"]["0"] == {
+        "label": "Morning",
+        "start": "06:00",
+        "end": "12:00",
+    }
 
     req = module.ScheduleUpdate(
         days=[
@@ -79,13 +87,16 @@ async def test_driver_schedule_save_and_read():
     )
     result = await module.save_schedule(req, current)
 
-    assert result["days"] == [
-        {"day": 0, "slots": [0, 1]},
-        {"day": 3, "slots": [2]},
+    assert [d["day"] for d in result["days"]] == [0, 3]
+    assert [d["slots"] for d in result["days"]] == [[0, 1], [2]]
+    # Shift ids are expanded into explicit local time windows on save.
+    assert result["days"][0]["windows"] == [
+        {"slot": 0, "start": "06:00", "end": "12:00"},
+        {"slot": 1, "start": "12:00", "end": "17:00"},
     ]
     assert current.schedule == result["days"]
     current.save.assert_awaited_once()
-    assert await module.get_schedule(current) == {"days": current.schedule}
+    assert (await module.get_schedule(current))["days"] == current.schedule
 
 
 @pytest.mark.asyncio
@@ -93,7 +104,7 @@ async def test_driver_vehicle_save_merges_and_read():
     import app.driver.router as module
 
     current = driver_user("driver-1", vehicle=None)
-    assert await module.get_vehicle(current) == {"vehicle": None}
+    assert (await module.get_vehicle(current))["vehicle"] is None
 
     result = await module.save_vehicle(
         module.VehicleUpdate(make="Toyota", model="Corolla", color="Red"),
@@ -168,9 +179,11 @@ async def test_driver_accepts_offer_transitions_order_and_creates_dispatch(monke
         "status": "ASSIGNED",
     }
     inserted.assert_awaited_once()
-    notify.assert_awaited_once_with(
-        None, "order-1", "order_accepted", data={"driver_id": "driver-1"}
-    )
+    # The consumer is told by the ACCEPTED transition itself (see
+    # OrderService._notify_consumer). Accepting used to announce it a second
+    # time, which sent the consumer two identical "driver on the way" pushes —
+    # and this order has no consumer_id, so nothing is published at all.
+    notify.assert_not_awaited()
 
 
 @pytest.mark.asyncio

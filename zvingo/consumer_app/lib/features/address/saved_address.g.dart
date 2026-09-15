@@ -23,13 +23,15 @@ class SavedAddressAdapter extends TypeAdapter<SavedAddress> {
       lat: fields[3] as double,
       lng: fields[4] as double,
       isDefault: fields[5] as bool,
+      instructions: fields[6] as String?,
+      accessNote: fields[7] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, SavedAddress obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(8)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -41,7 +43,11 @@ class SavedAddressAdapter extends TypeAdapter<SavedAddress> {
       ..writeByte(4)
       ..write(obj.lng)
       ..writeByte(5)
-      ..write(obj.isDefault);
+      ..write(obj.isDefault)
+      ..writeByte(6)
+      ..write(obj.instructions)
+      ..writeByte(7)
+      ..write(obj.accessNote);
   }
 
   @override

@@ -1,8 +1,17 @@
 import asyncio
 import json
-from fastapi import APIRouter, Request
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from pydantic import BaseModel, field_validator
 from sse_starlette.sse import EventSourceResponse
+from app.auth.models import User
+from app.auth.router import get_current_user
+from app.catalog.hours import InvalidHours, format_hhmm, parse_hhmm
 from app.config import settings
+from app.notification.fcm import fcm_status
+from app.notification.preferences import get_preferences, set_preferences
+from app.notification.stream_auth import authorize_stream, issue_ticket
 import redis.asyncio as redis
 import structlog
 
@@ -12,12 +21,106 @@ logger = structlog.get_logger()
 KEEPALIVE_INTERVAL = 15  # seconds between pings
 
 
+class NotificationPreferenceUpdate(BaseModel):
+    """Partial update — only the fields present are changed."""
+
+    push_enabled: Optional[bool] = None
+    sms_enabled: Optional[bool] = None
+    order_updates: Optional[bool] = None
+    chat_messages: Optional[bool] = None
+    driver_offers: Optional[bool] = None
+    promotions: Optional[bool] = None
+    quiet_hours_start: Optional[str] = None
+    quiet_hours_end: Optional[str] = None
+    timezone: Optional[str] = None
+
+    @field_validator("quiet_hours_start", "quiet_hours_end")
+    @classmethod
+    def _valid_time(cls, value: Optional[str]) -> Optional[str]:
+        if value in (None, ""):
+            return None
+        try:
+            return format_hhmm(parse_hhmm(value))
+        except InvalidHours as e:
+            raise ValueError(str(e)) from None
+
+
+@router.get("/preferences")
+async def read_preferences(current_user: User = Depends(get_current_user)):
+    """The caller's notification settings (defaults when never customised)."""
+    return await get_preferences(str(current_user.id))
+
+
+@router.put("/preferences")
+async def update_preferences(
+    update: NotificationPreferenceUpdate,
+    current_user: User = Depends(get_current_user),
+):
+    """Change the caller's notification settings. Only sent fields are applied."""
+    changes = update.model_dump(exclude_unset=True)
+    if not changes:
+        return await get_preferences(str(current_user.id))
+    try:
+        return await set_preferences(str(current_user.id), changes)
+    except Exception as e:
+        logger.error(
+            "Failed to save notification preferences",
+            user_id=str(current_user.id),
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Notification settings are temporarily unavailable",
+        )
+
+
+@router.get("/push/status")
+async def push_status(current_user: User = Depends(get_current_user)):
+    """Whether push delivery is actually configured on this deployment.
+
+    Lets a client explain "push is off on the server" instead of leaving the
+    user waiting for notifications that will never arrive.
+    """
+    return fcm_status()
+
+
+class StreamTicketRequest(BaseModel):
+    """Which channel the caller wants to listen on."""
+
+    channel: str
+
+
+@router.post("/stream-ticket")
+async def create_stream_ticket(
+    body: StreamTicketRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Exchange a JWT for a single-use ticket to one event channel.
+
+    EventSource cannot send an Authorization header, and putting the JWT in the
+    query string would write it into nginx logs and browser history. So the
+    caller authenticates here, normally, and receives a ticket that is valid for
+    one subscription to one channel for a matter of seconds.
+    """
+    ticket, expires_in = await issue_ticket(body.channel, current_user)
+    return {"ticket": ticket, "channel": body.channel, "expires_in": expires_in}
+
+
 @router.get("/events/{channel_id}")
-async def message_stream(request: Request, channel_id: str):
+async def message_stream(
+    request: Request,
+    channel_id: str,
+    ticket: str = "",
+    authorization: Optional[str] = Header(default=None),
+):
+    """SSE stream of real-time updates for one channel.
+
+    Requires a ticket from ``POST /notification/stream-ticket``. Before this
+    existed the endpoint took a channel id and nothing else, so anyone could
+    read any merchant's live orders, any order's chat, or any driver's
+    position -- restaurant ids are published by the public catalog listing.
     """
-    SSE Endpoint for real-time updates.
-    channel_id: usually merchant_id or driver_id
-    """
+    await authorize_stream(channel_id, ticket, authorization)
     async def event_generator():
         r = None
         pubsub = None

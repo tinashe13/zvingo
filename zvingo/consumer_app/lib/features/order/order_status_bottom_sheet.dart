@@ -1,354 +1,131 @@
-import 'dart:async';
-import 'dart:convert';
-import 'package:consumer_app/core/api_client.dart';
-import 'package:consumer_app/core/app_config.dart';
-import 'package:consumer_app/core/app_colors.dart';
-import 'package:consumer_app/core/app_text_styles.dart';
-import 'package:consumer_app/features/order/active_order_provider.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_client_sse/constants/sse_request_type_enum.dart';
-import 'package:flutter_client_sse/flutter_client_sse.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'package:lottie/lottie.dart';
+/// The shell's active-order hook.
+///
+/// ## Why this file renders nothing
+///
+/// There used to be **two** competing active-order affordances: this floating
+/// card above the dock, and the design system's sticky top banner
+/// (`shellOrderBannerProvider`, added by F1). Both could be on screen at once,
+/// both polled `/orders/{id}` on their own three-second timer, and they could
+/// disagree about the order's state.
+///
+/// The banner won — it is the §5.4 contract ("an in-progress order shows a
+/// sticky top banner with live ETA that taps into tracking"), it does not
+/// cover content, it is consistent with the cart bar, and it is the same
+/// component on every tab. So [OrderStatusBottomSheet] is now a **headless
+/// adapter**: `main_shell.dart` still mounts it for the active order id, and
+/// all it does is feed the shell banner from the one shared [OrderTracker] —
+/// the same live data the tracking screen uses, so the two can never disagree.
+///
+/// `main_shell.dart` and `checkout_screen.dart` are owned by other agents, so
+/// their call sites are unchanged. Once the shell can be edited, the
+/// `AnimatedSwitcher` block in `main_shell.dart` that mounts this widget can be
+/// deleted outright and the shell can host the banner alone — see the C3
+/// report's "requests for other teams".
+library;
 
+import 'dart:async';
+
+import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:consumer_app/core/shell_overlays.dart';
+import 'package:consumer_app/features/order/active_order_provider.dart';
+import 'package:consumer_app/features/order/order_providers.dart';
+import 'package:consumer_app/features/order/order_timeline.dart';
+import 'package:consumer_app/features/order/order_tracking_transport.dart';
+
+/// Drives the shell's sticky order banner for [orderId]. Renders nothing.
 class OrderStatusBottomSheet extends ConsumerStatefulWidget {
-  final String orderId;
   const OrderStatusBottomSheet({super.key, required this.orderId});
+
+  final String orderId;
 
   @override
   ConsumerState<OrderStatusBottomSheet> createState() =>
       _OrderStatusBottomSheetState();
 }
 
-class _OrderStatusBottomSheetState extends ConsumerState<OrderStatusBottomSheet>
-    with SingleTickerProviderStateMixin {
-  String _status = 'Preparing';
-  String _orderState = 'CREATED';
-  String _lottieAsset = 'assets/animations/cooking.json';
-  double? _driverLat;
-  double? _driverLng;
-  String? _driverId;
-  String? _driverName;
-  Timer? _statusPollTimer;
+class _OrderStatusBottomSheetState
+    extends ConsumerState<OrderStatusBottomSheet> {
+  /// How long a finished order keeps its banner, so "Delivered" is actually
+  /// seen before the banner disappears.
+  static const Duration _finishedLinger = Duration(seconds: 8);
 
-  // For the progress bar animation
-  late AnimationController _progressController;
+  Timer? _dismissTimer;
+  OrderTrackingState? _applied;
+  late final ShellOrderBannerController _banner;
 
   @override
   void initState() {
     super.initState();
-    _progressController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
-    _fetchOrderDetails();
-    // Start polling for order status updates every 3 seconds
-    _statusPollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      _pollOrderStatus();
-    });
-  }
-
-  @override
-  void didUpdateWidget(covariant OrderStatusBottomSheet oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.orderId != widget.orderId) {
-      _fetchOrderDetails();
-    }
+    // Captured now so `dispose` never has to touch `ref` or `context`.
+    _banner = ref.read(shellOrderBannerProvider.notifier);
   }
 
   @override
   void dispose() {
-    _statusPollTimer?.cancel();
-    _progressController.dispose();
-    SSEClient.unsubscribeFromSSE();
+    _dismissTimer?.cancel();
+    // The banner belongs to this order; leaving it behind would strand a
+    // stale ETA at the top of every tab. Deferred, because writing to a
+    // provider while the tree is being torn down throws.
+    final banner = _banner;
+    scheduleMicrotask(() {
+      try {
+        banner.hide();
+      } catch (_) {
+        // The scope itself is gone — there is no banner left to hide.
+      }
+    });
     super.dispose();
   }
 
-  Future<void> _fetchOrderDetails() async {
-    try {
-      final dio = ref.read(apiClientProvider);
-      final response = await dio.get('/orders/${widget.orderId}');
-      final data = response.data;
-
-      if (mounted) {
-        _updateState(data);
-        // Subscribe to driver location updates if driver is assigned
-        if (data['driver_id'] != null && _driverId == null) {
-          _driverId = data['driver_id'];
-          _subscribeToDriver(data['driver_id']);
-        }
-      }
-    } catch (e) {
-      debugPrint('Error fetching order: $e');
-    } finally {}
-  }
-
-  void _updateState(Map<String, dynamic> data) {
-    String state = data['state'] ?? 'CREATED';
-    // Strip 'OrderState.' prefix if present (backend enum format)
-    if (state.startsWith('OrderState.')) {
-      state = state.replaceFirst('OrderState.', '');
-    }
-    setState(() {
-      _orderState = state;
-      final rawName = data['driver_name'] as String?;
-      _driverName = rawName?.split(' ').first;
-
-      switch (state) {
-        case 'CREATED':
-          _status = 'Order Confirmed';
-          _lottieAsset = 'assets/animations/order_confirmed.json';
-          break;
-        case 'ACCEPTED':
-        case 'PREPARING':
-        case 'ARRIVED_AT_MERCHANT':
-        case 'READY_FOR_PICKUP':
-          _status = 'Preparing your food';
-          _lottieAsset = 'assets/animations/cooking.json';
-          break;
-        case 'PICKED_UP':
-        case 'EN_ROUTE':
-          _status = 'On the way';
-          _lottieAsset = 'assets/animations/delivery.json';
-          break;
-        case 'ARRIVED_AT_CUSTOMER':
-          _status = 'Driver Arrived';
-          _lottieAsset = 'assets/animations/delivery.json';
-          break;
-        case 'DELIVERED':
-          _status = 'Delivered';
-          _lottieAsset = 'assets/animations/delivered.json';
-          _statusPollTimer?.cancel();
-          // Auto-dismiss after 3 seconds
-          Future.delayed(const Duration(seconds: 3), () {
-            if (mounted) {
-              ref.read(activeOrderProvider.notifier).state = null;
-            }
-          });
-          break;
-        case 'CANCELLED':
-          _status = 'Cancelled';
-          _lottieAsset = 'assets/animations/cooking.json';
-          _statusPollTimer?.cancel();
-          // Auto-dismiss after 2 seconds
-          Future.delayed(const Duration(seconds: 2), () {
-            if (mounted) {
-              ref.read(activeOrderProvider.notifier).state = null;
-            }
-          });
-          break;
-        default:
-          _status = 'Processing';
-          _lottieAsset = 'assets/animations/cooking.json';
-      }
-    });
-  }
-
-  /// Poll order status to get real-time updates from driver actions
-  Future<void> _pollOrderStatus() async {
+  void _publish(OrderTrackingState state) {
     if (!mounted) return;
-    try {
-      final dio = ref.read(apiClientProvider);
-      final response = await dio.get('/orders/${widget.orderId}');
-      final data = response.data;
+    final order = state.order;
+    if (order == null) return;
 
-      if (mounted) {
-        String state = data['state'] ?? 'CREATED';
-        if (state.startsWith('OrderState.')) {
-          state = state.replaceFirst('OrderState.', '');
-        }
+    final headline = orderHeadline(
+      order.state,
+      driverFirstName: order.driver?.firstName,
+    );
+    final eta = state.eta;
 
-        // Only update if state changed
-        if (state != _orderState) {
-          _updateState(data);
-        }
+    ref.read(shellOrderBannerProvider.notifier).show(
+          ZvOrderBannerData(
+            orderId: order.id,
+            statusLabel: headline.title,
+            // A precise estimate animates as a number; a range or "Updating…"
+            // goes through as text. The banner never shows a fabricated count.
+            etaMinutes:
+                eta.confidence == EtaConfidence.precise ? eta.minutes : null,
+            etaText: eta.confidence == EtaConfidence.precise
+                ? null
+                : (eta.hasValue ? eta.label : null),
+            progress: order.progress,
+          ),
+        );
 
-        // Start driver tracking if driver just got assigned
-        if (data['driver_id'] != null && _driverId == null) {
-          _driverId = data['driver_id'];
-          final rawName = data['driver_name'] as String?;
-          _driverName = rawName?.split(' ').first;
-          _subscribeToDriver(data['driver_id']);
-          setState(() {});
-        }
-      }
-    } catch (e) {
-      // Silently ignore polling errors
-    }
-  }
-
-  void _subscribeToDriver(String driverId) {
-    if (driverId.isEmpty) return;
-
-    final url = '${AppConfig.apiBaseUrl}/location/driver/$driverId/track';
-
-    SSEClient.subscribeToSSE(
-      method: SSERequestType.GET,
-      url: url,
-      header: {
-        'Accept': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-      },
-    ).listen((event) {
-      if (event.data != null && event.data!.isNotEmpty) {
-        try {
-          final parsed = jsonDecode(event.data!);
-          final lat = (parsed['lat'] as num?)?.toDouble();
-          final lng = (parsed['lng'] as num?)?.toDouble();
-
-          if (lat != null && lng != null && mounted) {
-            setState(() {
-              _driverLat = lat;
-              _driverLng = lng;
-            });
-          }
-        } catch (e) {
-          // Ignore malformed events
-        }
-      }
-    });
-  }
-
-  /// Get appropriate subtitle text based on order state and driver info
-  String _getSubtitleText() {
-    switch (_orderState) {
-      case 'CREATED':
-        return 'Waiting for restaurant to confirm';
-      case 'ACCEPTED':
-      case 'PREPARING':
-      case 'ARRIVED_AT_MERCHANT':
-      case 'READY_FOR_PICKUP':
-        if (_driverName != null) {
-          return '$_driverName is picking up your order';
-        }
-        return 'Restaurant is preparing your order';
-      case 'PICKED_UP':
-      case 'EN_ROUTE':
-        if (_driverName != null && _driverLat != null && _driverLng != null) {
-          return '$_driverName is on the way';
-        } else if (_driverName != null) {
-          return '$_driverName is heading to you';
-        }
-        return 'Driver is on the way';
-      case 'ARRIVED_AT_CUSTOMER':
-        return _driverName != null
-            ? '$_driverName has arrived!'
-            : 'Driver has arrived!';
-      case 'DELIVERED':
-        return 'Enjoy your meal!';
-      case 'CANCELLED':
-        return 'Order was cancelled';
-      default:
-        return 'Estimated arrival: 25 min';
+    if (order.isTerminal) {
+      _dismissTimer ??= Timer(_finishedLinger, () {
+        if (!mounted) return;
+        ref.read(shellOrderBannerProvider.notifier).hide();
+        // Stop following this order; the provider re-derives the next active
+        // one from the order list if there is one.
+        ref.read(activeOrderProvider.notifier).state = null;
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Dismissible(
-      key: ValueKey(widget.orderId),
-      direction: DismissDirection.down,
-      onDismissed: (_) {
-        ref.read(activeOrderProvider.notifier).state = null;
-      },
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => context.push('/order/${widget.orderId}'),
-          child: Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.15),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                // Animation Icon
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: AppColors.primarySurface,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Lottie.asset(
-                      _lottieAsset,
-                      fit: BoxFit.cover,
-                      errorBuilder: (ctx, _, __) =>
-                          const Icon(Icons.fastfood, color: AppColors.primary),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 14),
+    final state = ref.watch(orderTrackingProvider(widget.orderId)).valueOrNull;
 
-                // Text Info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _status,
-                        style: AppTextStyles.titleMedium,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _getSubtitleText(),
-                        style: AppTextStyles.bodySmall,
-                      ),
-                      const SizedBox(height: 8),
-                      // Animated Progress Bar
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(2),
-                        child: AnimatedBuilder(
-                          animation: _progressController,
-                          builder: (context, child) {
-                            return LinearProgressIndicator(
-                              value: 0.6, // Placeholder progress
-                              backgroundColor: AppColors.background,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Color.lerp(
-                                    AppColors.primary,
-                                    AppColors.primaryDark,
-                                    _progressController.value)!,
-                              ),
-                              minHeight: 4,
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+    // Providers must not be written during a build.
+    if (state != null && !identical(state, _applied)) {
+      _applied = state;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _publish(state));
+    }
 
-                const SizedBox(width: 12),
-
-                // View Button
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: const BoxDecoration(
-                    color: AppColors.background,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.arrow_forward_ios,
-                      size: 16, color: AppColors.textSecondary),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+    return const SizedBox.shrink();
   }
 }

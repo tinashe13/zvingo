@@ -20,17 +20,18 @@ Protocol (JSON messages in both directions):
 
 import asyncio
 import json
-from datetime import datetime
 from app.time_utils import utc_now
 
 import redis.asyncio as aioredis
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
+from app.auth.models import User
 from app.auth.ws import authenticate_ws
 from app.config import settings
 from app.dispatch.schemas import DriverLocationUpdate
 from app.dispatch.service import dispatch_service
+from app.order.state_machine import InvalidStateTransition, OrderConflict, OrderState
 import structlog
 
 router = APIRouter()
@@ -49,6 +50,30 @@ def _authenticate_ws(websocket: WebSocket) -> str | None:
     return authenticate_ws(websocket)
 
 
+async def _load_active_driver(user_id: str):
+    """The driver's account when it exists and is still active, else None."""
+    try:
+        user = await User.get(user_id)
+    except Exception as e:
+        logger.warning("Driver lookup failed on WS handshake", user_id=user_id, error=str(e))
+        return None
+    if user is None or not getattr(user, "is_active", False):
+        return None
+    return user
+
+
+async def _send_error(websocket, code: str, order_id: str, message: str) -> None:
+    """Tell the driver an action of theirs was refused, and why."""
+    try:
+        await websocket.send_text(
+            json.dumps(
+                {"type": "error", "code": code, "order_id": order_id, "message": message}
+            )
+        )
+    except Exception:
+        pass
+
+
 @router.websocket("/ws/driver/{driver_id}")
 async def driver_ws(websocket: WebSocket, driver_id: str):
     """
@@ -61,6 +86,10 @@ async def driver_ws(websocket: WebSocket, driver_id: str):
     published messages (offers, order updates) to the driver.
     Incoming driver messages are dispatched to the appropriate service.
     """
+    # The driver is whoever the JWT says it is. The `driver_id` in the path is
+    # only ever a claim by the client: it is compared against the token and the
+    # connection is refused on any disagreement, so it can never be used to
+    # subscribe to, act on, or impersonate another driver's channel.
     authenticated_user_id = _authenticate_ws(websocket)
     if authenticated_user_id is None or authenticated_user_id != driver_id:
         # 1008 = policy violation (unauthenticated / not the driver's own channel)
@@ -68,6 +97,17 @@ async def driver_ws(websocket: WebSocket, driver_id: str):
             "Driver WebSocket rejected: auth failure",
             driver_id=driver_id,
             authenticated_user_id=authenticated_user_id,
+        )
+        await websocket.close(code=1008)
+        return
+
+    # A token stays valid for days, so also confirm the account still exists and
+    # is active — a suspended driver must stop receiving offers immediately.
+    user = await _load_active_driver(authenticated_user_id)
+    if user is None:
+        logger.warning(
+            "Driver WebSocket rejected: unknown or inactive account",
+            driver_id=driver_id,
         )
         await websocket.close(code=1008)
         return
@@ -140,7 +180,21 @@ async def driver_ws(websocket: WebSocket, driver_id: str):
             elif msg_type == "accept_offer":
                 order_id = msg.get("order_id")
                 if order_id:
-                    await dispatch_service.accept_offer(driver_id, order_id)
+                    try:
+                        await dispatch_service.accept_offer(driver_id, order_id)
+                    except (OrderConflict, InvalidStateTransition) as e:
+                        # Another driver won the race, or the order was
+                        # cancelled. Tell this driver so their offer card clears
+                        # instead of hanging on an order they will never get.
+                        logger.info(
+                            "Offer could not be accepted",
+                            driver_id=driver_id,
+                            order_id=order_id,
+                            error=str(e),
+                        )
+                        await _send_error(
+                            websocket, "offer_unavailable", order_id, str(e)
+                        )
 
             elif msg_type == "decline_offer":
                 order_id = msg.get("order_id")
@@ -160,9 +214,17 @@ async def driver_ws(websocket: WebSocket, driver_id: str):
                 if order_id and backend_state:
                     try:
                         from app.order.service import OrderService
-                        from app.order.state_machine import OrderState
+
+                        # `require_driver_id` is the important part: a driver may
+                        # only advance the delivery they are actually carrying.
+                        # Without it, any authenticated driver could walk any
+                        # order they knew the id of through to DELIVERED.
                         await OrderService.transition_state(
-                            order_id, OrderState(backend_state), actor_id=driver_id
+                            order_id,
+                            OrderState(backend_state),
+                            actor_id=driver_id,
+                            reason="driver_delivery_action",
+                            require_driver_id=driver_id,
                         )
                         logger.info(
                             "Delivery action applied",
@@ -177,6 +239,9 @@ async def driver_ws(websocket: WebSocket, driver_id: str):
                             order_id=order_id,
                             state=backend_state,
                             error=str(e),
+                        )
+                        await _send_error(
+                            websocket, "delivery_action_rejected", order_id, str(e)
                         )
 
             elif msg_type == "pong":

@@ -398,6 +398,11 @@ async def redispatch_order(
     order.retry_count = 0
     order.last_retry_at = None
     order.scheduled_dispatched = True
+    # The retry loop filters on dispatch_escalated != True. Leaving the flag set
+    # would keep this order permanently excluded from retries, so an admin would
+    # see "redispatched" while the order stayed dead-lettered.
+    order.dispatch_escalated = False
+    order.dispatch_escalated_at = None
     await order.save()
 
     from app.dispatch.service import dispatch_service

@@ -1,12 +1,23 @@
-import 'package:consumer_app/core/app_colors.dart';
-import 'package:consumer_app/core/app_text_styles.dart';
+/// Standalone payment — reached when an order exists but is not paid for
+/// (a failed prompt, a dropped connection, "pay another way" from checkout).
+///
+/// It answers three questions at every moment: what am I paying, how, and what
+/// do I do next on my phone. Nothing on this screen is a dead end — a failure
+/// always has the reason plus a retry, and a success hands off to tracking.
+library;
+
+import 'package:consumer_app/common/zvingo_ui.dart';
+import 'package:consumer_app/features/cart/money.dart';
 import 'package:consumer_app/features/payment/payment_provider.dart';
+import 'package:consumer_app/features/payment/payment_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 class PaymentScreen extends ConsumerStatefulWidget {
   final String orderId;
+
+  /// Amount due, in USD major units, passed on the route.
   final double amount;
 
   const PaymentScreen({super.key, required this.orderId, required this.amount});
@@ -16,9 +27,22 @@ class PaymentScreen extends ConsumerStatefulWidget {
 }
 
 class _PaymentScreenState extends ConsumerState<PaymentScreen> {
-  PaymentMethodType _selectedMethod = PaymentMethodType.ecocash;
   final _phoneController = TextEditingController();
-  bool _isProcessing = false;
+  PaymentMethodType _method = PaymentMethodType.ecocash;
+  String _currency = kDefaultCurrency;
+  String? _phoneError;
+  bool _celebrated = false;
+
+  Money get _usdDue => Money.fromMajor(widget.amount);
+
+  @override
+  void initState() {
+    super.initState();
+    // Re-attach to an in-flight prompt if one already exists for this order.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(paymentProvider.notifier).refreshForOrder(widget.orderId);
+    });
+  }
 
   @override
   void dispose() {
@@ -26,283 +50,192 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     super.dispose();
   }
 
+  Money get _amountToCharge {
+    if (_currency == kDefaultCurrency) return _usdDue;
+    final rates = ref.read(exchangeRatesProvider).valueOrNull;
+    final rate = rates?[_currency];
+    if (rate == null) return _usdDue;
+    return _usdDue.convertTo(_currency, rate);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final paymentState = ref.watch(paymentProvider);
+    final session = ref.watch(paymentProvider);
 
-    // Navigate to order tracking when payment succeeds
-    ref.listen(paymentProvider, (prev, next) {
-      if (next.status == 'PAID' && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Payment confirmed!'),
-            backgroundColor: AppColors.primary,
-          ),
-        );
+    ref.listen<PaymentSession>(paymentProvider, (previous, next) {
+      if (next.phase == PaymentPhase.paid && !_celebrated && mounted) {
+        _celebrated = true;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: AppColors.success,
+            content: Text('Payment confirmed — thank you!'),
+          ));
         context.go('/order/${widget.orderId}');
       }
     });
 
-    return Scaffold(
-      backgroundColor: AppColors.white,
-      appBar: AppBar(
-        backgroundColor: AppColors.white,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => context.pop(),
+    final waiting = session.phase == PaymentPhase.awaitingCustomer;
+    final busy = session.phase == PaymentPhase.initiating;
+
+    return ZvScreen(
+      title: 'Payment',
+      subtitle: 'Order ${_shortReference(widget.orderId)}',
+      fallbackRoute: '/orders',
+      footer: ZvStickyFooter(
+        child: ZvButton.primary(
+          label: 'Pay ${_amountToCharge.format()} with ${_method.label}',
+          loading: busy,
+          onPressed: waiting || busy ? null : _pay,
+          disabledReason: waiting
+              ? 'Approve the prompt on your phone, or cancel it below to '
+                  'start again.'
+              : null,
         ),
-        title: const Text('Payment', style: AppTextStyles.titleLarge),
-        centerTitle: true,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Order summary
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Order Total', style: AppTextStyles.titleMedium),
-                  Text(
-                    '\$${widget.amount.toStringAsFixed(2)}',
-                    style: AppTextStyles.titleLarge
-                        .copyWith(color: AppColors.primary),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 28),
-
-            const Text('Payment Method', style: AppTextStyles.titleMedium),
-            const SizedBox(height: 14),
-
-            // EcoCash
-            _PaymentMethodTile(
-              icon: Icons.phone_android,
-              title: 'EcoCash',
-              subtitle: 'Pay with EcoCash mobile money',
-              color: const Color(0xFF00A651),
-              isSelected: _selectedMethod == PaymentMethodType.ecocash,
-              onTap: () =>
-                  setState(() => _selectedMethod = PaymentMethodType.ecocash),
-            ),
-            const SizedBox(height: 10),
-
-            // OneMoney
-            _PaymentMethodTile(
-              icon: Icons.phone_android,
-              title: 'OneMoney',
-              subtitle: 'Pay with OneMoney mobile wallet',
-              color: const Color(0xFF1E3A5F),
-              isSelected: _selectedMethod == PaymentMethodType.onemoney,
-              onTap: () =>
-                  setState(() => _selectedMethod = PaymentMethodType.onemoney),
-            ),
-            const SizedBox(height: 10),
-
-            // InnBucks
-            _PaymentMethodTile(
-              icon: Icons.phone_android,
-              title: 'InnBucks',
-              subtitle: 'Pay with InnBucks wallet',
-              color: const Color(0xFFE5383B),
-              isSelected: _selectedMethod == PaymentMethodType.innbucks,
-              onTap: () =>
-                  setState(() => _selectedMethod = PaymentMethodType.innbucks),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Phone number input
-            const Text('Phone Number', style: AppTextStyles.titleSmall),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: InputDecoration(
-                hintText: '+263 7X XXX XXXX',
-                hintStyle: AppTextStyles.bodyMedium
-                    .copyWith(color: AppColors.textHint),
-                prefixIcon: const Icon(Icons.phone, color: AppColors.textHint),
-                filled: true,
-                fillColor: AppColors.background,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-
-            const Spacer(),
-
-            // Status indicator
-            if (paymentState.status == 'AWAITING_DELIVERY')
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: Colors.amber.shade50,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.amber.shade200),
-                ),
-                child: const Row(
-                  children: [
-                    SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Waiting for payment confirmation...\nCheck your phone for the USSD prompt',
-                        style: AppTextStyles.bodySmall,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.xl),
+        children: [
+          ZvCard(
+            color: AppColors.background,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Amount due',
+                          style: AppTextStyles.caption
+                              .copyWith(color: AppColors.textSecondary)),
+                      const SizedBox(height: 2),
+                      Text(
+                        _currency == kDefaultCurrency
+                            ? 'Charged in US dollars'
+                            : 'Converted from ${_usdDue.format()}',
+                        style: AppTextStyles.caption
+                            .copyWith(color: AppColors.textSecondary),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-
-            if (paymentState.status == 'FAILED')
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: AppColors.error.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Text(
-                  paymentState.error ?? 'Payment failed. Please try again.',
-                  style:
-                      AppTextStyles.bodySmall.copyWith(color: AppColors.error),
-                ),
-              ),
-
-            // Pay button
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: (_isProcessing ||
-                        paymentState.status == 'AWAITING_DELIVERY')
-                    ? null
-                    : _handlePayment,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    ],
                   ),
                 ),
-                child: _isProcessing
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : Text(
-                        'Pay \$${widget.amount.toStringAsFixed(2)}',
-                        style: AppTextStyles.button.copyWith(fontSize: 16),
-                      ),
-              ),
+                ZvAnimatedCount.money(
+                  value: _amountToCharge.major,
+                  currency: _amountToCharge.symbol,
+                  style: AppTextStyles.moneyDisplay,
+                  semanticLabel: 'Amount due',
+                ),
+              ],
+            ),
+          ),
+          if (waiting) ...[
+            const SizedBox(height: AppSpacing.md),
+            PaymentWaitingPanel(
+              session: session,
+              onCancel: () =>
+                  ref.read(paymentProvider.notifier).cancelWaiting(),
             ),
           ],
-        ),
+          if (session.phase == PaymentPhase.failed &&
+              session.failureReason != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            PaymentFailurePanel(
+              reason: session.failureReason!,
+              onRetry: _pay,
+              secondaryLabel: 'See my order',
+              onSecondary: () => context.go('/order/${widget.orderId}'),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.xxl),
+          const Text('How would you like to pay?', style: AppTextStyles.h2),
+          const SizedBox(height: AppSpacing.sm),
+          PaymentMethodPicker(
+            selected: _method,
+            allowCash: false,
+            onSelected: (value) => setState(() {
+              _method = value;
+              _phoneError = null;
+            }),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          MobileMoneyPhoneField(
+            controller: _phoneController,
+            method: _method,
+            errorText: _phoneError,
+            onChanged: (_) {
+              if (_phoneError != null) setState(() => _phoneError = null);
+            },
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          _currencyPicker(),
+          const SizedBox(height: AppSpacing.xl),
+          ZvCard(
+            color: AppColors.infoSurface,
+            borderColor: AppColors.info,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.info_outline_rounded,
+                    size: 20, color: AppColors.info),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Cards are not supported yet',
+                          style: AppTextStyles.bodyStrong),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Zvingo settles through Paynow, which handles EcoCash, '
+                        'OneMoney and InnBucks. Card acceptance is not live, so '
+                        'we do not offer it rather than take you down a path '
+                        'that cannot complete.',
+                        style: AppTextStyles.caption
+                            .copyWith(color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Future<void> _handlePayment() async {
-    final phone = _phoneController.text.trim();
-    if (phone.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your phone number')),
-      );
+  Widget _currencyPicker() {
+    final ratesAsync = ref.watch(exchangeRatesProvider);
+    return ratesAsync.maybeWhen(
+      data: (rates) => SettlementCurrencyPicker(
+        selected: _currency,
+        rates: rates,
+        usdAmount: _usdDue,
+        onSelected: (code) => setState(() => _currency = code),
+      ),
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+
+  Future<void> _pay() async {
+    final error = Payment.validatePhone(_phoneController.text);
+    if (error != null) {
+      setState(() => _phoneError = error);
       return;
     }
-
-    setState(() => _isProcessing = true);
-
     await ref.read(paymentProvider.notifier).initiatePayment(
           orderId: widget.orderId,
-          method: _selectedMethod,
-          phone: phone,
+          method: _method,
+          phone: _phoneController.text,
+          currency: _currency,
+          amount: _amountToCharge,
         );
-
-    if (mounted) {
-      setState(() => _isProcessing = false);
-    }
   }
-}
 
-class _PaymentMethodTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color color;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _PaymentMethodTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.color,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.08) : AppColors.background,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isSelected ? color : Colors.transparent,
-            width: 2,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: color, size: 22),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: AppTextStyles.titleSmall),
-                  Text(subtitle, style: AppTextStyles.bodySmall),
-                ],
-              ),
-            ),
-            if (isSelected) Icon(Icons.check_circle, color: color, size: 22),
-          ],
-        ),
-      ),
-    );
+  static String _shortReference(String orderId) {
+    final trimmed = orderId.trim();
+    if (trimmed.length <= 6) return trimmed.toUpperCase();
+    return trimmed.substring(trimmed.length - 6).toUpperCase();
   }
 }

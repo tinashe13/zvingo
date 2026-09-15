@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:consumer_app/core/app_colors.dart';
 
+import 'zv_buttons.dart';
+
+/// Legacy alias kept so existing screens keep compiling.
+///
+/// **New code should use `ZvButton.primary` / `ZvButton.secondary` /
+/// `ZvButton.tertiary` / `ZvButton.destructive`** — they carry the full §5.1
+/// contract (variants, disabled reason, width-locked loading state).
 class PrimaryButton extends StatelessWidget {
-  final String text;
-  final VoidCallback? onPressed;
-  final bool isLoading;
-  final bool isFullWidth;
-  final Color? backgroundColor;
-
   const PrimaryButton({
     super.key,
     required this.text,
@@ -17,40 +17,33 @@ class PrimaryButton extends StatelessWidget {
     this.backgroundColor,
   });
 
+  /// Button label.
+  final String text;
+
+  /// Tap handler; null disables the button.
+  final VoidCallback? onPressed;
+
+  /// Width-locked loading state.
+  final bool isLoading;
+
+  /// Stretch to the available width.
+  final bool isFullWidth;
+
+  /// Legacy override. A non-null value that is not the error colour is
+  /// ignored — the design system allows exactly one filled action colour.
+  final Color? backgroundColor;
+
   @override
   Widget build(BuildContext context) {
-    final bgColor = backgroundColor ?? AppColors.selectedDark;
-    return SizedBox(
-      width: isFullWidth ? double.infinity : null,
-      height: 54,
-      child: ElevatedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: bgColor,
-          foregroundColor: AppColors.textOnPrimary,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          elevation: 0,
-        ),
-        child: isLoading
-            ? const SizedBox(
-                height: 24,
-                width: 24,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2.5,
-                ),
-              )
-            : Text(
-                text,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.1,
-                ),
-              ),
-      ),
+    final destructive = backgroundColor != null &&
+        backgroundColor == Theme.of(context).colorScheme.error;
+    return ZvButton(
+      label: text,
+      onPressed: onPressed,
+      loading: isLoading,
+      fullWidth: isFullWidth,
+      variant:
+          destructive ? ZvButtonVariant.destructive : ZvButtonVariant.primary,
     );
   }
 }

@@ -22,6 +22,15 @@ class QueryResult:
     def __init__(self, values):
         self.values = values
 
+    def sort(self, *_args):
+        return self
+
+    def skip(self, *_args):
+        return self
+
+    def limit(self, *_args):
+        return self
+
     async def to_list(self):
         return self.values
 
@@ -232,20 +241,35 @@ async def test_dispatch_location_scoring_and_workflows(monkeypatch):
         "driver:d2": {"status": "ONLINE"},
     }
     drivers = await service.find_drivers_for_order(-17.8, 31.0)
-    assert [driver[0] for driver in drivers] == ["d1", "d2"]
+    # Offline/busy drivers are never candidates. Ranking is no longer
+    # distance-only: d2 is closer and carries neutral priors, which beats d1's
+    # perfect rating dragged down by a 0.5 acceptance rate.
+    assert [driver[0] for driver in drivers] == ["d2", "d1"]
+
+    # dispatch_order ranks with score_candidates (it logs the winning score);
+    # find_drivers_for_order is the thin (driver_id, distance) view of it.
+    def candidate(driver_id, distance_km, score):
+        return {
+            "driver_id": driver_id,
+            "distance_km": distance_km,
+            "score": score,
+            "components": {},
+        }
 
     find = AsyncMock(return_value=[])
-    monkeypatch.setattr(service, "find_drivers_for_order", find)
+    monkeypatch.setattr(service, "score_candidates", find)
     assert await service.dispatch_order("order", 0, 0) is None
     assert await service.dispatch_order("order", -17.8, 31.0) is None
 
-    find.return_value = [("d1", 1.2), ("d2", 2.3)]
+    find.return_value = [candidate("d1", 1.2, 0.9), candidate("d2", 2.3, 0.4)]
     transition = AsyncMock()
     send_offer = AsyncMock()
     monkeypatch.setattr(order_service.OrderService, "transition_state", transition)
     monkeypatch.setattr(notification_module.notification_service, "send_offer", send_offer)
     await service.dispatch_order("order", -17.8, 31.0)
-    assert send_offer.await_count == 2
+    # An order is offered to one driver at a time (DISPATCH_OFFER_FANOUT), so
+    # only the best candidate is contacted in this round.
+    assert send_offer.await_count == 1
     transition.side_effect = RuntimeError("already offered")
     await service.dispatch_order("order", -17.8, 31.0)
 
@@ -267,7 +291,9 @@ async def test_dispatch_location_scoring_and_workflows(monkeypatch):
     monkeypatch.setattr(notification_module.notification_service, "notify_consumer", notify)
     assert await service.accept_offer("d1", "order") is order
     inserted.assert_awaited_once()
-    notify.assert_awaited_once()
+    # The consumer notification belongs to the state transition, so accepting no
+    # longer sends a second, identical push of its own.
+    notify.assert_not_awaited()
     assert await service.decline_offer("d1", "order") == {"status": "declined"}
 
     active = object()
@@ -284,7 +310,9 @@ async def test_payment_exchange_initiation_and_completion(monkeypatch):
     import app.payment.service as module
 
     redis = RedisDouble()
-    monkeypatch.setattr(module.aioredis, "from_url", lambda *_a, **_k: redis)
+    # Rate resolution lives in app.finance.exchange now (auditable + pinnable),
+    # so that is where the Redis connection is opened.
+    monkeypatch.setattr(module.exchange.aioredis, "from_url", lambda *_a, **_k: redis)
     redis.values["exchange_rate:ZIG"] = "14"
     assert await module.PaymentService.get_exchange_rate("zig") == 14
     assert await module.PaymentService.get_exchange_rate("ZAR") == 18.5
@@ -324,16 +352,19 @@ async def test_payment_exchange_initiation_and_completion(monkeypatch):
     payment = await module.PaymentService.initiate_payment(
         "order", "consumer", 10, PaymentMethod.ECOCASH, "+263", "ZIG"
     )
-    assert payment.amount_local == 20 and payment.status == PaymentStatus.AWAITING_DELIVERY
+    # Amounts are integer minor units: $10.00 at 2.0 ZIG/USD is 2000 ZIG cents.
+    assert payment.amount_local_cents == 2000
+    assert payment.amount_usd_cents == 1000
+    assert payment.status == PaymentStatus.AWAITING_DELIVERY
     assert len(tasks) == 1
 
     module.paynow_client.send_mobile.return_value = SimpleNamespace(
         success=False, error="declined"
     )
     failed = await module.PaymentService.initiate_payment(
-        "order", "consumer", 10, PaymentMethod.CARD, "+263", "USD"
+        "order", "consumer", 10, PaymentMethod.ECOCASH, "+263", "USD"
     )
-    assert failed.amount_local == 10 and failed.status == PaymentStatus.FAILED
+    assert failed.amount_local_cents == 1000 and failed.status == PaymentStatus.FAILED
 
     monkeypatch.setattr(module.asyncio, "sleep", AsyncMock())
     FakePayment.get.return_value = None
@@ -361,9 +392,19 @@ async def test_payment_status_webhooks_and_refunds(monkeypatch):
     payment = SimpleNamespace(
         id="p1",
         order_id="o1",
-        poll_url="poll",
+        consumer_id="c1",
+        # Only a Paynow-hosted poll URL is ever followed; a webhook cannot
+        # redirect us at an endpoint of its own choosing.
+        poll_url="https://www.paynow.co.zw/interface/poll/abc123",
         paynow_reference="ref",
-        amount_usd=10.0,
+        amount_usd_cents=1000,
+        amount_local_cents=1000,
+        currency="USD",
+        charge_amount_minor=1000,
+        charge_currency="USD",
+        breakdown=None,
+        fx_rate_micros=None,
+        refund_request_id=None,
         status=PaymentStatus.AWAITING_DELIVERY,
         updated_at=None,
         save=AsyncMock(),
@@ -374,7 +415,32 @@ async def test_payment_status_webhooks_and_refunds(monkeypatch):
         get = AsyncMock(return_value=None)
         find_one = AsyncMock(return_value=None)
 
+    class FakeRefundRequest:
+        created = []
+
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+            self.id = "refund-1"
+            self.external_reference = None
+            self.resolved_by = None
+            self.resolved_at = None
+            self.resolution_note = ""
+            self.ledger_posted = False
+            self.updated_at = None
+            FakeRefundRequest.created.append(self)
+
+        async def insert(self):
+            return self
+
+        async def save(self):
+            return self
+
+        @classmethod
+        async def find_one(cls, *args):
+            return None
+
     monkeypatch.setattr(module, "Payment", FakePayment)
+    monkeypatch.setattr(module, "RefundRequest", FakeRefundRequest)
     assert await module.PaymentService.check_payment_status("missing") is None
     FakePayment.get.return_value = SimpleNamespace(poll_url=None)
     assert (await module.PaymentService.check_payment_status("p")).poll_url is None
@@ -397,7 +463,8 @@ async def test_payment_status_webhooks_and_refunds(monkeypatch):
         paid=False, status="Cancelled"
     )
     await module.PaymentService.check_payment_status("p")
-    assert payment.status == PaymentStatus.FAILED
+    # A cancellation is now recorded as CANCELLED, not lumped in with FAILED.
+    assert payment.status == PaymentStatus.CANCELLED
     payment.status = PaymentStatus.AWAITING_DELIVERY
     module.paynow_client.check_status.return_value = SimpleNamespace(
         paid=False, status="Pending"
@@ -415,8 +482,13 @@ async def test_payment_status_webhooks_and_refunds(monkeypatch):
     payment.status = PaymentStatus.AWAITING_DELIVERY
     await module.PaymentService.handle_webhook("ref", "delivered", "poll")
     assert payment.status == PaymentStatus.PAID
+    # PAID -> FAILED is not a legal transition: a late "failed" notification on
+    # a settled payment is an anomaly for an operator, never a silent unwind.
     await module.PaymentService.handle_webhook("ref", "failed", "poll")
-    assert payment.status == PaymentStatus.FAILED
+    assert payment.status == PaymentStatus.PAID
+    # A replayed "paid" notification does not re-run settlement.
+    assert await module.PaymentService.handle_webhook("ref", "paid", "poll") is payment
+    assert payment.status == PaymentStatus.PAID
     assert await module.PaymentService.handle_webhook("ref", "pending", "poll") is payment
     assert await module.PaymentService.get_payment_for_order("o1") is payment
 
@@ -427,7 +499,11 @@ async def test_payment_status_webhooks_and_refunds(monkeypatch):
     assert await module.PaymentService.refund_payment("p") is payment
     payment.status = PaymentStatus.PAID
     await module.PaymentService.refund_payment("p")
+    # Mock mode is the only path on which the provider reports a settled
+    # refund, so the request closes out as COMPLETED with the money booked.
     assert payment.status == PaymentStatus.REFUNDED
+    assert FakeRefundRequest.created[-1].status.value == "COMPLETED"
+    assert FakeRefundRequest.created[-1].amount_minor == 1000
 
 
 @pytest.mark.asyncio
@@ -484,7 +560,17 @@ async def test_notification_payloads_delivery_and_push(monkeypatch):
     assert payload["customer_name"] == "Jane D."
     assert payload["item_count"] == 3
     assert payload["items_summary"] == "Burger +2 more"
-    assert payload["order_subtotal_cents"] == 0
+    # Order.total_amount is the basket SUBTOTAL (before fees, tip and discount),
+    # so a $4.00 basket is 400 minor units. This previously asserted 0, because
+    # the payload subtracted the fee and tip back out of a figure that had never
+    # included them and clamped the negative result -- so a driver was shown a
+    # $0.00 order value on the offer card they decide from.
+    assert payload["order_subtotal_cents"] == 400
+    assert payload["tip_cents"] == 100
+    # Customer total = subtotal + delivery + service + tax + tip - discount.
+    assert payload["total_cents"] == (
+        400 + payload["delivery_fee_cents"] + 100
+    )
     assert payload["short_id"] == "ZV123456"
 
     order.items = []
@@ -542,8 +628,10 @@ async def test_retry_service_lifecycle_loop_and_orders(monkeypatch):
     await module.OrderRetryService.start()
     await module.OrderRetryService.start()
     assert module.OrderRetryService._task is task
+    assert module.OrderRetryService._offer_task is task
     await module.OrderRetryService.stop()
-    task.cancel.assert_called_once()
+    # Two loops now run: the slow retry sweep and the fast offer-expiry sweep.
+    assert task.cancel.call_count == 2
     await module.OrderRetryService.stop()
 
     original_process = module.OrderRetryService._process_stuck_orders.__func__

@@ -36,6 +36,12 @@ class Query:
     def sort(self, *args):
         return self
 
+    def skip(self, *_args):
+        return self
+
+    def limit(self, *_args):
+        return self
+
     async def to_list(self):
         return self.values
 
@@ -210,18 +216,35 @@ async def test_resolve_restaurant_id(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_promotion_service_record_redemption(monkeypatch):
+    """Redemption is a single conditional findAndModify, not read-modify-write.
+
+    Two checkouts racing for the last use of a limited promo must not both
+    win, so the cap check and the increment happen in one atomic operation.
+    """
     import app.catalog.promotion_service as module
 
-    p = promo()
-    monkeypatch.setattr(module, "_find_promo", AsyncMock(return_value=p))
-    await module.record_redemption("SAVE10", "u1")
-    assert p.current_uses == 1
-    assert p.redeemed_by == ["u1"]
-    p.save.assert_awaited_once()
+    collection = SimpleNamespace(
+        find_one_and_update=AsyncMock(return_value={"current_uses": 1})
+    )
+    monkeypatch.setattr(module, "_promotion_collection", lambda: collection)
 
-    # Missing promo is a no-op (never raises).
-    monkeypatch.setattr(module, "_find_promo", AsyncMock(return_value=None))
-    await module.record_redemption("MISSING", "u1")
+    assert await module.record_redemption("SAVE10", "u1") is True
+    filter_arg, update_arg = collection.find_one_and_update.await_args.args
+    assert filter_arg["code"] == "SAVE10"
+    assert filter_arg["is_active"] is True
+    # The caps are enforced inside the filter, against the document's own fields.
+    assert "$expr" in filter_arg
+    assert update_arg["$inc"] == {"current_uses": 1, "redemptions_by_user.u1": 1}
+    assert update_arg["$addToSet"] == {"redeemed_by": "u1"}
+
+    # An exhausted promo matches nothing, so the claim fails instead of
+    # silently over-redeeming.
+    collection.find_one_and_update = AsyncMock(return_value=None)
+    assert await module.record_redemption("SAVE10", "u1") is False
+
+    # No initialised collection (e.g. before startup) is reported, not crashed.
+    monkeypatch.setattr(module, "_promotion_collection", lambda: None)
+    assert await module.record_redemption("MISSING", "u1") is False
 
 
 # ── Promo validate endpoint ──────────────────────────────────
@@ -604,14 +627,46 @@ async def test_refund_service_provider_failure(monkeypatch):
     import app.payment.service as module
 
     payment = SimpleNamespace(
-        id="p1", order_id="o1", paynow_reference="ref", amount_usd=10.0,
+        id="p1", order_id="o1", consumer_id="c1", paynow_reference="ref",
+        amount_usd_cents=1000, amount_local_cents=1000, currency="USD",
+        charge_amount_minor=1000, charge_currency="USD",
+        refund_request_id=None,
         status=PaymentStatus.PAID, save=AsyncMock(),
     )
     class FakePayment:
         get = AsyncMock(return_value=payment)
-    monkeypatch.setattr(module, "Payment", FakePayment)
 
-    # Provider refund fails → status stays PAID.
+    class FakeRefundRequest:
+        created = []
+
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+            self.id = f"refund-{len(FakeRefundRequest.created) + 1}"
+            self.external_reference = None
+            self.resolved_by = None
+            self.resolved_at = None
+            self.resolution_note = ""
+            self.ledger_posted = False
+            self.updated_at = None
+            FakeRefundRequest.created.append(self)
+
+        async def insert(self):
+            return self
+
+        async def save(self):
+            return self
+
+        @classmethod
+        async def find_one(cls, *args):
+            return None
+
+    monkeypatch.setattr(module, "Payment", FakePayment)
+    monkeypatch.setattr(module, "RefundRequest", FakeRefundRequest)
+
+    # Provider refund fails → the payment is NOT quietly left as if nothing
+    # happened, and it is certainly not marked REFUNDED. It moves to
+    # REFUND_PENDING with an auditable PENDING_MANUAL refund request, which is
+    # an explicit "we owe this customer money and it has not moved yet".
     monkeypatch.setattr(
         module.paynow_client,
         "refund",
@@ -619,17 +674,21 @@ async def test_refund_service_provider_failure(monkeypatch):
     )
     result = await module.PaymentService.refund_payment("p1")
     assert result is payment
-    assert payment.status == PaymentStatus.PAID
-    payment.save.assert_not_awaited()
+    assert payment.status == PaymentStatus.REFUND_PENDING
+    assert FakeRefundRequest.created[-1].status.value == "PENDING_MANUAL"
+    assert FakeRefundRequest.created[-1].resolution_note == "nope"
+    assert payment.refund_request_id == FakeRefundRequest.created[-1].id
 
-    # Provider refund succeeds → REFUNDED.
+    # Provider refund succeeds → REFUNDED, with the ledger posting attempted.
+    payment.status = PaymentStatus.PAID
     monkeypatch.setattr(
         module.paynow_client,
         "refund",
-        AsyncMock(return_value=SimpleNamespace(success=True)),
+        AsyncMock(return_value=SimpleNamespace(success=True, reference="rf-1")),
     )
     result = await module.PaymentService.refund_payment("p1")
     assert result.status == PaymentStatus.REFUNDED
+    assert FakeRefundRequest.created[-1].external_reference == "rf-1"
     payment.save.assert_awaited()
 
 

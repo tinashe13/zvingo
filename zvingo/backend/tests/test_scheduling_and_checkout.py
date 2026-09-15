@@ -21,6 +21,12 @@ class Query:
     def sort(self, *args):
         return self
 
+    def skip(self, *_args):
+        return self
+
+    def limit(self, *_args):
+        return self
+
     async def to_list(self):
         return self.values
 

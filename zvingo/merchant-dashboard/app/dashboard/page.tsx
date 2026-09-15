@@ -1,115 +1,431 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { apiJson } from "@/lib/api";
-import { ArrowRight, CheckCircle2, ChefHat, Clock3, DollarSign, PackageCheck, ShoppingBag, TrendingUp } from "lucide-react";
+import {
+  ArrowRight,
+  BellRing,
+  ChefHat,
+  Clock3,
+  DollarSign,
+  Inbox,
+  ShoppingBag,
+  Timer,
+  UtensilsCrossed,
+} from "lucide-react";
+import { PageContainer, PageSection } from "@/components/AppShell";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ErrorState,
+  OrderStatusPill,
+  SkeletonRegion,
+  StatCard,
+  StatCardSkeleton,
+  buttonClasses,
+  cn,
+} from "@/components/ui";
+import { api, endpoints, normaliseOrderState, type Order } from "@/lib/api";
+import { useApi, useMerchantSession } from "@/lib/useApi";
+import {
+  formatDuration,
+  formatMoney,
+  formatOrderRef,
+  formatRelativeTime,
+  minutesSince,
+  pluralise,
+} from "@/lib/format";
+import { useNow } from "@/lib/hooks";
 
-type Order = { id: string; state: string; total_amount?: number; created_at?: string; items?: { name: string; quantity: number }[] };
-const terminalStates = new Set(["DELIVERED", "CANCELLED"]);
+/** Newest orders pulled for the overview. The API caps a page at 200. */
+const OVERVIEW_LIMIT = 200;
+const REFRESH_INTERVAL_MS = 30_000;
 
-export default function DashboardPage() {
-    const [orders, setOrders] = useState<Order[]>([]);
-    const [userName, setUserName] = useState("Merchant");
-    const [loading, setLoading] = useState(true);
+/** How many finished orders are sampled to measure the real prep time. */
+const PREP_SAMPLE_SIZE = 12;
 
-    useEffect(() => {
-        async function load() {
-            try {
-                const me = await apiJson("/auth/me");
-                setUserName(me.full_name || "Merchant");
-                try { setOrders(await apiJson(`/orders/merchant/${me.id}`)); } catch { setOrders([]); }
-            } catch (err) {
-                console.error("Failed to load dashboard stats:", err);
-            } finally { setLoading(false); }
+/** Rows in the live feed. */
+const FEED_SIZE = 8;
+
+const WAITING_STATES = new Set(["CREATED", "OFFERED"]);
+const KITCHEN_STATES = new Set(["ACCEPTED", "ARRIVED_AT_MERCHANT"]);
+const TERMINAL_STATES = new Set(["DELIVERED", "CANCELLED"]);
+
+interface OrderEventRow {
+  state: string;
+  timestamp?: string | null;
+  actor_id?: string | null;
+  reason?: string | null;
+}
+
+/** Parse an API timestamp. Naive ISO strings from the backend are UTC. */
+function parseTimestamp(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const raw = /^\d{4}-\d{2}-\d{2}T[\d:.]+$/.test(value) ? `${value}Z` : value;
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isToday(value: string | null | undefined, now: number): boolean {
+  const date = parseTimestamp(value);
+  if (!date) return false;
+  const today = new Date(now);
+  return (
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate()
+  );
+}
+
+export default function DashboardOverviewPage() {
+  const {
+    merchantId,
+    restaurant,
+    isLoading: sessionLoading,
+    error: sessionError,
+    refresh: refreshSession,
+  } = useMerchantSession();
+  const now = useNow(30_000);
+
+  const ordersQuery = useApi<Order[]>(
+    merchantId ? `orders:overview:${merchantId}` : null,
+    () => endpoints.orders.forMerchant(merchantId, { limit: OVERVIEW_LIMIT }),
+    { refreshInterval: REFRESH_INTERVAL_MS, dedupeMs: 5_000 },
+  );
+
+  const orders = ordersQuery.data;
+
+  const today = React.useMemo(() => {
+    const list = (orders ?? []).filter((order) => isToday(order.created_at, now));
+    const delivered = list.filter((order) => normaliseOrderState(order.state) === "DELIVERED");
+    const waiting = list.filter((order) => WAITING_STATES.has(normaliseOrderState(order.state)));
+    const inKitchen = list.filter((order) => KITCHEN_STATES.has(normaliseOrderState(order.state)));
+    const openValue = list
+      .filter((order) => !TERMINAL_STATES.has(normaliseOrderState(order.state)))
+      .reduce((sum, order) => sum + (order.total_amount || 0), 0);
+
+    return {
+      all: list,
+      delivered,
+      waiting,
+      inKitchen,
+      revenue: delivered.reduce((sum, order) => sum + (order.total_amount || 0), 0),
+      openValue,
+      oldestWait: waiting.reduce(
+        (oldest, order) => Math.max(oldest, minutesSince(order.created_at, now)),
+        0,
+      ),
+    };
+  }, [orders, now]);
+
+  /* ---- Average prep time, measured from the real audit trail --------------- */
+
+  // `GET /finance/analytics/merchant/{id}` cannot supply this: it matches
+  // `Order.merchant_id` (a restaurant id) against the merchant *user* id, so it
+  // returns zeros and a hard-coded 18-minute fallback. Rather than print a
+  // fabricated number, prep time is computed from the order event trail.
+  const prepIds = React.useMemo(
+    () =>
+      today.delivered
+        .slice(0, PREP_SAMPLE_SIZE)
+        .map((order) => order.id)
+        .sort(),
+    [today.delivered],
+  );
+
+  const prepQuery = useApi<{ minutes: number; sample: number }>(
+    prepIds.length ? `prep:${merchantId}:${prepIds.join(",")}` : null,
+    async () => {
+      const results = await Promise.allSettled(
+        prepIds.map((id) => api.get<OrderEventRow[]>(`/orders/${id}/events`)),
+      );
+      const durations: number[] = [];
+      for (const result of results) {
+        if (result.status !== "fulfilled") continue;
+        let acceptedAt: number | null = null;
+        let pickedUpAt: number | null = null;
+        for (const event of result.value) {
+          const at = parseTimestamp(event.timestamp);
+          if (!at) continue;
+          const state = (event.state ?? "").replace(/^OrderState\./, "");
+          if (state === "ACCEPTED") acceptedAt = at.getTime();
+          else if (state === "PICKED_UP" && pickedUpAt === null) pickedUpAt = at.getTime();
         }
-        load();
-    }, []);
+        if (acceptedAt !== null && pickedUpAt !== null && pickedUpAt > acceptedAt) {
+          durations.push((pickedUpAt - acceptedAt) / 60_000);
+        }
+      }
+      return durations.length
+        ? { minutes: durations.reduce((a, b) => a + b, 0) / durations.length, sample: durations.length }
+        : { minutes: 0, sample: 0 };
+    },
+    { dedupeMs: 5 * 60_000, revalidateOnFocus: false },
+  );
 
-    const stats = useMemo(() => {
-        const active = orders.filter((order) => !terminalStates.has(order.state));
-        const completed = orders.filter((order) => order.state === "DELIVERED");
-        const revenue = completed.reduce((sum, order) => sum + (order.total_amount || 0), 0);
-        return { active: active.length, completed: completed.length, revenue };
-    }, [orders]);
+  const prepSample = prepQuery.data?.sample ?? 0;
 
-    if (loading) return <DashboardSkeleton />;
+  /* ---- Menu availability, straight from the restaurant record ------------- */
 
+  const availableItems = restaurant?.menu?.filter((item) => item.is_available).length ?? 0;
+  const totalItems = restaurant?.menu?.length ?? 0;
+
+  /* ---- Render ------------------------------------------------------------- */
+
+  if (sessionError && !merchantId) {
     return (
-        <div className="mx-auto max-w-[1480px] px-6 py-8 lg:px-10 lg:py-10">
-            <section className="mb-8 flex items-end justify-between gap-6 max-sm:items-start max-sm:flex-col">
-                <div>
-                    <p className="mb-2 text-sm font-bold text-primary">THURSDAY OVERVIEW</p>
-                    <h1 className="text-4xl font-black tracking-[-0.045em] text-neutral-900 sm:text-5xl">Good evening, {firstName(userName)}.</h1>
-                    <p className="mt-3 max-w-xl text-base text-neutral-500">Your restaurant is online and ready for the dinner rush.</p>
-                </div>
-                <Link href="/dashboard/orders" className="inline-flex h-12 items-center gap-2 rounded-xl bg-neutral-900 px-5 text-sm font-bold text-white shadow-lg shadow-black/10 hover:bg-neutral-800">View live orders <ArrowRight className="h-4 w-4" /></Link>
-            </section>
-
-            <section className="grid gap-4 md:grid-cols-3">
-                <MetricCard icon={DollarSign} label="Net sales" value={`$${stats.revenue.toFixed(2)}`} detail={`${stats.completed} completed orders`} tone="lime" />
-                <MetricCard icon={ShoppingBag} label="All orders" value={String(orders.length)} detail="Across your full history" tone="white" />
-                <MetricCard icon={Clock3} label="In progress" value={String(stats.active)} detail={stats.active ? "Needs your attention" : "Kitchen is all clear"} tone="white" />
-            </section>
-
-            <section className="mt-6 grid gap-6 xl:grid-cols-[1.55fr_.9fr]">
-                <div className="rounded-3xl border border-neutral-200/70 bg-white p-6 shadow-sm sm:p-7">
-                    <div className="mb-7 flex items-center justify-between">
-                        <div><h2 className="text-xl font-black tracking-[-0.025em] text-neutral-900">Today&apos;s sales</h2><p className="mt-1 text-sm text-neutral-500">Order value throughout the day</p></div>
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-light px-3 py-1.5 text-xs font-bold text-primary-hover"><TrendingUp className="h-3.5 w-3.5" /> Live</span>
-                    </div>
-                    <SalesChart orderCount={orders.length} />
-                </div>
-
-                <div className="rounded-3xl bg-neutral-900 p-6 text-white shadow-lg shadow-black/10 sm:p-7">
-                    <div className="flex items-start justify-between">
-                        <div><p className="text-sm font-semibold text-neutral-400">Store health</p><h2 className="mt-1 text-2xl font-black tracking-tight">Looking sharp</h2></div>
-                        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#d7f654] text-neutral-900"><CheckCircle2 className="h-6 w-6" /></div>
-                    </div>
-                    <div className="mt-8 space-y-5">
-                        <HealthRow label="Menu availability" value="96%" progress="96%" />
-                        <HealthRow label="Order acceptance" value="100%" progress="100%" />
-                        <HealthRow label="Prep time" value="18 min" progress="72%" />
-                    </div>
-                    <Link href="/dashboard/settings" className="mt-8 flex h-11 items-center justify-center rounded-xl bg-white/10 text-sm font-bold hover:bg-white/15">Review store settings</Link>
-                </div>
-            </section>
-
-            <section className="mt-6 rounded-3xl border border-neutral-200/70 bg-white shadow-sm">
-                <div className="flex items-center justify-between border-b border-neutral-100 px-6 py-5 sm:px-7">
-                    <div><h2 className="text-xl font-black tracking-[-0.025em] text-neutral-900">Recent orders</h2><p className="mt-1 text-sm text-neutral-500">The latest activity from your live order feed</p></div>
-                    <Link href="/dashboard/orders" className="text-sm font-bold text-neutral-900 hover:text-primary">See all</Link>
-                </div>
-                {orders.length ? <div className="divide-y divide-neutral-100">{orders.slice(0, 4).map((order) => <OrderRow key={order.id} order={order} />)}</div> : (
-                    <div className="flex flex-col items-center px-6 py-14 text-center">
-                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-neutral-100 text-neutral-500"><ChefHat className="h-7 w-7" /></div>
-                        <h3 className="mt-4 font-black text-neutral-900">Ready for the first order</h3><p className="mt-1 text-sm text-neutral-500">New orders will appear here the moment they arrive.</p>
-                    </div>
-                )}
-            </section>
-        </div>
+      <PageContainer>
+        <ErrorState
+          error={sessionError}
+          title="We could not load your restaurant"
+          onRetry={refreshSession}
+        />
+      </PageContainer>
     );
+  }
+
+  const loading = ordersQuery.isLoading || (sessionLoading && !orders);
+  const feed = (orders ?? []).slice(0, FEED_SIZE);
+
+  return (
+    <PageContainer>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <p className="type-body min-w-0 text-text-secondary">
+          {restaurant?.name ? `${restaurant.name} · today so far` : "Today so far"}
+        </p>
+        <Link href="/dashboard/orders" className={buttonClasses({ variant: "primary", size: "md" })}>
+          Open live orders
+          <ArrowRight className="h-4 w-4" aria-hidden="true" />
+        </Link>
+      </div>
+
+      {ordersQuery.error && !orders ? (
+        <ErrorState
+          error={ordersQuery.error}
+          title="We could not load today’s figures"
+          onRetry={ordersQuery.refresh}
+        />
+      ) : (
+        <>
+          <PageSection
+            title="Today"
+            description="Everything below is measured from your own orders since midnight."
+          >
+            {loading ? (
+              <SkeletonRegion label="Loading today’s figures">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <StatCardSkeleton />
+                  <StatCardSkeleton />
+                  <StatCardSkeleton />
+                  <StatCardSkeleton />
+                </div>
+              </SkeletonRegion>
+            ) : (
+              <div className="zv-stagger grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <StatCard
+                  label="Orders today"
+                  value={today.all.length}
+                  icon={ShoppingBag}
+                  hint={`${today.delivered.length} delivered so far`}
+                />
+                <StatCard
+                  label="Revenue today"
+                  value={today.revenue}
+                  format="money"
+                  icon={DollarSign}
+                  hint={
+                    today.openValue > 0
+                      ? `${formatMoney(today.openValue)} still in progress`
+                      : "From delivered orders"
+                  }
+                />
+                <StatCard
+                  label="Waiting to accept"
+                  value={today.waiting.length}
+                  icon={BellRing}
+                  hint={
+                    today.waiting.length
+                      ? `Oldest has waited ${formatDuration(today.oldestWait)}`
+                      : "Nothing needs you right now"
+                  }
+                />
+                <StatCard
+                  label="Average prep time"
+                  value={prepSample ? (prepQuery.data?.minutes ?? 0) : "—"}
+                  format="duration"
+                  icon={Timer}
+                  lowerIsBetter
+                  loading={prepIds.length > 0 && prepQuery.isLoading}
+                  hint={
+                    prepSample
+                      ? `Accept to pickup, across ${pluralise(prepSample, "order")} finished today`
+                      : "Measured once an order is picked up today"
+                  }
+                />
+              </div>
+            )}
+          </PageSection>
+
+          {today.waiting.length > 0 && (
+            <PageSection
+              title="Needs you now"
+              description="These customers are waiting for you to accept or reject."
+              actions={
+                <Link
+                  href="/dashboard/orders"
+                  className={buttonClasses({ variant: "secondary", size: "sm" })}
+                >
+                  Go to the board
+                </Link>
+              }
+            >
+              <ul className="zv-stagger flex flex-col gap-3">
+                {today.waiting.slice(0, 3).map((order) => {
+                  const waited = minutesSince(order.created_at, now);
+                  return (
+                    <li key={order.id}>
+                      <Card className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="type-h3 tabular-figures text-neutral-900">
+                            {formatOrderRef(order.id)}
+                          </p>
+                          <p className="type-caption text-text-secondary">
+                            {pluralise(
+                              order.items.reduce((sum, item) => sum + (item.quantity || 0), 0),
+                              "item",
+                            )}{" "}
+                            · {formatMoney(order.total_amount)}
+                          </p>
+                        </div>
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 type-caption font-bold tabular-figures",
+                            waited >= 8
+                              ? "bg-error-surface text-error"
+                              : waited >= 3
+                                ? "bg-warning-surface text-warning"
+                                : "bg-neutral-100 text-neutral-700",
+                          )}
+                        >
+                          <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
+                          Waiting {formatDuration(waited)}
+                        </span>
+                      </Card>
+                    </li>
+                  );
+                })}
+              </ul>
+            </PageSection>
+          )}
+
+          <PageSection
+            title="Live feed"
+            description={`Updates on their own every ${Math.round(REFRESH_INTERVAL_MS / 1000)} seconds.`}
+            actions={
+              <Button
+                variant="tertiary"
+                size="sm"
+                onClick={() => void ordersQuery.refresh()}
+              >
+                Refresh
+              </Button>
+            }
+          >
+            {loading ? (
+              <SkeletonRegion label="Loading recent orders">
+                <div className="flex flex-col gap-3">
+                  <StatCardSkeleton />
+                  <StatCardSkeleton />
+                </div>
+              </SkeletonRegion>
+            ) : feed.length === 0 ? (
+              <EmptyState
+                icon={Inbox}
+                title="No orders yet"
+                description="When a customer orders, it lands here and on the live board with a sound you cannot miss."
+                action={
+                  <Link
+                    href="/dashboard/menu"
+                    className={buttonClasses({ variant: "secondary", size: "md" })}
+                  >
+                    Check your menu
+                  </Link>
+                }
+              />
+            ) : (
+              <Card flush>
+                <ul className="zv-stagger divide-y divide-divider">
+                  {feed.map((order) => (
+                    <li
+                      key={order.id}
+                      className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3"
+                    >
+                      <span className="type-body-strong w-24 shrink-0 tabular-figures text-neutral-900">
+                        {formatOrderRef(order.id)}
+                      </span>
+                      <OrderStatusPill state={normaliseOrderState(order.state)} size="sm" />
+                      <span className="type-caption min-w-0 flex-1 truncate text-text-secondary">
+                        {order.items
+                          .slice(0, 3)
+                          .map((item) => `${item.quantity}× ${item.name}`)
+                          .join(", ")}
+                      </span>
+                      <span className="type-caption shrink-0 tabular-figures text-text-tertiary">
+                        {formatRelativeTime(order.created_at, now)}
+                      </span>
+                      <span className="type-body-strong shrink-0 tabular-figures text-neutral-900">
+                        {formatMoney(order.total_amount)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
+          </PageSection>
+
+          <PageSection
+            title="Your menu"
+            description="What customers can order from you right now."
+            actions={
+              <Link
+                href="/dashboard/menu"
+                className={buttonClasses({ variant: "secondary", size: "sm" })}
+              >
+                Manage menu
+              </Link>
+            }
+          >
+            <Card className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <span
+                  aria-hidden="true"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-neutral-100 text-neutral-700"
+                >
+                  <UtensilsCrossed className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="type-h3 tabular-figures text-neutral-900">
+                    {sessionLoading && !restaurant
+                      ? "—"
+                      : `${availableItems} of ${totalItems} available`}
+                  </p>
+                  <p className="type-caption text-text-secondary">
+                    {totalItems === 0
+                      ? "Add your first dish so customers can order."
+                      : availableItems === totalItems
+                        ? "Everything on your menu is switched on."
+                        : `${totalItems - availableItems} hidden from customers.`}
+                  </p>
+                </div>
+              </div>
+              <Badge tone={today.inKitchen.length ? "warning" : "neutral"} icon={<ChefHat />}>
+                {pluralise(today.inKitchen.length, "order")} in the kitchen
+              </Badge>
+            </Card>
+          </PageSection>
+        </>
+      )}
+    </PageContainer>
+  );
 }
-
-function firstName(name: string) { return name.trim().split(/\s+/)[0] || "Merchant"; }
-
-function MetricCard({ icon: Icon, label, value, detail, tone }: { icon: typeof DollarSign; label: string; value: string; detail: string; tone: "lime" | "white" }) {
-    const featured = tone === "lime";
-    return <div className={`rounded-3xl border p-6 shadow-sm ${featured ? "border-[#d7f654] bg-[#d7f654]" : "border-neutral-200/70 bg-white"}`}><div className="flex items-start justify-between"><div><p className={`text-sm font-semibold ${featured ? "text-neutral-700" : "text-neutral-500"}`}>{label}</p><p className="mt-3 text-4xl font-black tracking-[-0.04em] text-neutral-900">{value}</p><p className={`mt-2 text-xs font-semibold ${featured ? "text-neutral-700" : "text-neutral-400"}`}>{detail}</p></div><span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${featured ? "bg-neutral-900 text-white" : "bg-neutral-100 text-neutral-700"}`}><Icon className="h-5 w-5" /></span></div></div>;
-}
-
-function SalesChart({ orderCount }: { orderCount: number }) {
-    const points = orderCount ? "0,118 54,108 108,112 162,82 216,92 270,48 324,60 378,32 432,46 486,18 540,34 594,12" : "0,118 54,114 108,116 162,110 216,112 270,106 324,108 378,102 432,104 486,98 540,100 594,94";
-    return <div><div className="h-52 w-full overflow-hidden rounded-2xl bg-neutral-50 p-4"><svg viewBox="0 0 594 140" className="h-full w-full" preserveAspectRatio="none" aria-label="Sales trend chart"><defs><linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#0A8F5B" stopOpacity=".25"/><stop offset="1" stopColor="#0A8F5B" stopOpacity="0"/></linearGradient></defs>{[28,62,96,130].map((y)=><line key={y} x1="0" x2="594" y1={y} y2={y} stroke="#e2e2de" strokeDasharray="4 7"/>)}<polygon points={`${points} 594,140 0,140`} fill="url(#salesFill)"/><polyline points={points} fill="none" stroke="#0A8F5B" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/></svg></div><div className="mt-3 flex justify-between px-1 text-[11px] font-semibold text-neutral-400"><span>9 AM</span><span>12 PM</span><span>3 PM</span><span>6 PM</span><span>Now</span></div></div>;
-}
-
-function HealthRow({ label, value, progress }: { label: string; value: string; progress: string }) { return <div><div className="mb-2 flex justify-between text-sm"><span className="text-neutral-300">{label}</span><span className="font-bold">{value}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-[#d7f654]" style={{width:progress}}/></div></div>; }
-
-function OrderRow({ order }: { order: Order }) {
-    const itemCount = order.items?.reduce((count, item) => count + item.quantity, 0) || 0;
-    return <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4 px-6 py-4 hover:bg-neutral-50 sm:px-7"><span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-neutral-100 text-neutral-700"><PackageCheck className="h-5 w-5"/></span><div className="min-w-0"><p className="truncate text-sm font-black text-neutral-900">Order #{order.id.slice(-5).toUpperCase()}</p><p className="mt-0.5 text-xs text-neutral-500">{itemCount} items · {formatState(order.state)}</p></div><div className="text-right"><p className="text-sm font-black text-neutral-900">${(order.total_amount||0).toFixed(2)}</p><p className="mt-0.5 text-xs text-neutral-400">{formatTime(order.created_at)}</p></div></div>;
-}
-
-function formatState(state: string) { return state.toLowerCase().replaceAll("_", " "); }
-function formatTime(value?: string) { return value ? new Date(value).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}) : "Just now"; }
-function DashboardSkeleton() { return <div className="mx-auto max-w-[1480px] animate-pulse px-6 py-10 lg:px-10"><div className="h-12 w-2/5 rounded-xl bg-neutral-200"/><div className="mt-4 h-5 w-1/3 rounded bg-neutral-200"/><div className="mt-10 grid gap-4 md:grid-cols-3">{[1,2,3].map((i)=><div key={i} className="h-40 rounded-3xl bg-white"/>)}</div><div className="mt-6 h-80 rounded-3xl bg-white"/></div>; }

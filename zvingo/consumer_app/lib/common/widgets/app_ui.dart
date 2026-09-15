@@ -1,7 +1,18 @@
-import 'package:consumer_app/core/app_colors.dart';
-import 'package:consumer_app/core/app_text_styles.dart';
 import 'package:flutter/material.dart';
 
+import 'package:consumer_app/core/app_colors.dart';
+import 'package:consumer_app/core/app_spacing.dart';
+import 'package:consumer_app/core/app_text_styles.dart';
+
+import 'zv_card.dart';
+import 'zv_states.dart';
+import 'zv_tap_scale.dart';
+
+/// A large in-body page title with an optional eyebrow, subtitle and trailing
+/// action. Use it on top-level tab screens, which have no app-bar title.
+///
+/// Non-top-level screens should use `ZvScreen`, which supplies both a title
+/// and a back affordance (§5.4).
 class AppPageTitle extends StatelessWidget {
   const AppPageTitle({
     super.key,
@@ -9,13 +20,27 @@ class AppPageTitle extends StatelessWidget {
     this.subtitle,
     this.eyebrow,
     this.trailing,
-    this.padding = const EdgeInsets.fromLTRB(20, 20, 20, 18),
+    this.padding = const EdgeInsets.fromLTRB(
+      AppSpacing.md,
+      AppSpacing.lg,
+      AppSpacing.md,
+      AppSpacing.md,
+    ),
   });
 
+  /// The screen's name, in `h1`.
   final String title;
+
+  /// One-line explanation under the title.
   final String? subtitle;
+
+  /// Small UPPERCASE eyebrow above the title.
   final String? eyebrow;
+
+  /// Trailing widget, e.g. a `ZvIconButton`.
   final Widget? trailing;
+
+  /// Padding around the block.
   final EdgeInsets padding;
 
   @override
@@ -32,70 +57,80 @@ class AppPageTitle extends StatelessWidget {
                 if (eyebrow != null) ...[
                   Text(
                     eyebrow!.toUpperCase(),
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: AppColors.brandGreen,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.5,
-                    ),
+                    style: AppTextStyles.overline
+                        .copyWith(color: AppColors.brandGreen),
                   ),
-                  const SizedBox(height: 7),
+                  const SizedBox(height: AppSpacing.xxs + 2),
                 ],
-                Text(title, style: AppTextStyles.headlineLarge),
+                Text(
+                  title,
+                  style: AppTextStyles.h1,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 if (subtitle != null) ...[
-                  const SizedBox(height: 6),
+                  const SizedBox(height: AppSpacing.xxs + 2),
                   Text(
                     subtitle!,
-                    style: AppTextStyles.bodyMedium
+                    style: AppTextStyles.body
                         .copyWith(color: AppColors.textSecondary),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ],
             ),
           ),
-          if (trailing != null) ...[const SizedBox(width: 12), trailing!],
+          if (trailing != null) ...[
+            const SizedBox(width: AppSpacing.sm),
+            trailing!,
+          ],
         ],
       ),
     );
   }
 }
 
+/// Legacy alias for [ZvCard]. **New code should use `ZvCard`.**
 class AppSurface extends StatelessWidget {
   const AppSurface({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(16),
+    this.padding = const EdgeInsets.all(AppSpacing.cardPadding),
     this.margin = EdgeInsets.zero,
     this.color = AppColors.surface,
     this.onTap,
   });
 
+  /// Card content.
   final Widget child;
+
+  /// Inner padding.
   final EdgeInsets padding;
+
+  /// Outer margin.
   final EdgeInsets margin;
+
+  /// Surface colour.
   final Color color;
+
+  /// Tap handler.
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final content = Container(
-      margin: margin,
+    return ZvCard(
       padding: padding,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: child,
-    );
-    if (onTap == null) return content;
-    return InkWell(
+      margin: margin,
+      color: color,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: content,
+      child: child,
     );
   }
 }
 
+/// Legacy alias for [ZvEmptyState]. **New code should use `ZvEmptyState`**,
+/// which also takes a Lottie illustration and a secondary action.
 class AppEmptyState extends StatelessWidget {
   const AppEmptyState({
     super.key,
@@ -105,39 +140,52 @@ class AppEmptyState extends StatelessWidget {
     this.action,
   });
 
+  /// Glyph in the tinted panel.
   final IconData icon;
+
+  /// One-line title.
   final String title;
+
+  /// One-line explanation.
   final String message;
+
+  /// Primary action widget.
   final Widget? action;
 
   @override
   Widget build(BuildContext context) {
+    if (action == null) {
+      return ZvEmptyState(icon: icon, title: title, message: message);
+    }
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.xxl,
+          vertical: AppSpacing.huge,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: AppColors.accentSurface,
-                borderRadius: BorderRadius.circular(24),
+              height: 80,
+              width: 80,
+              decoration: const BoxDecoration(
+                color: AppColors.brandGreenSurface,
+                borderRadius: AppRadius.xlAll,
               ),
-              child: Icon(icon, size: 32, color: AppColors.textPrimary),
+              child: Icon(icon, size: 34, color: AppColors.brandGreen),
             ),
-            const SizedBox(height: 20),
-            Text(title,
-                style: AppTextStyles.titleLarge, textAlign: TextAlign.center),
-            const SizedBox(height: 7),
+            const SizedBox(height: AppSpacing.lg),
+            Text(title, style: AppTextStyles.h2, textAlign: TextAlign.center),
+            const SizedBox(height: AppSpacing.xs),
             Text(
               message,
-              style: AppTextStyles.bodyMedium
-                  .copyWith(color: AppColors.textSecondary),
+              style:
+                  AppTextStyles.body.copyWith(color: AppColors.textSecondary),
               textAlign: TextAlign.center,
             ),
-            if (action != null) ...[const SizedBox(height: 22), action!],
+            const SizedBox(height: AppSpacing.xl),
+            action!,
           ],
         ),
       ),
@@ -145,6 +193,8 @@ class AppEmptyState extends StatelessWidget {
   }
 }
 
+/// A settings-style row: tinted icon tile, title, optional subtitle and a
+/// chevron. Use it for account, help and payment-method lists.
 class AppIconTile extends StatelessWidget {
   const AppIconTile({
     super.key,
@@ -156,37 +206,87 @@ class AppIconTile extends StatelessWidget {
     this.trailing,
   });
 
+  /// Leading glyph.
   final IconData icon;
+
+  /// Row title.
   final String title;
+
+  /// Optional explanation under the title.
   final String? subtitle;
+
+  /// Tap handler.
   final VoidCallback? onTap;
+
+  /// Renders the row in the error tone, for sign-out / delete.
   final bool destructive;
+
+  /// Replaces the chevron, e.g. with a switch.
   final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     final color = destructive ? AppColors.error : AppColors.textPrimary;
-    return ListTile(
-      onTap: onTap,
-      leading: Container(
-        width: 42,
-        height: 42,
-        decoration: BoxDecoration(
-          color: destructive ? AppColors.errorSurface : AppColors.surfaceMuted,
-          borderRadius: BorderRadius.circular(13),
-        ),
-        child: Icon(icon, size: 21, color: color),
+    final row = Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
       ),
-      title:
-          Text(title, style: AppTextStyles.titleSmall.copyWith(color: color)),
-      subtitle: subtitle == null
-          ? null
-          : Text(subtitle!,
-              style: AppTextStyles.bodySmall
-                  .copyWith(color: AppColors.textSecondary)),
-      trailing: trailing ??
-          Icon(Icons.chevron_right_rounded,
-              color: destructive ? AppColors.error : AppColors.textHint),
+      child: Row(
+        children: [
+          Container(
+            height: 42,
+            width: 42,
+            decoration: BoxDecoration(
+              color:
+                  destructive ? AppColors.errorSurface : AppColors.surfaceMuted,
+              borderRadius: AppRadius.mdAll,
+            ),
+            child: Icon(icon, size: 21, color: color),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: AppTextStyles.h3.copyWith(color: color),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle!,
+                    style: AppTextStyles.caption,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          trailing ??
+              Icon(
+                Icons.chevron_right_rounded,
+                color: destructive ? AppColors.error : AppColors.textTertiary,
+              ),
+        ],
+      ),
+    );
+
+    if (onTap == null) return row;
+    return ZvTapScale(
+      childHandlesTap: true,
+      behavior: HitTestBehavior.deferToChild,
+      semanticLabel: title,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(onTap: onTap, child: row),
+      ),
     );
   }
 }

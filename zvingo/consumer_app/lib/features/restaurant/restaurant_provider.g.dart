@@ -6,7 +6,7 @@ part of 'restaurant_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$restaurantListHash() => r'b2d86c74975c6a0b3c0cb09c24a968677627c77b';
+String _$restaurantListHash() => r'2cdd0c0d1bea299234f2c41919b37b91c5ee2ab3';
 
 /// See also [restaurantList].
 @ProviderFor(restaurantList)
@@ -21,10 +21,8 @@ final restaurantListProvider =
   allTransitiveDependencies: null,
 );
 
-@Deprecated('Will be removed in 3.0. Use Ref instead')
-// ignore: unused_element
 typedef RestaurantListRef = AutoDisposeFutureProviderRef<List<Restaurant>>;
-String _$restaurantDetailHash() => r'9e780a6c35ea2746da42d3e51d7c5649507d8707';
+String _$restaurantDetailHash() => r'7b7975cf73a505d5dd4231fb91ead0b89b8426cc';
 
 /// Copied from Dart SDK
 class _SystemHash {
@@ -160,8 +158,6 @@ class RestaurantDetailProvider extends AutoDisposeFutureProvider<Restaurant> {
   }
 }
 
-@Deprecated('Will be removed in 3.0. Use Ref instead')
-// ignore: unused_element
 mixin RestaurantDetailRef on AutoDisposeFutureProviderRef<Restaurant> {
   /// The parameter `id` of this provider.
   String get id;
@@ -177,7 +173,7 @@ class _RestaurantDetailProviderElement
 }
 
 String _$searchRestaurantItemsHash() =>
-    r'9ef453471ad9308338f9deb0182a3c0407d6cbf5';
+    r'cedc300c10234137e65a0dfd019ad4b556b9183d';
 
 /// See also [searchRestaurantItems].
 @ProviderFor(searchRestaurantItems)
@@ -305,8 +301,6 @@ class SearchRestaurantItemsProvider
   }
 }
 
-@Deprecated('Will be removed in 3.0. Use Ref instead')
-// ignore: unused_element
 mixin SearchRestaurantItemsRef on AutoDisposeFutureProviderRef<List<MenuItem>> {
   /// The parameter `restaurantId` of this provider.
   String get restaurantId;
@@ -328,7 +322,7 @@ class _SearchRestaurantItemsProviderElement
 }
 
 String _$restaurantPromotionsHash() =>
-    r'dcff90934c5df2d25120b49413208504d34f9ed1';
+    r'f950bce83267c5f3522304b3e406f5a2b86b4665';
 
 /// See also [restaurantPromotions].
 @ProviderFor(restaurantPromotions)
@@ -445,8 +439,6 @@ class RestaurantPromotionsProvider
   }
 }
 
-@Deprecated('Will be removed in 3.0. Use Ref instead')
-// ignore: unused_element
 mixin RestaurantPromotionsRef on AutoDisposeFutureProviderRef<List<Promotion>> {
   /// The parameter `restaurantId` of this provider.
   String get restaurantId;
@@ -462,4 +454,4 @@ class _RestaurantPromotionsProviderElement
       (origin as RestaurantPromotionsProvider).restaurantId;
 }
 // ignore_for_file: type=lint
-// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

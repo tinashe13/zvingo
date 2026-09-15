@@ -44,14 +44,29 @@ class SMSParser:
                     return f"Order {order_id} accepted. Head to merchant for pickup."
                 return f"Order {order_id} not found"
             except Exception as e:
-                logger.error("SMS ACCEPT failed", error=str(e))
-                return f"Cannot accept order: {str(e)}"
+                logger.error("SMS ACCEPT failed", error=str(e), order_id=order_id)
+                return f"Cannot accept order {order_id}. It may already be taken."
 
         elif command == "DECLINE":
             if not args:
                 return "Invalid format. Use: DECLINE <ORDER_ID>"
             order_id = args[0]
-            return f"Order {order_id} declined."
+            driver = await SMSParser._get_driver_by_phone(phone)
+            if not driver:
+                return "Driver not found for this phone number"
+            try:
+                # Previously this returned "declined" without telling dispatch,
+                # so the offer sat until it timed out and the driver believed
+                # they had released it.
+                from app.dispatch.service import dispatch_service
+
+                await dispatch_service.decline_offer(str(driver.id), order_id)
+                return f"Order {order_id} declined."
+            except Exception as e:
+                logger.error(
+                    "SMS DECLINE failed", error=str(e), order_id=order_id
+                )
+                return f"Cannot decline order {order_id}. Contact support."
 
         elif command == "COMPLETE":
             if not args:
@@ -63,14 +78,24 @@ class SMSParser:
             try:
                 from app.order.service import OrderService
                 from app.order.state_machine import OrderState
+                # driver_id scopes the write to THIS driver's own delivery.
+                # Without it any driver could text COMPLETE with any order id
+                # and mark a stranger's delivery done, crediting themselves the
+                # earnings. ACCEPT above has always passed it; COMPLETE did not.
                 order = await OrderService.transition_state(
-                    order_id, OrderState.DELIVERED, str(driver.id)
+                    order_id,
+                    OrderState.DELIVERED,
+                    str(driver.id),
+                    driver_id=str(driver.id),
                 )
                 if order:
                     return f"Order {order_id} delivered. Earnings updated."
                 return f"Order {order_id} not found"
             except Exception as e:
-                return f"Cannot complete order: {str(e)}"
+                logger.error(
+                    "SMS COMPLETE failed", error=str(e), order_id=order_id
+                )
+                return f"Cannot complete order {order_id}. Contact support."
 
         elif command == "STATUS":
             driver = await SMSParser._get_driver_by_phone(phone)
