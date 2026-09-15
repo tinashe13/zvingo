@@ -726,9 +726,9 @@ class _MapControl extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         shape: BoxShape.circle,
-        boxShadow: AppShadows.sm,
+        boxShadow: AppShadows.md,
       ),
       child: ZvIconButton(
         icon: icon,
