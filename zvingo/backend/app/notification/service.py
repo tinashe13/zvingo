@@ -47,10 +47,15 @@ class NotificationService:
             order_id, driver_id, driver_dist_km
         )
 
+        # Record the offer so the driver's acceptance rate is measurable.
+        from app.notification.offer_metrics import record_offer
+        await record_offer(driver_id)
+
         # ── FCM push notification ─────────────────────────────
         from app.auth.models import User
+        from app.notification.preferences import should_notify
         user = await User.get(driver_id)
-        if user and user.fcm_token:
+        if user and user.fcm_token and await should_notify(driver_id, "driver_offers"):
             from app.notification.fcm import send_push_notification
             merchant_name = offer_data.get("merchant_name", "A restaurant")
             fee = offer_data.get("delivery_fee_cents", 0) / 100
@@ -62,7 +67,7 @@ class NotificationService:
                       "payload": json.dumps(offer_data)},
             )
         else:
-            logger.info("No FCM token for driver, SSE only", driver_id=driver_id)
+            logger.info("No FCM push for driver, SSE only", driver_id=driver_id)
 
         # ── Redis: pub/sub + pending-offer cache ─────────────
         # Publish fires the offer to any currently connected WebSocket.
@@ -229,10 +234,11 @@ class NotificationService:
         finally:
             await r.close()
 
-        # Also send FCM push to consumer
+        # Also send FCM push to consumer, subject to their preferences.
         from app.auth.models import User
+        from app.notification.preferences import should_notify
         user = await User.get(consumer_id)
-        if user and user.fcm_token:
+        if user and user.fcm_token and await should_notify(consumer_id, "order_updates"):
             from app.notification.fcm import send_push_notification
             titles = {
                 "order_accepted": "Driver on the way!",

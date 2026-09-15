@@ -6,7 +6,7 @@ part of 'search_screen.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$searchRestaurantsHash() => r'd0c3a6c5a8e26282d5f41db15a4ecad2c2bee670';
+String _$searchRestaurantsHash() => r'54cdb213719ac46d93e17fa16a5e06e08434a496';
 
 /// Copied from Dart SDK
 class _SystemHash {
@@ -143,8 +143,6 @@ class SearchRestaurantsProvider
   }
 }
 
-@Deprecated('Will be removed in 3.0. Use Ref instead')
-// ignore: unused_element
 mixin SearchRestaurantsRef on AutoDisposeFutureProviderRef<List<Restaurant>> {
   /// The parameter `query` of this provider.
   String get query;
@@ -159,4 +157,4 @@ class _SearchRestaurantsProviderElement
   String get query => (origin as SearchRestaurantsProvider).query;
 }
 // ignore_for_file: type=lint
-// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

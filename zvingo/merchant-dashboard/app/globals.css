@@ -16,42 +16,34 @@
   /* §2 type scale — size / line-height / weight / tracking */
   --text-display: 32px;
   --text-display--line-height: 38px;
-  --text-display--font-weight: 800;
   --text-display--letter-spacing: -0.6px;
 
   --text-h1: 26px;
   --text-h1--line-height: 32px;
-  --text-h1--font-weight: 800;
   --text-h1--letter-spacing: -0.5px;
 
   --text-h2: 21px;
   --text-h2--line-height: 27px;
-  --text-h2--font-weight: 700;
   --text-h2--letter-spacing: -0.4px;
 
   --text-h3: 17px;
   --text-h3--line-height: 23px;
-  --text-h3--font-weight: 700;
   --text-h3--letter-spacing: -0.2px;
 
   --text-body: 15px;
   --text-body--line-height: 22px;
-  --text-body--font-weight: 400;
   --text-body--letter-spacing: 0px;
 
   --text-caption: 13px;
   --text-caption--line-height: 18px;
-  --text-caption--font-weight: 500;
   --text-caption--letter-spacing: 0px;
 
   --text-overline: 11px;
   --text-overline--line-height: 14px;
-  --text-overline--font-weight: 700;
   --text-overline--letter-spacing: 0.8px;
 
   --text-button: 15px;
   --text-button--line-height: 20px;
-  --text-button--font-weight: 700;
   --text-button--letter-spacing: -0.1px;
 
   /* --- §1.1 Brand ------------------------------------------------------ */
@@ -320,6 +312,15 @@ a:not([data-no-tap-scale]):active,
   }
 }
 
+@keyframes zv-toast-progress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
 @keyframes zv-spin {
   to {
     transform: rotate(360deg);
@@ -337,6 +338,19 @@ a:not([data-no-tap-scale]):active,
    ========================================================================== */
 
 @layer components {
+  /* §2 type roles — size + line-height + tracking + weight in one class.
+     Use these for headings; the bare `text-h1` utility sets metrics only so
+     that `font-*` utilities stay composable. */
+  .type-display { font-size: var(--text-display); line-height: var(--text-display--line-height); letter-spacing: var(--text-display--letter-spacing); font-weight: 800; }
+  .type-h1 { font-size: var(--text-h1); line-height: var(--text-h1--line-height); letter-spacing: var(--text-h1--letter-spacing); font-weight: 800; }
+  .type-h2 { font-size: var(--text-h2); line-height: var(--text-h2--line-height); letter-spacing: var(--text-h2--letter-spacing); font-weight: 700; }
+  .type-h3 { font-size: var(--text-h3); line-height: var(--text-h3--line-height); letter-spacing: var(--text-h3--letter-spacing); font-weight: 700; }
+  .type-body { font-size: var(--text-body); line-height: var(--text-body--line-height); font-weight: 400; }
+  .type-body-strong { font-size: var(--text-body); line-height: var(--text-body--line-height); font-weight: 600; }
+  .type-caption { font-size: var(--text-caption); line-height: var(--text-caption--line-height); font-weight: 500; }
+  .type-overline { font-size: var(--text-overline); line-height: var(--text-overline--line-height); letter-spacing: var(--text-overline--letter-spacing); font-weight: 700; text-transform: uppercase; }
+  .type-button { font-size: var(--text-button); line-height: var(--text-button--line-height); letter-spacing: var(--text-button--letter-spacing); font-weight: 700; }
+
   /* §2 — money, ETAs and counters must not jitter as digits change. */
   .tabular-figures {
     font-variant-numeric: tabular-nums;
@@ -405,6 +419,9 @@ a:not([data-no-tap-scale]):active,
   }
   .zv-spin {
     animation: zv-spin 900ms linear infinite;
+  }
+  .zv-toast-progress {
+    animation: zv-toast-progress linear forwards;
   }
   .zv-draw-check {
     stroke-dasharray: 32;
@@ -511,7 +528,8 @@ a:not([data-no-tap-scale]):active,
   .zv-shimmer,
   .zv-alert-ring,
   .zv-alert-bell,
-  .zv-spin {
+  .zv-spin,
+  .zv-toast-progress {
     animation: none !important;
   }
 

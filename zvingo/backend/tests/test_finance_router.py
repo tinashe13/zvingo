@@ -54,6 +54,7 @@ def user(id="user-1"):
 @pytest.mark.asyncio
 async def test_exchange_rates_cached_default_and_update(monkeypatch):
     import app.finance.router as module
+    import app.finance.exchange as exchange_module
 
     class Redis:
         def __init__(self, cached=None):
@@ -62,11 +63,29 @@ async def test_exchange_rates_cached_default_and_update(monkeypatch):
             self.set = AsyncMock()
             self.close = AsyncMock()
 
+    # Publishing a rate now appends an immutable audit record before the cache
+    # is touched, so stand in for the Beanie document (no database here).
+    class FakeExchangeRate:
+        written = []
+
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+            self.id = "rate-1"
+
+        async def insert(self):
+            FakeExchangeRate.written.append(self)
+            return self
+
+    monkeypatch.setattr(exchange_module, "ExchangeRate", FakeExchangeRate)
+
     default_redis = Redis()
     monkeypatch.setattr(module.aioredis, "from_url", lambda *args, **kwargs: default_redis)
     default = await module.get_exchange_rates()
     assert default.rates == module.DEFAULT_RATES
     default_redis.close.assert_awaited_once()
+    # Provenance travels with the rates so a client can spot a stale quote.
+    assert default.meta["ZIG"]["source"]
+    assert default.meta["USD"]["is_stale"] is False
 
     cached_redis = Redis('{"ZIG": 14.0}')
     monkeypatch.setattr(module.aioredis, "from_url", lambda *args, **kwargs: cached_redis)
@@ -74,7 +93,10 @@ async def test_exchange_rates_cached_default_and_update(monkeypatch):
     assert cached.rates["ZIG"] == 14.0
     updated = await module.update_exchange_rate("zar", 19.0, "token")
     assert updated["rates"]["ZAR"] == 19.0
-    cached_redis.set.assert_awaited_once()
+    assert updated["published"]["source"] == "manual"
+    # Rates are persisted as exact integer micro-units, never floats.
+    assert FakeExchangeRate.written[-1].rate_micros == 19_000_000
+    assert cached_redis.set.await_count >= 1
 
     fresh_redis = Redis()
     monkeypatch.setattr(module.aioredis, "from_url", lambda *args, **kwargs: fresh_redis)
@@ -86,7 +108,7 @@ async def test_merchant_analytics(monkeypatch):
     import app.finance.router as module
 
     now = datetime.now()
-    delivered = SimpleNamespace(total_amount=20.125)
+    delivered = SimpleNamespace(total_amount=20.13)
     history = SimpleNamespace(
         events=[
             SimpleNamespace(state=OrderState.ACCEPTED, timestamp=now),
@@ -122,8 +144,9 @@ async def test_merchant_analytics(monkeypatch):
     ]
     result = await module.get_merchant_analytics("merchant", user("merchant"))
     assert result == {
-        "today_orders": 1, "today_gmv": 20.12, "total_orders": 3,
-        "total_gmv": 40.25, "active_items": 1, "avg_prep_time": 20.0,
+        "today_orders": 1, "today_gmv": 20.13, "today_gmv_minor": 2013,
+        "total_orders": 3, "total_gmv": 40.26, "total_gmv_minor": 4026,
+        "active_items": 1, "avg_prep_time": 20.0,
     }
 
     FakeRestaurant.find_one.return_value = None

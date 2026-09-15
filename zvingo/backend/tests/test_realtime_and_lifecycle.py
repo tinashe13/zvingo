@@ -192,6 +192,15 @@ async def test_websocket_rejection_and_full_message_flow(monkeypatch):
     await module.driver_ws(wrong, "driver")
     assert wrong.closed_code == 1008
 
+    # A valid token for an account that no longer exists is refused too.
+    monkeypatch.setattr(module.User, "get", AsyncMock(return_value=None))
+    deactivated = WebSocket(token=AuthService.create_access_token({"sub": "driver"}))
+    await module.driver_ws(deactivated, "driver")
+    assert deactivated.closed_code == 1008
+    monkeypatch.setattr(
+        module.User, "get", AsyncMock(return_value=SimpleNamespace(is_active=True))
+    )
+
     token = AuthService.create_access_token({"sub": "driver"})
     messages = [
         "not-json",

@@ -59,6 +59,15 @@ class OrderCreate(BaseModel):
 class OrderUpdateState(BaseModel):
     state: OrderState
 
+
+class OrderEventResponse(BaseModel):
+    """One entry of an order's audit trail, as returned by GET /orders/{id}/events."""
+
+    state: str
+    timestamp: Optional[datetime] = None
+    actor_id: Optional[str] = None
+    reason: Optional[str] = None
+
 class OrderResponse(BaseModel):
     id: str
     state: OrderState

@@ -6,7 +6,7 @@ part of 'filter_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$filtersHash() => r'0610c339c272abcf420f8b0f15aa511e1f31118d';
+String _$filtersHash() => r'b733b00dc1a93b8168bf0800ca861d6ec89cc83b';
 
 /// See also [Filters].
 @ProviderFor(Filters)
@@ -21,4 +21,4 @@ final filtersProvider = NotifierProvider<Filters, FilterState>.internal(
 
 typedef _$Filters = Notifier<FilterState>;
 // ignore_for_file: type=lint
-// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

@@ -85,9 +85,8 @@ class AppTheme {
   static OutlineInputBorder _inputBorder(Color color, double width) {
     return OutlineInputBorder(
       borderRadius: AppRadius.mdAll,
-      borderSide: width == 0
-          ? BorderSide.none
-          : BorderSide(color: color, width: width),
+      borderSide:
+          width == 0 ? BorderSide.none : BorderSide(color: color, width: width),
     );
   }
 
@@ -169,8 +168,8 @@ class AppTheme {
       errorBorder: _inputBorder(AppColors.error, 1.5),
       focusedErrorBorder: _inputBorder(AppColors.error, 1.5),
       labelStyle: AppTextStyles.caption,
-      floatingLabelStyle: AppTextStyles.caption
-          .copyWith(color: AppColors.actionDefault),
+      floatingLabelStyle:
+          AppTextStyles.caption.copyWith(color: AppColors.actionDefault),
       hintStyle: AppTextStyles.body.copyWith(color: AppColors.textTertiary),
       helperStyle: AppTextStyles.caption,
       errorStyle: AppTextStyles.caption.copyWith(color: AppColors.error),

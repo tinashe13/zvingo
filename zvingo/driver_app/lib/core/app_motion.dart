@@ -138,7 +138,7 @@ class AppMotion {
   static Interval staggerInterval(int index, int count) {
     if (count <= 1) return const Interval(0, 1, curve: enter);
     final capped = index.clamp(0, staggerCap);
-    final span = 1 / (staggerCap + 1);
+    const span = 1 / (staggerCap + 1);
     final start = (capped * span * 0.6).clamp(0.0, 0.6);
     return Interval(start, (start + 0.4).clamp(0.0, 1.0), curve: enter);
   }
@@ -216,9 +216,8 @@ class _StaggeredEntranceState extends State<StaggeredEntrance>
   @override
   Widget build(BuildContext context) {
     final rise = AppMotion.offsetOf(context, widget.offset);
-    final curved = CurvedAnimation(
-      parent: _controller,
-      curve: AppMotion.curveOf(context, AppMotion.enter),
+    final curved = _controller.drive(
+      CurveTween(curve: AppMotion.curveOf(context, AppMotion.enter)),
     );
 
     return AnimatedBuilder(

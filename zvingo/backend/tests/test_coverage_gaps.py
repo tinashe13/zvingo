@@ -17,6 +17,15 @@ class Query:
     def __init__(self, values):
         self.values = values
 
+    def sort(self, *_args):
+        return self
+
+    def skip(self, *_args):
+        return self
+
+    def limit(self, *_args):
+        return self
+
     async def to_list(self):
         return self.values
 
@@ -120,6 +129,10 @@ async def test_websocket_worker_loops_and_cleanup_errors(monkeypatch):
 
     token = AuthService.create_access_token({"sub": "driver"})
     websocket = SlowWebSocket(token)
+    # The handshake now also confirms the account exists and is still active.
+    monkeypatch.setattr(
+        module.User, "get", AsyncMock(return_value=SimpleNamespace(is_active=True))
+    )
     monkeypatch.setattr(module.aioredis, "from_url", lambda *args, **kwargs: Redis())
     monkeypatch.setattr(module, "PING_INTERVAL", 0)
     await module.driver_ws(websocket, "driver")
@@ -239,9 +252,8 @@ async def test_payment_success_transition_with_and_without_order(monkeypatch):
     await PaymentService._on_payment_success(payment)
 
 
-def test_import_time_cors_warning_and_sms_initialization(monkeypatch):
+def test_import_time_cors_warning(monkeypatch):
     import app.main as main_module
-    import app.sms.router as sms_module
 
     monkeypatch.setattr(main_module.settings, "ENVIRONMENT", "production")
     monkeypatch.setattr(main_module.settings, "CORS_ORIGINS", "")
@@ -249,11 +261,14 @@ def test_import_time_cors_warning_and_sms_initialization(monkeypatch):
     monkeypatch.setattr(main_module.settings, "ENVIRONMENT", "development")
     importlib.reload(main_module)
 
-    initialize = MagicMock()
-    monkeypatch.setattr(sms_module.africastalking, "initialize", initialize)
-    monkeypatch.setenv("AT_API_KEY", "test-key")
-    monkeypatch.setenv("AT_USERNAME", "test-user")
-    importlib.reload(sms_module)
-    initialize.assert_called_once_with("test-user", "test-key")
-    monkeypatch.delenv("AT_API_KEY")
-    importlib.reload(sms_module)
+
+def test_sms_router_uses_the_shared_gateway():
+    """The router must not build its own Africa's Talking client.
+
+    It used to initialise one at import from AT_USERNAME/AT_API_KEY and fall
+    back to a mock whenever the key was missing — including in production.
+    """
+    import app.sms.router as sms_module
+
+    assert not hasattr(sms_module, "africastalking")
+    assert sms_module.sms_gateway is not None

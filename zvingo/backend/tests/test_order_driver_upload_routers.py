@@ -25,6 +25,12 @@ class Query:
     def sort(self, *args):
         return self
 
+    def skip(self, *_args):
+        return self
+
+    def limit(self, *_args):
+        return self
+
     async def to_list(self):
         return self.values
 
@@ -173,22 +179,28 @@ async def test_order_cancel_create_and_state_update(monkeypatch):
         OrderItem(name="Drink", quantity=1, price=2),
     ]))
     FakeOrder.get.return_value = current
+    # DELIVERED is one of the two states a consumer's role may reach.
     response = await module.update_order_state(
-        "order-1", OrderUpdateState(state=OrderState.ACCEPTED), user()
+        "order-1", OrderUpdateState(state=OrderState.DELIVERED), user()
     )
     assert response.state == OrderState.CREATED
+    # Role check: a consumer cannot advance their own order into ACCEPTED —
+    # that would take it out of the dispatch pool with no driver on it.
+    with pytest.raises(HTTPException) as exc:
+        await module.update_order_state("order-1", OrderUpdateState(state=OrderState.ACCEPTED), user())
+    assert exc.value.status_code == 403
     # Ownership check: a consumer may not mutate someone else's order.
     with pytest.raises(HTTPException) as exc:
-        await module.update_order_state("order-1", OrderUpdateState(state=OrderState.ACCEPTED), user("other"))
+        await module.update_order_state("order-1", OrderUpdateState(state=OrderState.DELIVERED), user("other"))
     assert exc.value.status_code == 403
     FakeOrder.get.return_value = None
     with pytest.raises(HTTPException) as exc:
-        await module.update_order_state("missing", OrderUpdateState(state=OrderState.ACCEPTED), user())
+        await module.update_order_state("missing", OrderUpdateState(state=OrderState.DELIVERED), user())
     assert exc.value.status_code == 404
     FakeOrder.get.return_value = current
     module.OrderService.transition_state.side_effect = InvalidStateTransition("no")
     with pytest.raises(HTTPException) as exc:
-        await module.update_order_state("order-1", OrderUpdateState(state=OrderState.ACCEPTED), user())
+        await module.update_order_state("order-1", OrderUpdateState(state=OrderState.DELIVERED), user())
     assert exc.value.status_code == 400
 
     # The order was found for the access check but the transition returned
@@ -196,7 +208,7 @@ async def test_order_cancel_create_and_state_update(monkeypatch):
     module.OrderService.transition_state.side_effect = None
     module.OrderService.transition_state.return_value = None
     with pytest.raises(HTTPException) as exc:
-        await module.update_order_state("order-1", OrderUpdateState(state=OrderState.ACCEPTED), user())
+        await module.update_order_state("order-1", OrderUpdateState(state=OrderState.DELIVERED), user())
     assert exc.value.status_code == 404
 
 
@@ -288,13 +300,22 @@ async def test_driver_schedule_get_and_save():
     import app.driver.router as module
 
     current = user("driver-1", schedule=[], vehicle=None)
-    assert (await module.get_schedule(current)) == {"days": []}
+    assert (await module.get_schedule(current))["days"] == []
 
     req = module.ScheduleUpdate(days=[module.ScheduleDay(day=0, slots=[0, 1])])
     result = await module.save_schedule(req, current)
-    assert result["days"] == [{"day": 0, "slots": [0, 1]}]
-    assert current.schedule == [{"day": 0, "slots": [0, 1]}]
+    assert result["days"][0]["slots"] == [0, 1]
+    assert current.schedule == result["days"]
     assert current.save.await_count == 1
+
+    # Two entries for the same weekday are a client bug, not a merge.
+    with pytest.raises(HTTPException):
+        await module.save_schedule(
+            module.ScheduleUpdate(
+                days=[module.ScheduleDay(day=1, slots=[0]), module.ScheduleDay(day=1, slots=[1])]
+            ),
+            current,
+        )
 
 
 @pytest.mark.asyncio
@@ -302,7 +323,7 @@ async def test_driver_vehicle_get_and_save():
     import app.driver.router as module
 
     current = user("driver-1", schedule=[], vehicle=None)
-    assert (await module.get_vehicle(current)) == {"vehicle": None}
+    assert (await module.get_vehicle(current))["vehicle"] is None
 
     result = await module.save_vehicle(
         module.VehicleUpdate(make="Toyota", color="Red"), current
@@ -336,27 +357,59 @@ async def test_order_location_helper_handles_location_and_legacy_dict():
 
 @pytest.mark.asyncio
 async def test_upload_validation_success_and_failure(monkeypatch, tmp_path):
+    """The upload route trusts the bytes, not the name or the declared type."""
     import app.upload.router as module
 
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 32
+
     class Upload:
+        """Streaming stand-in for UploadFile: read() drains, like the real one."""
+
         def __init__(self, filename, content):
             self.filename = filename
-            self.read = AsyncMock(return_value=content)
+            self._content = content
+            self._offset = 0
 
+        async def read(self, size=-1):
+            if size is None or size < 0:
+                chunk, self._offset = self._content[self._offset:], len(self._content)
+                return chunk
+            chunk = self._content[self._offset:self._offset + size]
+            self._offset += len(chunk)
+            return chunk
+
+    # A dangerous extension is refused before the bytes are even read.
     with pytest.raises(HTTPException) as exc:
-        await module.upload_file(Upload("bad.exe", b"x"), user())
+        await module.upload_file(Upload("shell.php", png), user())
     assert exc.value.status_code == 400
+
+    # An extension that is merely unsupported is refused too.
+    with pytest.raises(HTTPException) as exc:
+        await module.upload_file(Upload("bad.exe", png), user())
+    assert exc.value.status_code == 400
+
+    # Oversized bodies are rejected while streaming, with 413.
     monkeypatch.setattr(module, "MAX_FILE_SIZE", 2)
     with pytest.raises(HTTPException) as exc:
-        await module.upload_file(Upload("large.png", b"123"), user())
+        await module.upload_file(Upload("large.png", png), user())
+    assert exc.value.status_code == 413
+    monkeypatch.setattr(module, "MAX_FILE_SIZE", 5 * 1024 * 1024)
+
+    # A .png name over non-image bytes is rejected by the magic-byte sniff.
+    with pytest.raises(HTTPException) as exc:
+        await module.upload_file(Upload("image.png", b"not an image at all"), user())
     assert exc.value.status_code == 400
 
     monkeypatch.setattr(module, "UPLOAD_DIR", tmp_path)
-    result = await module.upload_file(Upload(None, b"ok"), user())
-    assert result["url"].endswith(".jpg")
-    assert len(list(tmp_path.iterdir())) == 1
+    result = await module.upload_file(Upload(None, png), user())
+    assert result["url"].endswith(".png")
+    assert result["content_type"] == "image/png"
+    stored = list(tmp_path.iterdir())
+    assert len(stored) == 1
+    # The stored name is generated, never taken from the client.
+    assert stored[0].name != "image.png"
 
     monkeypatch.setattr(module, "UPLOAD_DIR", Path("missing") / "nested")
     with pytest.raises(HTTPException) as exc:
-        await module.upload_file(Upload("image.png", b"ok"), user())
+        await module.upload_file(Upload("image.png", png), user())
     assert exc.value.status_code == 500

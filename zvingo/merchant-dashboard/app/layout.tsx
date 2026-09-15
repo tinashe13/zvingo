@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { ToastProvider } from "@/components/ui/Toast";
 import "./globals.css";
 
 // §2 — Inter across all three surfaces. Variable weights 400–800 cover the
@@ -46,7 +47,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body className="min-h-screen bg-background font-sans text-body text-text-secondary antialiased">
-        {children}
+        {/* Mounted at the root so `useToast()` works on every screen, whatever
+            layout a page sits under. */}
+        <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
   );

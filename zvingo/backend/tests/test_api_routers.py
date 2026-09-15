@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import BackgroundTasks, HTTPException
+from pydantic import ValidationError
 from jose import jwt
 
 from app.auth.schemas import OTPRequest, OTPVerify, UserCreate
@@ -142,9 +143,7 @@ async def test_auth_profile_otp_fcm_reset_and_favourites(monkeypatch):
         find_one = AsyncMock(return_value=None)
 
     monkeypatch.setattr(module, "User", FakeUser)
-    with pytest.raises(HTTPException) as exc:
-        await module.request_otp(OTPRequest(phone=current.phone))
-    assert exc.value.status_code == 404
+    assert await module.request_otp(OTPRequest(phone=current.phone)) == {"status": "otp_sent"}
     FakeUser.find_one.return_value = current
     monkeypatch.setattr(module.AuthService, "create_otp", AsyncMock(return_value="123456"))
     monkeypatch.setattr(sms_module.sms_gateway, "send_sms", AsyncMock(return_value=True))
@@ -152,10 +151,10 @@ async def test_auth_profile_otp_fcm_reset_and_favourites(monkeypatch):
 
     monkeypatch.setattr(module.AuthService, "verify_otp", AsyncMock(return_value=False))
     with pytest.raises(HTTPException, match="Invalid or expired"):
-        await module.verify_otp(OTPVerify(phone=current.phone, code="bad"))
+        await module.verify_otp(OTPVerify(phone=current.phone, code="badcode"))
     module.AuthService.verify_otp.return_value = True
     FakeUser.find_one.return_value = None
-    with pytest.raises(HTTPException, match="User not found"):
+    with pytest.raises(HTTPException, match="Invalid or expired OTP"):
         await module.verify_otp(OTPVerify(phone=current.phone, code="123456"))
     FakeUser.find_one.return_value = current
     assert (await module.verify_otp(OTPVerify(phone=current.phone, code="123456")))[
@@ -178,9 +177,9 @@ async def test_auth_profile_otp_fcm_reset_and_favourites(monkeypatch):
         AsyncMock(return_value="reset-token-long"),
     )
     monkeypatch.setattr(settings, "ENVIRONMENT", "development")
-    assert (await module.request_password_reset(module.PasswordResetRequest(phone=current.phone)))[
-        "token"
-    ] == "reset-token-long"
+    assert await module.request_password_reset(
+        module.PasswordResetRequest(phone=current.phone)
+    ) == {"status": "reset_initiated"}
     monkeypatch.setattr(settings, "ENVIRONMENT", "production")
     assert await module.request_password_reset(
         module.PasswordResetRequest(phone=current.phone)
@@ -189,20 +188,20 @@ async def test_auth_profile_otp_fcm_reset_and_favourites(monkeypatch):
     monkeypatch.setattr(module.AuthService, "verify_reset_token", AsyncMock(return_value=None))
     with pytest.raises(HTTPException, match="Invalid or expired"):
         await module.confirm_password_reset(
-            module.PasswordResetConfirm(token="bad", new_password="new")
+            module.PasswordResetConfirm(token="bad-token", new_password="new-password")
         )
     module.AuthService.verify_reset_token.return_value = current.phone
     FakeUser.find_one.return_value = None
     with pytest.raises(HTTPException, match="User not found"):
         await module.confirm_password_reset(
-            module.PasswordResetConfirm(token="ok", new_password="new")
+            module.PasswordResetConfirm(token="ok-token-1", new_password="new-password")
         )
     FakeUser.find_one.return_value = current
     monkeypatch.setattr(module.AuthService, "get_password_hash", lambda value: f"hashed-{value}")
     assert await module.confirm_password_reset(
-        module.PasswordResetConfirm(token="ok", new_password="new")
+        module.PasswordResetConfirm(token="ok-token-1", new_password="new-password")
     ) == {"status": "password_reset"}
-    assert current.hashed_password == "hashed-new"
+    assert current.hashed_password == "hashed-new-password"
 
     assert await module.get_favourites(current) == {"favourite_restaurant_ids": []}
     added = await module.toggle_favourite("restaurant", current)
@@ -309,13 +308,23 @@ async def test_dispatch_router_all_paths(monkeypatch):
 
     limiter = SimpleNamespace(check_location_update=AsyncMock(return_value=(False, "slow down")))
     monkeypatch.setattr(module, "RateLimiter", lambda _: limiter)
+    driver = user(id="d")
     update = DriverLocationUpdate(driver_id="d", lat=1, lng=2)
+    # A body naming a different driver is refused: the driver comes from the JWT.
     with pytest.raises(HTTPException) as exc:
-        await module.update_location(update, BackgroundTasks(), "token", redis)
+        await module.update_location(
+            DriverLocationUpdate(driver_id="someone-else", lat=1, lng=2),
+            BackgroundTasks(),
+            driver,
+            redis,
+        )
+    assert exc.value.status_code == 403
+    with pytest.raises(HTTPException) as exc:
+        await module.update_location(update, BackgroundTasks(), driver, redis)
     assert exc.value.status_code == 429
     limiter.check_location_update.return_value = (True, None)
     tasks = BackgroundTasks()
-    assert await module.update_location(update, tasks, "token", redis) == {
+    assert await module.update_location(update, tasks, driver, redis) == {
         "status": "received"
     }
     assert len(tasks.tasks) == 1
@@ -348,15 +357,34 @@ async def test_dispatch_router_all_paths(monkeypatch):
     }
     assert (await module.get_driver_state(current))["active_order"]["short_id"] == "ZVCDEF"
 
-    orders = [SimpleNamespace(state=OrderState.ACCEPTED, save=AsyncMock()) for _ in range(2)]
+    # Reset is state-aware: pre-pickup orders go back to dispatch, and an order
+    # the driver is actually carrying is completed through the state machine.
+    orders = [
+        SimpleNamespace(id="pre-pickup", state=OrderState.ACCEPTED, save=AsyncMock()),
+        SimpleNamespace(id="carrying", state=OrderState.PICKED_UP, save=AsyncMock()),
+    ]
 
     class FakeOrder:
         find = MagicMock(return_value=QueryResult(orders))
 
     monkeypatch.setattr(order_models, "Order", FakeOrder)
+    monkeypatch.setattr(
+        module.dispatch_service, "release_order", AsyncMock(return_value=orders[0])
+    )
+    import app.order.service as order_service
+
+    monkeypatch.setattr(
+        order_service.OrderService, "transition_state", AsyncMock(return_value=orders[1])
+    )
     reset = await module.reset_driver_state(current)
     assert reset["orders_reset"] == 2
-    assert all(order.state == OrderState.DELIVERED for order in orders)
+    assert reset["orders_released"] == 1
+    assert reset["orders_completed"] == 1
+    module.dispatch_service.release_order.assert_awaited_once_with(
+        "driver", "pre-pickup", reason="driver_reset"
+    )
+    # The carried order was completed, not silently overwritten.
+    assert order_service.OrderService.transition_state.await_args.args[1] is OrderState.DELIVERED
 
 
 @pytest.mark.asyncio
@@ -383,16 +411,33 @@ async def test_location_sync_and_sms_routers(monkeypatch):
     assert response.body == b"packed"
     assert response.media_type == "application/x-msgpack"
 
-    request = sms.SMSRequest(to="+263", message="hello")
-    monkeypatch.setattr(sms, "sms", None)
-    assert (await sms.send_sms(request, current))["provider"] == "mock"
-    provider = SimpleNamespace(send=MagicMock(return_value={"ok": True}))
-    monkeypatch.setattr(sms, "sms", provider)
-    assert (await sms.send_sms(request, current))["provider"] == "africastalking"
-    provider.send.side_effect = RuntimeError("provider down")
+    # SMS delivery goes through the shared gateway, whose mock/production split
+    # is driven by SMS_MOCK_MODE — the router no longer decides.
+    request = sms.SMSRequest(to="+263771234567", message="hello")
+    admin = user(id="admin-1", role="admin")
+    monkeypatch.setattr(sms.sms_gateway, "mock_mode", True)
+    monkeypatch.setattr(sms.sms_gateway, "send_sms", AsyncMock(return_value=True))
+    assert (await sms.send_sms(request, admin))["provider"] == "mock"
+
+    monkeypatch.setattr(sms.sms_gateway, "mock_mode", False)
+    assert (await sms.send_sms(request, admin))["provider"] == "africastalking"
+
+    # A gateway that reports non-delivery must not report success.
+    monkeypatch.setattr(sms.sms_gateway, "send_sms", AsyncMock(return_value=False))
     with pytest.raises(HTTPException) as exc:
-        await sms.send_sms(request, current)
-    assert exc.value.status_code == 500
+        await sms.send_sms(request, admin)
+    assert exc.value.status_code == 502
+
+    monkeypatch.setattr(
+        sms.sms_gateway, "send_sms", AsyncMock(side_effect=RuntimeError("provider down"))
+    )
+    with pytest.raises(HTTPException) as exc:
+        await sms.send_sms(request, admin)
+    assert exc.value.status_code == 502
+
+    # A non-E.164 destination is rejected before it can cost money.
+    with pytest.raises(ValidationError):
+        sms.SMSRequest(to="0771234567", message="hello")
 
 
 @pytest.mark.asyncio

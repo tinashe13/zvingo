@@ -1,14 +1,75 @@
+"""Application settings, with hard production safety gates.
+
+Everything the process needs is read from the environment exactly once, at
+import time. A misconfigured production deployment must never start: the
+``_enforce_production_safety`` validator below refuses to build ``Settings``
+when a known-insecure secret, a mock payment/SMS gateway, a wildcard CORS
+policy or a dev-only escape hatch is still enabled. Each message names the
+offending environment variable so the failure is actionable from a container
+log alone.
+"""
+
 from pydantic import model_validator
 from pydantic_settings import BaseSettings
 from typing import List, Optional
+from urllib.parse import urlparse
 
-# Placeholder secrets that must never reach production.
+# Placeholder secrets that must never reach production. Compared
+# case-insensitively after stripping surrounding whitespace and quotes.
 KNOWN_INSECURE_SECRETS = {
     "changethis",
     "changeme",
+    "change-me",
     "secret",
+    "secretkey",
+    "secret_key",
+    "supersecret",
+    "super-secret",
+    "password",
+    "test",
+    "testing",
+    "dev",
+    "development",
+    "zvingo",
     "generate-a-random-64-char-string-here",
+    "your-secret-key",
+    "your-secret-key-here",
+    "insecure",
+    "0123456789abcdef",
 }
+
+# A production signing key must be at least this long and carry at least this
+# many distinct characters. The distinctness floor is what rejects padded
+# placeholders such as "x" * 64, which are long but have no entropy at all.
+MIN_SECRET_KEY_LENGTH = 32
+MIN_SECRET_KEY_DISTINCT_CHARS = 12
+
+
+def _normalise_secret(value: str) -> str:
+    return (value or "").strip().strip("'\"").lower()
+
+
+def secret_key_problem(secret: str) -> Optional[str]:
+    """Why ``secret`` is unfit for signing production tokens, or None.
+
+    Kept as a module-level function so the same rule can be asserted in tests
+    and reused by any future key-rotation tooling.
+    """
+    if not secret or not secret.strip():
+        return "is empty"
+    normalised = _normalise_secret(secret)
+    if normalised in KNOWN_INSECURE_SECRETS:
+        return "is a well-known placeholder value"
+    if len(secret) < MIN_SECRET_KEY_LENGTH:
+        return f"is only {len(secret)} characters (minimum {MIN_SECRET_KEY_LENGTH})"
+    if len(set(secret)) < MIN_SECRET_KEY_DISTINCT_CHARS:
+        return (
+            f"has only {len(set(secret))} distinct characters "
+            f"(minimum {MIN_SECRET_KEY_DISTINCT_CHARS}) — it looks like padding, "
+            "not a random key"
+        )
+    return None
+
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Zvingo"
@@ -28,6 +89,11 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "changethis"  # MUST change in production (enforced below)
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
+    # Refresh tokens are long-lived but single-use: every refresh rotates the
+    # token and revokes its predecessor (see app/auth/tokens.py).
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+    # `iss` claim minted into, and required of, every token this service issues.
+    JWT_ISSUER: str = "zvingo"
 
     # CORS: comma-separated list of allowed origins.
     # Empty => "*" in development, no origins in production.
@@ -56,6 +122,10 @@ class Settings(BaseSettings):
     # Upload
     UPLOAD_BASE_URL: str = "http://localhost:8000"
     MAX_UPLOAD_SIZE_BYTES: int = 5 * 1024 * 1024  # 5MB
+    # Uploads accepted per user per window. Stops an authenticated account
+    # being used to fill the disk.
+    UPLOAD_RATE_LIMIT: int = 30
+    UPLOAD_RATE_WINDOW_SECONDS: int = 300
 
     # Dispatch retry (re-offer stuck orders)
     DISPATCH_RETRY_INTERVAL_SECONDS: int = 120
@@ -71,6 +141,7 @@ class Settings(BaseSettings):
     LOG_JSON: bool = False  # force JSON logs (always on in production)
     METRICS_ENABLED: bool = True
     # When set, GET /metrics requires `Authorization: Bearer <token>`.
+    # Required in production whenever METRICS_ENABLED is true.
     METRICS_TOKEN: Optional[str] = None
 
     # Alerting — a background monitor emits `alert` log events and publishes
@@ -93,6 +164,29 @@ class Settings(BaseSettings):
     LOCATION_UPDATE_RATE_LIMIT: int = 30  # Max 30 requests per driver per 60 seconds (3s interval = ~20, with headroom)
     LOCATION_UPDATE_WINDOW_SECONDS: int = 60
 
+    # Credential-stuffing / OTP-brute-force defences. Each limit is
+    # "attempts per window", counted per client IP *and* per identifier.
+    LOGIN_RATE_LIMIT: int = 10
+    LOGIN_RATE_WINDOW_SECONDS: int = 300
+    REGISTER_RATE_LIMIT: int = 5
+    REGISTER_RATE_WINDOW_SECONDS: int = 3600
+    OTP_REQUEST_RATE_LIMIT: int = 5
+    OTP_REQUEST_RATE_WINDOW_SECONDS: int = 900
+    OTP_VERIFY_RATE_LIMIT: int = 10
+    OTP_VERIFY_RATE_WINDOW_SECONDS: int = 900
+    PASSWORD_RESET_RATE_LIMIT: int = 5
+    PASSWORD_RESET_RATE_WINDOW_SECONDS: int = 3600
+    # A single OTP may be guessed this many times before it is burned.
+    OTP_MAX_ATTEMPTS: int = 5
+    OTP_TTL_SECONDS: int = 300
+    # Password reset tokens are short-lived by design — 15 minutes is long
+    # enough to receive an SMS and short enough to limit exposure.
+    PASSWORD_RESET_TTL_SECONDS: int = 900
+
+    # Security response headers (main.py). Disable only for local debugging.
+    SECURITY_HEADERS_ENABLED: bool = True
+    HSTS_MAX_AGE_SECONDS: int = 31536000  # 1 year
+
     # Dev: default restaurant location behavior
     DEV_ALLOW_ADMIN_ENDPOINTS: bool = False
     DEV_FORCE_DEFAULT_RESTAURANT_LOCATION: bool = False
@@ -103,14 +197,22 @@ class Settings(BaseSettings):
     model_config = {"env_file": ".env"}
 
     @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT.strip().lower() == "production"
+
+    @property
     def cors_origins(self) -> List[str]:
         """Parsed list of allowed CORS origins.
 
         Falls back to permissive "*" only in development; in production an
-        explicit CORS_ORIGINS list must be provided (empty otherwise).
+        explicit CORS_ORIGINS list must be provided (empty otherwise), and a
+        wildcard entry is rejected outright by the validator below.
         """
         if self.CORS_ORIGINS:
-            return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+            origins = [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+            if self.is_production:
+                return [o for o in origins if o != "*"]
+            return origins
         if self.ENVIRONMENT == "development":
             return ["*"]
         return []
@@ -118,30 +220,79 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _enforce_production_safety(self) -> "Settings":
         """Refuse to start with insecure/mock configuration in production."""
-        if self.ENVIRONMENT != "production":
+        if not self.is_production:
             return self
 
         errors = []
-        if not self.SECRET_KEY or self.SECRET_KEY in KNOWN_INSECURE_SECRETS:
+
+        problem = secret_key_problem(self.SECRET_KEY)
+        if problem:
             errors.append(
-                "SECRET_KEY is missing or set to a known default; "
-                "generate a strong random value (e.g. `openssl rand -hex 32`)"
+                f"SECRET_KEY {problem}; generate a strong random value "
+                "(e.g. `openssl rand -hex 32`)"
             )
+
         if self.PAYMENT_MOCK_MODE:
-            errors.append("PAYMENT_MOCK_MODE must be false in production")
+            errors.append(
+                "PAYMENT_MOCK_MODE must be false in production "
+                "(true auto-approves every payment without charging anyone)"
+            )
         if not (self.PAYNOW_INTEGRATION_ID and self.PAYNOW_INTEGRATION_KEY):
             errors.append(
                 "PAYNOW_INTEGRATION_ID and PAYNOW_INTEGRATION_KEY are required in production"
             )
         if self.SMS_MOCK_MODE:
-            errors.append("SMS_MOCK_MODE must be false in production")
+            errors.append(
+                "SMS_MOCK_MODE must be false in production "
+                "(true silently drops OTP and password-reset messages)"
+            )
         if not self.AFRICASTALKING_API_KEY:
             errors.append("AFRICASTALKING_API_KEY is required in production")
+
+        # CORS: a wildcard with allow_credentials=True is a cross-site
+        # request-forgery primitive, so it is refused rather than filtered.
+        raw_origins = [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        if "*" in raw_origins:
+            errors.append(
+                "CORS_ORIGINS must not contain '*' in production; list the exact "
+                "browser origins (e.g. https://app.zvingo.com)"
+            )
+        for origin in raw_origins:
+            if origin == "*":
+                continue
+            parsed = urlparse(origin)
+            if parsed.scheme not in ("http", "https") or not parsed.netloc:
+                errors.append(
+                    f"CORS_ORIGINS entry {origin!r} is not an absolute origin "
+                    "(expected scheme://host[:port] with no path)"
+                )
+            elif parsed.path not in ("", "/"):
+                errors.append(
+                    f"CORS_ORIGINS entry {origin!r} must not include a path"
+                )
+
+        if self.DEV_ALLOW_ADMIN_ENDPOINTS:
+            errors.append(
+                "DEV_ALLOW_ADMIN_ENDPOINTS must be false in production "
+                "(it exposes unauthenticated maintenance routes)"
+            )
+        if self.DEV_FORCE_DEFAULT_RESTAURANT_LOCATION:
+            errors.append(
+                "DEV_FORCE_DEFAULT_RESTAURANT_LOCATION must be false in production"
+            )
+
+        if self.METRICS_ENABLED and not self.METRICS_TOKEN:
+            errors.append(
+                "METRICS_TOKEN is required in production when METRICS_ENABLED is true "
+                "(otherwise GET /metrics publishes internal traffic data); set a random "
+                "token or disable with METRICS_ENABLED=false"
+            )
 
         if errors:
             raise ValueError(
                 "Refusing to start with ENVIRONMENT=production: " + "; ".join(errors)
             )
         return self
+
 
 settings = Settings()

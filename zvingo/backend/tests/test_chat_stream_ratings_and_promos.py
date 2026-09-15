@@ -425,24 +425,24 @@ async def test_per_user_limit_counts_redemptions(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_record_redemption_increments_per_user_counts(monkeypatch):
+async def test_record_redemption_claims_per_user_counts_atomically(monkeypatch):
     import app.catalog.promotion_service as module
 
-    target = promo(
-        code="SAVE", current_uses=1, redeemed_by=["consumer-1"], redemptions_by_user={},
-        save=AsyncMock(),
-    )
-    monkeypatch.setattr(module, "_find_promo", AsyncMock(return_value=target))
+    collection = SimpleNamespace(find_one_and_update=AsyncMock(return_value={}))
+    monkeypatch.setattr(module, "_promotion_collection", lambda: collection)
 
     await module.record_redemption("SAVE", "consumer-1")
-    # The legacy `redeemed_by` entry counted as one, so this is the second.
-    assert target.redemptions_by_user == {"consumer-1": 2}
-    assert target.current_uses == 2
-    assert target.redeemed_by == ["consumer-1"]
+    filter_arg, update_arg = collection.find_one_and_update.await_args.args
+    assert update_arg["$inc"]["redemptions_by_user.consumer-1"] == 1
+
+    # The per-user cap is evaluated server-side, and a legacy `redeemed_by`
+    # entry still counts as one prior redemption.
+    expr = filter_arg["$expr"]["$and"][1]["$lt"][0]["$max"]
+    assert {"$ifNull": ["$redemptions_by_user.consumer-1", 0]} in expr
 
     await module.record_redemption("SAVE", "consumer-2")
-    assert target.redemptions_by_user["consumer-2"] == 1
-    assert "consumer-2" in target.redeemed_by
+    _, update_arg = collection.find_one_and_update.await_args.args
+    assert update_arg["$addToSet"] == {"redeemed_by": "consumer-2"}
 
 
 def test_item_field_reads_dicts_and_models():

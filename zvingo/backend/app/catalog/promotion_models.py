@@ -1,6 +1,7 @@
 from typing import Dict, Optional, List
 from beanie import Document, Indexed
 from pydantic import BaseModel, Field
+from pymongo import IndexModel
 from datetime import datetime
 from app.time_utils import utc_now
 import uuid
@@ -43,6 +44,9 @@ class Promotion(Document):
     # `redeemed_by` is retained for documents written before this field existed.
     redemptions_by_user: Dict[str, int] = {}
 
+    # Acquisition promos: only redeemable by a consumer with no prior orders.
+    first_order_only: bool = False
+
     # Promo code (optional — for code-based promos)
     code: Optional[str] = None
 
@@ -54,5 +58,9 @@ class Promotion(Document):
         indexes = [
             [("merchant_id", 1)],
             [("is_active", 1), ("ends_at", 1)],
-            [("code", 1)],
+            # Promo codes are looked up by code on every validate and every
+            # redemption; uniqueness also stops two merchants shipping the same
+            # code and racing each other's counters.
+            IndexModel([("code", 1)], unique=True, sparse=True, name="code_unique"),
+            [("restaurant_id", 1), ("is_active", 1)],
         ]

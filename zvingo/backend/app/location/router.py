@@ -1,7 +1,7 @@
 import asyncio
 import json
-from fastapi import APIRouter, Request
-from typing import List, Optional
+from fastapi import APIRouter, Query, Request
+from typing import Annotated, List, Optional
 from sse_starlette.sse import EventSourceResponse
 import redis.asyncio as aioredis
 
@@ -13,9 +13,23 @@ router = APIRouter()
 
 
 @router.get("/restaurants/nearby")
-async def nearby_restaurants(lat: float, lng: float, radius_km: float = 5.0):
-    restaurants = await LocationService.find_nearby_restaurants(lat, lng, radius_km)
-    return restaurants
+async def nearby_restaurants(
+    lat: float,
+    lng: float,
+    radius_km: float = 5.0,
+    open_now: bool = False,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+):
+    """Restaurants near a point, nearest first, ranked and paginated.
+
+    Each result carries the same `availability` and `discovery` blocks as
+    `/catalog/search`, so a map or "near you" carousel can show distance and
+    open/closed without a second round trip.
+    """
+    return await LocationService.find_nearby_restaurants(
+        lat, lng, radius_km, limit=limit, offset=offset, open_now=open_now
+    )
 
 
 @router.get("/driver/{driver_id}/track")

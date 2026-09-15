@@ -1,11 +1,18 @@
 from contextlib import asynccontextmanager
 import asyncio
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config import settings
 from app.db.session import init_db
 from app.observability.logging import configure_logging
-from app.observability.middleware import RequestContextMiddleware
+from app.observability.middleware import (
+    REQUEST_ID_HEADER,
+    RequestContextMiddleware,
+    SecurityHeadersMiddleware,
+)
 import structlog
 
 configure_logging()
@@ -81,6 +88,13 @@ app = FastAPI(
 )
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+# Security headers sit inside the request-context middleware so that even a
+# response produced by an error handler carries them.
+app.add_middleware(
+    SecurityHeadersMiddleware,
+    hsts_max_age=settings.HSTS_MAX_AGE_SECONDS,
+    enabled=settings.SECURITY_HEADERS_ENABLED,
+)
 # Outermost middleware: every request gets a correlation id, latency log,
 # and an entry in the HTTP metrics — including ones that error out.
 app.add_middleware(RequestContextMiddleware)
@@ -88,8 +102,16 @@ app.add_middleware(RequestContextMiddleware)
 from fastapi.middleware.cors import CORSMiddleware
 
 # Origins come from the CORS_ORIGINS setting (comma-separated).
-# Defaults to "*" only in development; in production an explicit list is required.
-_cors_origins = settings.cors_origins
+# Defaults to "*" only in development; in production Settings refuses to build
+# with a wildcard at all, and the filter below is the second line of defence —
+# `allow_origins=["*"]` together with `allow_credentials=True` is a
+# cross-site request-forgery primitive, so it must be impossible in production.
+_cors_origins = [o for o in settings.cors_origins if not (settings.is_production and o == "*")]
+if settings.is_production and "*" in settings.cors_origins:
+    raise RuntimeError(
+        "CORS_ORIGINS must not be '*' in production — set it to the exact "
+        "browser origins that may call this API."
+    )
 if not _cors_origins:
     logger.warning(
         "CORS_ORIGINS is empty — browser clients will be blocked. "
@@ -102,10 +124,86 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[REQUEST_ID_HEADER],
 )
+
+
+def _request_id(request: Request) -> str:
+    return getattr(request.state, "request_id", "") or request.headers.get(
+        REQUEST_ID_HEADER, ""
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """Pass deliberate HTTP errors through, with the correlation id attached."""
+    headers = dict(getattr(exc, "headers", None) or {})
+    request_id = _request_id(request)
+    if request_id:
+        headers[REQUEST_ID_HEADER] = request_id
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail, "request_id": request_id},
+        headers=headers,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """422 without echoing the rejected payload.
+
+    FastAPI's default handler includes the offending `input` value, which for
+    a login or password-reset body means the credential lands in the response
+    and in any client-side error log that captures it.
+    """
+    errors = [
+        {
+            "loc": error.get("loc", []),
+            "msg": error.get("msg", "Invalid value"),
+            "type": error.get("type", "value_error"),
+        }
+        for error in exc.errors()
+    ]
+    return JSONResponse(
+        status_code=422,
+        content={"detail": errors, "request_id": _request_id(request)},
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Never leak an internal failure to the caller.
+
+    The traceback, the exception type and the route go to the structured log
+    (where the request id ties them to the client's report); the client gets a
+    generic message and that id. A stack trace in an HTTP response is a map of
+    the codebase, the dependency versions and often the file system layout.
+    """
+    request_id = _request_id(request)
+    logger.exception(
+        "unhandled_exception",
+        path=request.url.path,
+        method=request.method,
+        request_id=request_id,
+        error_type=type(exc).__name__,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal server error",
+            "request_id": request_id,
+        },
+        headers={REQUEST_ID_HEADER: request_id} if request_id else None,
+    )
+
 
 @app.get("/health")
 async def health_check():
+    """Liveness probe. Deliberately dependency-free and detail-free.
+
+    Readiness (is MongoDB/Redis reachable?) is a separate probe at GET /ready
+    so a dead dependency removes the pod from rotation without also killing it.
+    """
     return {"status": "ok"}
 
 from app.observability import router as observability_router
