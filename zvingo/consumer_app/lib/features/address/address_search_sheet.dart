@@ -1,41 +1,33 @@
-import 'dart:async';
-
-import 'package:consumer_app/core/api_client.dart';
-import 'package:consumer_app/core/app_colors.dart';
-import 'package:consumer_app/core/app_text_styles.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Result returned when the user picks an address from the search sheet.
-class GeocodedAddress {
-  final String displayName;
-  final double lat;
-  final double lng;
+import 'package:consumer_app/common/zvingo_ui.dart';
+import 'package:consumer_app/features/address/geocode_provider.dart';
 
-  const GeocodedAddress({
-    required this.displayName,
-    required this.lat,
-    required this.lng,
-  });
-}
+export 'package:consumer_app/features/address/geocode_provider.dart'
+    show GeocodedAddress;
 
-/// A modal bottom sheet that lets the user search for an address using the
-/// backend's Nominatim geocoding endpoint (`GET /location/geocode`).
+/// Search for a street address.
 ///
-/// Usage:
-/// ```dart
-/// final result = await AddressSearchSheet.show(context);
-/// if (result != null) { /* use result.displayName, result.lat, result.lng */ }
-/// ```
+/// Suggestions come from `GET /location/geocode`, through [GeocodeService],
+/// which debounces, caches and throttles — see the note on finding X3 there.
+/// This sheet therefore never fires a request per keystroke, and a query the
+/// user has typed before returns instantly from cache with no spinner.
 class AddressSearchSheet extends ConsumerStatefulWidget {
-  const AddressSearchSheet({super.key});
+  const AddressSearchSheet({super.key, this.initialQuery});
 
-  static Future<GeocodedAddress?> show(BuildContext context) {
+  final String? initialQuery;
+
+  static Future<GeocodedAddress?> show(
+    BuildContext context, {
+    String? initialQuery,
+  }) {
     return showModalBottomSheet<GeocodedAddress>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const AddressSearchSheet(),
+      useSafeArea: true,
+      backgroundColor: AppColors.surface,
+      builder: (_) => AddressSearchSheet(initialQuery: initialQuery),
     );
   }
 
@@ -44,217 +36,152 @@ class AddressSearchSheet extends ConsumerStatefulWidget {
 }
 
 class _AddressSearchSheetState extends ConsumerState<AddressSearchSheet> {
-  final _controller = TextEditingController();
-  Timer? _debounce;
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initialQuery ?? '');
 
-  List<GeocodedAddress> _results = [];
-  bool _loading = false;
-  String? _error;
+  @override
+  void initState() {
+    super.initState();
+    if ((widget.initialQuery ?? '').isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref
+            .read(geocodeSearchProvider.notifier)
+            .onQueryChanged(widget.initialQuery!);
+      });
+    }
+  }
 
   @override
   void dispose() {
-    _debounce?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
-  void _onChanged(String value) {
-    _debounce?.cancel();
-    if (value.trim().length < 2) {
-      setState(() {
-        _results = [];
-        _error = null;
-        _loading = false;
-      });
-      return;
-    }
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    _debounce =
-        Timer(const Duration(milliseconds: 350), () => _search(value.trim()));
-  }
-
-  Future<void> _search(String query) async {
-    try {
-      final dio = ref.read(apiClientProvider);
-      final response = await dio.get(
-        '/location/geocode',
-        queryParameters: {'q': query},
-      );
-      final data = response.data as List<dynamic>;
-      if (!mounted) return;
-      setState(() {
-        _results = data
-            .map((e) => GeocodedAddress(
-                  displayName: e['display_name'] as String,
-                  lat: (e['lat'] as num).toDouble(),
-                  lng: (e['lng'] as num).toDouble(),
-                ))
-            .toList();
-        _loading = false;
-        _error = _results.isEmpty
-            ? 'No addresses found. Try a different search.'
-            : null;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = 'Could not search. Check your connection and try again.';
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final search = ref.watch(geocodeSearchProvider);
 
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.85,
-      ),
-      decoration: const BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Drag handle
-          Center(
-            child: Container(
-              margin: const EdgeInsets.only(top: 12),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.border,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-
-          // Header
-          const Padding(
-            padding: EdgeInsets.fromLTRB(20, 16, 20, 12),
-            child: Text('Search Address', style: AppTextStyles.titleLarge),
-          ),
-
-          // Search field
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: TextField(
+    return ZvSheet(
+      title: 'Find your address',
+      subtitle: 'Start with the street or the suburb, then fine-tune the pin.',
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.6,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ZvSearchField(
               controller: _controller,
-              autofocus: true,
-              onChanged: _onChanged,
-              decoration: InputDecoration(
-                hintText: 'e.g. 123 Samora Machel Ave, Harare',
-                hintStyle: AppTextStyles.bodyMedium
-                    .copyWith(color: AppColors.textHint),
-                prefixIcon: const Icon(Icons.search,
-                    color: AppColors.textHint, size: 22),
-                suffixIcon: _controller.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear,
-                            size: 20, color: AppColors.textHint),
-                        onPressed: () {
-                          _controller.clear();
-                          setState(() {
-                            _results = [];
-                            _error = null;
-                            _loading = false;
-                          });
-                        },
-                      )
-                    : null,
-                filled: true,
-                fillColor: AppColors.background,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide:
-                      const BorderSide(color: AppColors.primary, width: 1.5),
-                ),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              ),
+              autofocus: (widget.initialQuery ?? '').isEmpty,
+              hint: 'e.g. 123 Samora Machel Ave, Harare',
+              onChanged: (value) =>
+                  ref.read(geocodeSearchProvider.notifier).onQueryChanged(value),
+              onClear: () =>
+                  ref.read(geocodeSearchProvider.notifier).onQueryChanged(''),
             ),
-          ),
-
-          const SizedBox(height: 8),
-
-          // Results / states
-          Flexible(
-            child: _buildBody(),
-          ),
-
-          SizedBox(height: bottomInset + 16),
-        ],
+            const SizedBox(height: AppSpacing.sm),
+            Expanded(child: _buildBody(search)),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildBody() {
-    if (_loading) {
-      return const Padding(
-        padding: EdgeInsets.all(32),
-        child: Center(child: CircularProgressIndicator()),
+  Widget _buildBody(GeocodeSearchState search) {
+    if (search.loading) {
+      return const ZvSkeletonList.tiles(count: 5);
+    }
+
+    if (search.error != null) {
+      return ZvErrorState(
+        error: search.error,
+        title: 'Address search is unavailable',
+        onRetry: () => ref.read(geocodeSearchProvider.notifier).retry(),
       );
     }
 
-    if (_error != null) {
-      return Padding(
-        padding: const EdgeInsets.all(32),
-        child: Center(
-          child: Text(
-            _error!,
-            style: AppTextStyles.bodyMedium
-                .copyWith(color: AppColors.textSecondary),
-            textAlign: TextAlign.center,
-          ),
-        ),
+    if (!GeocodeService.isSearchable(search.query)) {
+      return const ZvEmptyState(
+        icon: Icons.travel_explore_rounded,
+        title: 'Type at least 3 letters',
+        message: 'Search by street, building or suburb — for example '
+            '"Borrowdale" or "Samora Machel".',
       );
     }
 
-    if (_results.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(32),
-        child: Center(
-          child: Text(
-            'Type to search for an address',
-            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
-          ),
-        ),
+    if (search.results.isEmpty && search.hasSearched) {
+      return ZvEmptyState(
+        icon: Icons.location_off_outlined,
+        title: 'No match for "${search.query.trim()}"',
+        message: 'Try the suburb on its own, then drop the pin exactly where '
+            'you want your delivery.',
+        actionLabel: 'Drop a pin instead',
+        onAction: () => Navigator.of(context).pop(),
       );
     }
 
-    return ListView.separated(
-      shrinkWrap: true,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      itemCount: _results.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
+    return ZvStaggeredListView.builder(
+      itemCount: search.results.length,
+      gap: AppSpacing.xs,
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
       itemBuilder: (context, index) {
-        final r = _results[index];
-        return ListTile(
-          leading: const Icon(Icons.location_on_outlined,
-              color: AppColors.primary, size: 22),
-          title: Text(
-            r.displayName,
-            style: AppTextStyles.bodyMedium,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+        final result = search.results[index];
+        return ZvCard(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          onTap: () => Navigator.of(context).pop(result),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: const BoxDecoration(
+                  color: AppColors.surfaceMuted,
+                  borderRadius: AppRadius.smAll,
+                ),
+                child: Icon(
+                  _iconFor(result.type),
+                  size: 20,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      result.primaryLine,
+                      style: AppTextStyles.h3,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (result.secondaryLine.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.xxxs),
+                      Text(
+                        result.secondaryLine,
+                        style: AppTextStyles.caption
+                            .copyWith(color: AppColors.textSecondary),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded,
+                  color: AppColors.neutral400),
+            ],
           ),
-          onTap: () => Navigator.of(context).pop(r),
         );
       },
     );
   }
+
+  IconData _iconFor(String type) => switch (type) {
+        'house' || 'building' || 'residential' => Icons.home_outlined,
+        'road' || 'street' || 'highway' => Icons.signpost_outlined,
+        'suburb' || 'neighbourhood' || 'city' || 'town' =>
+          Icons.location_city_outlined,
+        'restaurant' || 'cafe' || 'fast_food' => Icons.storefront_outlined,
+        _ => Icons.location_on_outlined,
+      };
 }

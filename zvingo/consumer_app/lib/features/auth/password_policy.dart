@@ -67,7 +67,7 @@ class ZvPasswordPolicy {
           RegExp(r'[A-Za-z]').hasMatch(value) &&
           RegExp(r'[0-9]').hasMatch(value),
     ),
-    ZvPasswordRule(
+    const ZvPasswordRule(
       label: 'Not your phone number or "password"',
       test: _isNotObvious,
     ),
@@ -186,13 +186,8 @@ class ZvPasswordChecklist extends StatelessWidget {
         ],
         ...ZvPasswordPolicy.rules.map((rule) {
           final met = rule.test(password);
-          final color = !started
-              ? AppColors.textSecondary
-              : met
-                  ? AppColors.success
-                  : rule.required
-                      ? AppColors.textSecondary
-                      : AppColors.textSecondary;
+          final color =
+              met && started ? AppColors.success : AppColors.textSecondary;
           return Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.xxs),
             child: Row(

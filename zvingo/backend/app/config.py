@@ -181,6 +181,22 @@ class Settings(BaseSettings):
     # Finance
     DRIVER_SHARE_RATIO: float = 0.85  # driver keeps 85% of delivery fee
 
+    # Delivery fee model: the fee is charged in blocks of distance, so a trip is
+    # priced per started block rather than per exact kilometre.
+    DELIVERY_BLOCK_SIZE_KM: float = 5.0
+    DELIVERY_BLOCK_PRICE_USD: float = 5.00
+
+    # Who absorbs a promo discount. "platform" means Zvingo funds it and the
+    # merchant is still paid in full; "merchant" deducts it from the merchant
+    # payout. This is a commercial decision, not a technical default — it
+    # changes who loses money on every discounted order.
+    PROMO_DISCOUNT_FUNDED_BY: str = "platform"
+
+    # Exchange rates older than this are refused rather than used to price an
+    # order. In a volatile-currency market, charging at a stale rate is charging
+    # at a guess.
+    EXCHANGE_RATE_MAX_AGE_SECONDS: int = 6 * 60 * 60
+
     # BinProto
     BINPROTO_UDP_PORT: int = 9090
     BINPROTO_TCP_PORT: int = 9091

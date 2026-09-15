@@ -14,6 +14,9 @@ logger = structlog.get_logger()
 AVG_SPEED_KMH = 25.0
 
 
+from app.finance.money import to_minor
+
+
 def _offer_timeout_seconds() -> int:
     """How long a driver has to answer an offer.
 
@@ -165,19 +168,30 @@ class NotificationService:
         else:
             items_summary = "Order"
 
-        # Delivery fee in cents — auto-calculate if the order has no fee set
-        if order.delivery_fee and order.delivery_fee > 0:
-            delivery_fee_cents = int(order.delivery_fee * 100)
-        else:
-            from app.finance.fee_calculator import calculate_delivery_fee
-            gross_fee, _ = calculate_delivery_fee(delivery_dist_km)
-            delivery_fee_cents = int(gross_fee * 100)
+        # Money comes from the single authoritative breakdown, never recomputed
+        # here. Order.total_amount is the basket SUBTOTAL before fees, tip and
+        # discount -- this function previously treated it as a grand total and
+        # subtracted the fees back out of it, so the figures on the offer card
+        # (the numbers a driver decides on in about three seconds) were wrong.
+        from app.finance.fee_calculator import (
+            breakdown_for_order,
+            calculate_delivery_fee,
+        )
 
-        tip_cents = int(order.tip_amount * 100) if order.tip_amount else 0
-        total_cents = int(order.total_amount * 100) if order.total_amount else 0
-        order_subtotal_cents = total_cents - delivery_fee_cents - tip_cents
-        if order_subtotal_cents < 0:
-            order_subtotal_cents = 0
+        breakdown = breakdown_for_order(order)
+        delivery_fee_cents = breakdown.delivery_fee_minor
+        total_cents = breakdown.customer_total_minor
+        if delivery_fee_cents <= 0:
+            # Order carries no fee yet (offered before checkout priced it): fall
+            # back to the distance model rather than showing zero. The fallback
+            # has to land in the total as well, or the card shows a fee that the
+            # total does not account for and the figures visibly disagree.
+            gross_fee, _ = calculate_delivery_fee(delivery_dist_km)
+            delivery_fee_cents = to_minor(gross_fee)
+            total_cents += delivery_fee_cents
+
+        tip_cents = breakdown.tip_minor
+        order_subtotal_cents = breakdown.subtotal_minor
 
         # Build short ID from order_id
         short_id = f"ZV{str(order_id)[-6:].upper()}"

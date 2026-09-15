@@ -6,7 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:consumer_app/common/zvingo_ui.dart';
 import 'package:consumer_app/features/auth/auth_provider.dart';
-import 'package:consumer_app/features/auth/login_screen.dart' show AuthErrorBanner;
+import 'package:consumer_app/features/auth/login_screen.dart'
+    show AuthErrorBanner, pasteFromClipboard;
 import 'package:consumer_app/features/auth/phone_number.dart';
 import 'package:consumer_app/features/auth/widgets/auth_scaffold.dart';
 import 'package:consumer_app/features/auth/widgets/phone_field.dart';

@@ -474,3 +474,49 @@ Future<List<Promotion>> restaurantPromotions(
       queryParameters: {'restaurant_id': restaurantId});
   return (response.data as List).map((e) => Promotion.fromJson(e)).toList();
 }
+
+// ── Reviews ───────────────────────────────────────────────────
+
+/// One customer review of a restaurant.
+@immutable
+class RestaurantReview {
+  const RestaurantReview({
+    required this.id,
+    required this.rating,
+    this.comment,
+    this.tags = const <String>[],
+    this.createdAt,
+  });
+
+  final String id;
+  final int rating;
+  final String? comment;
+  final List<String> tags;
+  final DateTime? createdAt;
+
+  factory RestaurantReview.fromJson(Map<String, dynamic> json) =>
+      RestaurantReview(
+        id: json['id']?.toString() ?? '',
+        rating: (json['restaurant_rating'] as num?)?.toInt() ?? 0,
+        comment: (json['comment'] as String?)?.trim().isEmpty ?? true
+            ? null
+            : (json['comment'] as String).trim(),
+        tags: ((json['tags'] as List?) ?? const [])
+            .map((e) => e.toString())
+            .toList(),
+        createdAt: DateTime.tryParse(json['created_at']?.toString() ?? ''),
+      );
+}
+
+/// Reviews for one restaurant (`GET /rating/restaurants/{id}/reviews`).
+///
+/// Hand-written rather than generated: the pinned `riverpod_generator` emits a
+/// deprecated `AutoDisposeFutureProviderRef` for every generated provider.
+final restaurantReviewsProvider =
+    FutureProvider.family<List<RestaurantReview>, String>((ref, id) async {
+  final dio = ref.watch(apiClientProvider);
+  final response = await dio.get('/rating/restaurants/$id/reviews');
+  return (response.data as List)
+      .map((e) => RestaurantReview.fromJson(Map<String, dynamic>.from(e as Map)))
+      .toList();
+});

@@ -131,9 +131,9 @@ class _Header extends StatelessWidget {
       height: 132,
       child: Stack(
         children: [
-          Positioned.fill(
+          const Positioned.fill(
             child: DecoratedBox(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: AppColors.actionDefault,
                 borderRadius: BorderRadius.only(
                   bottomLeft: Radius.circular(AppRadius.xl),

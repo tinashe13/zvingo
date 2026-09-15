@@ -560,7 +560,17 @@ async def test_notification_payloads_delivery_and_push(monkeypatch):
     assert payload["customer_name"] == "Jane D."
     assert payload["item_count"] == 3
     assert payload["items_summary"] == "Burger +2 more"
-    assert payload["order_subtotal_cents"] == 0
+    # Order.total_amount is the basket SUBTOTAL (before fees, tip and discount),
+    # so a $4.00 basket is 400 minor units. This previously asserted 0, because
+    # the payload subtracted the fee and tip back out of a figure that had never
+    # included them and clamped the negative result -- so a driver was shown a
+    # $0.00 order value on the offer card they decide from.
+    assert payload["order_subtotal_cents"] == 400
+    assert payload["tip_cents"] == 100
+    # Customer total = subtotal + delivery + service + tax + tip - discount.
+    assert payload["total_cents"] == (
+        400 + payload["delivery_fee_cents"] + 100
+    )
     assert payload["short_id"] == "ZV123456"
 
     order.items = []
