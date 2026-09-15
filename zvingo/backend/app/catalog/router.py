@@ -549,17 +549,38 @@ def _candidate_query(q: str) -> dict:
         tokens = [q.strip()]
     clauses = []
     for token in tokens:
-        pattern = re.escape(token)
-        clauses.extend(
-            [
-                {"name": {"$regex": pattern, "$options": "i"}},
-                {"description": {"$regex": pattern, "$options": "i"}},
-                {"categories": {"$regex": pattern, "$options": "i"}},
-                {"dietary_tags": {"$regex": pattern, "$options": "i"}},
-                {"menu.name": {"$regex": pattern, "$options": "i"}},
-                {"menu.category": {"$regex": pattern, "$options": "i"}},
-            ]
-        )
+        patterns = [re.escape(token)]
+
+        # A misspelling is not a substring of the correct word, so an exact
+        # regex returns an empty candidate pool and the Python ranker -- which
+        # is the part that is actually typo-tolerant -- never sees the record
+        # to rescue it. Searching "sadsa" found nothing while "sadza" matched.
+        #
+        # So also match on a leading fragment of each token. Most misspellings
+        # differ in the tail ("chiken"/"chicken", "kombe"/"kombi"), so the head
+        # still selects the right candidates. Recall widens; precision is
+        # unaffected because search_service.rank drops anything below
+        # FUZZY_THRESHOLD before it can reach the results.
+        if len(token) >= 4:
+            stem = token[: max(3, (len(token) + 1) // 2)]
+            if stem != token:
+                # \b, not ^: these fields hold phrases, so the word being
+                # searched for is rarely the first one. Anchoring to the start
+                # of the string matched "Sadza & Beef Stew" but not the
+                # "Chicken" in "Grilled Chicken & Chips".
+                patterns.append(r"\b" + re.escape(stem))
+
+        for pattern in patterns:
+            clauses.extend(
+                [
+                    {"name": {"$regex": pattern, "$options": "i"}},
+                    {"description": {"$regex": pattern, "$options": "i"}},
+                    {"categories": {"$regex": pattern, "$options": "i"}},
+                    {"dietary_tags": {"$regex": pattern, "$options": "i"}},
+                    {"menu.name": {"$regex": pattern, "$options": "i"}},
+                    {"menu.category": {"$regex": pattern, "$options": "i"}},
+                ]
+            )
     return {"$or": clauses}
 
 

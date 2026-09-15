@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Annotated, Any, List, Optional
+import structlog
+
 from app.order.schemas import (
     CheckoutCreate,
     CheckoutResponse,
@@ -30,6 +32,7 @@ from app.auth.router import get_current_user
 from app.auth.models import User
 
 router = APIRouter()
+logger = structlog.get_logger()
 
 #: Default and maximum page sizes for order listings. Unbounded listings are a
 #: latency and memory hazard once an account has thousands of orders.
@@ -144,8 +147,11 @@ async def _users_by_id(ids) -> dict:
             {"_id": {"$in": [_document_id(i) for i in wanted]}}
         ).to_list()
         return {str(u.id): u for u in users}
-    except Exception:
-        # A malformed id in the set must not blank out the whole board.
+    except Exception as e:
+        # A malformed id in the set must not blank out the whole board -- but a
+        # silent empty result here means every order card loses its customer,
+        # so say why rather than swallowing it.
+        logger.warning("Batch user lookup failed", error=str(e), count=len(wanted))
         return {}
 
 
@@ -381,8 +387,8 @@ async def get_order_group(
         raise HTTPException(status_code=404, detail="Order group not found")
     for order in orders:
         await _assert_order_access(order, current_user)
-    # The merchant owns these orders, so they may see who each one is for.
-    # Batched: one query for every consumer and driver on the page.
+    # Access is already asserted above, so the caller is a party to these
+    # orders and may see who they are for.
     people = await _users_by_id(
         [o.consumer_id for o in orders] + [o.driver_id for o in orders]
     )
@@ -513,7 +519,21 @@ async def get_merchant_orders(
         .to_list()
     )
 
-    return [_to_response(o) for o in orders]
+    # The merchant owns these orders, so their staff may see who each one is
+    # for -- without this a kitchen can only show an order reference and cannot
+    # ring the customer. Batched: one query for every consumer and driver on
+    # the page rather than a round trip each.
+    people = await _users_by_id(
+        [o.consumer_id for o in orders] + [o.driver_id for o in orders]
+    )
+    return [
+        _to_response(
+            o,
+            driver_name=getattr(people.get(str(o.driver_id)), "full_name", None),
+            consumer=people.get(str(o.consumer_id)),
+        )
+        for o in orders
+    ]
 
 @router.post("/{order_id}/confirm-delivery")
 async def consumer_confirm_delivery(

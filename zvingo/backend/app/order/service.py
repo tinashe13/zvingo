@@ -184,6 +184,14 @@ class OrderService:
             idempotency_key=order_in.idempotency_key,
             group_id=group_id,
             tip_amount=order_in.tip_amount or 0.0,
+            # service_fee and tax_amount were accepted by OrderCreate, carried
+            # through checkout, and then never assigned here -- so they fell
+            # back to the model default of 0.0 and the customer was undercharged
+            # by both on every single order. The charge is derived from these
+            # fields (fee_calculator.breakdown_for_order), so dropping them here
+            # silently discounts the order.
+            service_fee=order_in.service_fee or 0.0,
+            tax_amount=order_in.tax_amount or 0.0,
             is_pickup=order_in.is_pickup,
             scheduled_at=order_in.scheduled_at,
             promo_code=order_in.promo_code,
