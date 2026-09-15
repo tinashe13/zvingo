@@ -29,7 +29,7 @@ final pushConfiguredProvider = AutoDisposeFutureProvider<bool>.internal(
 
 typedef PushConfiguredRef = AutoDisposeFutureProviderRef<bool>;
 String _$notificationSettingsHash() =>
-    r'00a2fc44c1253cec8acf1e28ea31cd969a06ee86';
+    r'bf8509d6849e62d0d28316db2664f83f6263d76b';
 
 /// Reads and writes `/notification/preferences`.
 ///

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:consumer_app/common/zvingo_ui.dart';
 import 'package:consumer_app/features/cart/cart_provider.dart';
 import 'package:consumer_app/features/restaurant/restaurant_provider.dart';
+import 'package:consumer_app/features/home/widgets/restaurant_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -377,7 +378,7 @@ class _MenuResultRow extends StatelessWidget {
                         icon: Icons.trending_down_rounded,
                       ),
                     if (item.approvalPercent != null)
-                      ZvMetaItem(
+                      MetaItem(
                         icon: Icons.thumb_up_rounded,
                         label: '${item.approvalPercent}%'
                             '${item.approvalCount != null ? ' (${item.approvalCount})' : ''}',

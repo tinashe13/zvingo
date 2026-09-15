@@ -111,8 +111,12 @@ class OrderTrackingState {
       case OrderConnectionStatus.degraded:
         return 'Live updates paused. Refreshing every few seconds instead.';
       case OrderConnectionStatus.offline:
-        return "Can't reach Zvingo right now. We keep retrying — this screen "
-            'may be out of date.';
+        // With no order loaded the full-screen error state already explains
+        // it; a banner on top of that is noise.
+        return hasOrder
+            ? "Can't reach Zvingo right now. We keep retrying — this screen "
+                'may be out of date.'
+            : null;
     }
   }
 
@@ -146,10 +150,16 @@ class OrderTrackingState {
 /// gives per-connection cancellation, the app's own `Authorization` header via
 /// the shared Dio interceptor, and control of the receive timeout.
 class SseConnection {
-  SseConnection._(this._subscription, this._cancelToken);
+  SseConnection._(this._subscription, this._cancelToken, this._markClosed);
 
   final StreamSubscription<String> _subscription;
   final CancelToken _cancelToken;
+
+  /// Silences this connection's callbacks. Cancelling a Dio stream surfaces as
+  /// an error on the subscription; without this, closing an old connection
+  /// would fire the caller's "stream lost" handler and tear down the *new*
+  /// one, which is how reconnect loops start.
+  final void Function() _markClosed;
 
   /// Opens [path] on [dio] and calls [onEvent] for every SSE event.
   ///
@@ -165,6 +175,7 @@ class SseConnection {
     required VoidCallback onDone,
   }) async {
     final cancelToken = CancelToken();
+    var closed = false;
     final response = await dio.get<ResponseBody>(
       path,
       queryParameters: queryParameters,
@@ -206,6 +217,7 @@ class SseConnection {
 
     final subscription = lines.listen(
       (line) {
+        if (closed) return;
         if (line.isEmpty) {
           flush();
           return;
@@ -227,16 +239,22 @@ class SseConnection {
             break; // id / retry are not used by this backend
         }
       },
-      onError: (Object error, StackTrace _) => onError(error),
-      onDone: onDone,
+      onError: (Object error, StackTrace _) {
+        if (!closed) onError(error);
+      },
+      onDone: () {
+        if (!closed) onDone();
+      },
       cancelOnError: true,
     );
 
-    return SseConnection._(subscription, cancelToken);
+    return SseConnection._(subscription, cancelToken, () => closed = true);
   }
 
-  /// Closes this connection only. Other streams are unaffected.
+  /// Closes this connection only. Other streams are unaffected, and this
+  /// connection's callbacks never fire again.
   Future<void> close() async {
+    _markClosed();
     if (!_cancelToken.isCancelled) {
       _cancelToken.cancel('closed');
     }

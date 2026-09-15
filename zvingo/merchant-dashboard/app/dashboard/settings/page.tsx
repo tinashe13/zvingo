@@ -257,6 +257,9 @@ function LocationPicker({
   disabled?: boolean;
 }) {
   const [zoom, setZoom] = React.useState(15);
+  // Opening viewport only — never a saved value. With no pin yet the map opens
+  // over Harare because that is where Zvingo trades; the merchant still has to
+  // place a real pin before anything is written.
   const [centre, setCentre] = React.useState<Coords>(value ?? { lat: -17.8252, lng: 31.0335 });
   const [size, setSize] = React.useState({ width: 640, height: 260 });
   const [locating, setLocating] = React.useState(false);
@@ -517,6 +520,81 @@ function LocationPicker({
   );
 }
 
+/**
+ * Latitude/longitude as text, so a half-typed pair never becomes a pin.
+ * Both fields have to parse and be in range before the pickup point moves —
+ * there is no fallback city, because guessing a location is how deliveries end
+ * up at the wrong address.
+ */
+function CoordinateFields({
+  pin,
+  onChange,
+}: {
+  pin: Coords | null;
+  onChange: (next: Coords) => void;
+}) {
+  const signature = pin ? `${pin.lat},${pin.lng}` : "";
+  const [lat, setLat] = React.useState(pin ? pin.lat.toFixed(6) : "");
+  const [lng, setLng] = React.useState(pin ? pin.lng.toFixed(6) : "");
+  const lastPushed = React.useRef(signature);
+
+  React.useEffect(() => {
+    if (signature === lastPushed.current) return;
+    lastPushed.current = signature;
+    setLat(pin ? pin.lat.toFixed(6) : "");
+    setLng(pin ? pin.lng.toFixed(6) : "");
+  }, [signature, pin]);
+
+  function commit(nextLat: string, nextLng: string) {
+    if (nextLat.trim() === "" || nextLng.trim() === "") return;
+    const a = Number(nextLat);
+    const b = Number(nextLng);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return;
+    if (Math.abs(a) > 90 || Math.abs(b) > 180) return;
+    lastPushed.current = `${a},${b}`;
+    onChange({ lat: a, lng: b });
+  }
+
+  const latError =
+    lat.trim() !== "" && (!Number.isFinite(Number(lat)) || Math.abs(Number(lat)) > 90)
+      ? "Latitude runs from −90 to 90."
+      : undefined;
+  const lngError =
+    lng.trim() !== "" && (!Number.isFinite(Number(lng)) || Math.abs(Number(lng)) > 180)
+      ? "Longitude runs from −180 to 180."
+      : undefined;
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <Input
+        label="Latitude"
+        type="number"
+        step="0.000001"
+        inputSize="sm"
+        value={lat}
+        error={latError}
+        help={!pin ? "Fill both fields to place the pin." : undefined}
+        onChange={(e) => {
+          setLat(e.target.value);
+          commit(e.target.value, lng);
+        }}
+      />
+      <Input
+        label="Longitude"
+        type="number"
+        step="0.000001"
+        inputSize="sm"
+        value={lng}
+        error={lngError}
+        onChange={(e) => {
+          setLng(e.target.value);
+          commit(lat, e.target.value);
+        }}
+      />
+    </div>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* Opening-hours editor                                                       */
 /* -------------------------------------------------------------------------- */
@@ -720,6 +798,101 @@ function HoursEditor({
 }
 
 /* -------------------------------------------------------------------------- */
+/* Per-section form state                                                     */
+/* -------------------------------------------------------------------------- */
+
+interface Section<T> {
+  value: T;
+  set: (updater: T | ((prev: T) => T)) => void;
+  dirty: boolean;
+  /** Throw away edits and go back to the last saved values. */
+  reset: () => void;
+  /** Adopt `next` as the saved baseline, after the server confirmed it. */
+  commit: (next: T) => void;
+}
+
+/**
+ * One section's form, with its own dirty flag and its own baseline.
+ *
+ * The important behaviour is the effect: this page polls store status every
+ * minute, and every save rewrites the cached restaurant. Re-hydrating blindly
+ * on either would wipe half-typed edits, so a section only takes new server
+ * values when the merchant has nothing unsaved in it.
+ */
+function useSection<T>(server: T | null, fallback: T): Section<T> {
+  const serverSignature = server === null ? "" : JSON.stringify(server);
+  const [value, setValue] = React.useState<T>(server ?? fallback);
+  const [baseline, setBaseline] = React.useState<string>(
+    serverSignature || JSON.stringify(fallback),
+  );
+  const serverRef = React.useRef(server);
+  React.useEffect(() => {
+    serverRef.current = server;
+  });
+
+  const dirty = JSON.stringify(value) !== baseline;
+
+  React.useEffect(() => {
+    if (!serverSignature || serverSignature === baseline) return;
+    if (dirty) return; // the merchant is mid-edit — their work wins
+    const next = serverRef.current;
+    if (next !== null) setValue(next);
+    setBaseline(serverSignature);
+  }, [serverSignature, baseline, dirty]);
+
+  const reset = React.useCallback(() => {
+    try {
+      setValue(JSON.parse(baseline) as T);
+    } catch {
+      /* baseline is always JSON we wrote ourselves; ignore a parse failure */
+    }
+  }, [baseline]);
+
+  const commit = React.useCallback((next: T) => {
+    setValue(next);
+    setBaseline(JSON.stringify(next));
+  }, []);
+
+  const set = React.useCallback((updater: T | ((prev: T) => T)) => {
+    setValue((prev) => (typeof updater === "function" ? (updater as (p: T) => T)(prev) : updater));
+  }, []);
+
+  return { value, set, dirty, reset, commit };
+}
+
+type OverrideChoice = "schedule" | "open" | "closed";
+
+interface AvailabilityForm {
+  override: OverrideChoice;
+  acceptsScheduled: boolean;
+}
+interface HoursForm {
+  week: Week;
+  timezone: string;
+}
+interface ProfileForm {
+  name: string;
+  description: string;
+  imageUrl: string;
+  bannerUrl: string;
+  cuisines: string[];
+}
+interface LocationForm {
+  address: string;
+  pin: Coords | null;
+}
+interface DeliveryForm {
+  prepMin: string;
+  prepMax: string;
+  deliveryFee: string;
+  freeThreshold: string;
+}
+interface ContactForm {
+  fullName: string;
+  email: string;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Page                                                                       */
 /* -------------------------------------------------------------------------- */
 
@@ -728,6 +901,8 @@ export default function SettingsPage() {
   const toast = useToast();
   const session = useMerchantSession();
   const restaurantId = session.restaurantId;
+  const restaurant = session.restaurant;
+  const user = session.user;
 
   const status = useApi<RestaurantStatus>(
     restaurantId ? storeStatusKey(restaurantId) : null,
@@ -735,99 +910,96 @@ export default function SettingsPage() {
     { refreshInterval: 60_000, dedupeMs: 10_000 },
   );
 
-  /* --- Availability -------------------------------------------------- */
-  const [overrideChoice, setOverrideChoice] = React.useState<"schedule" | "open" | "closed">("schedule");
-  const [acceptsScheduled, setAcceptsScheduled] = React.useState(true);
+  /* --- Section state ------------------------------------------------- */
+
+  const availability = useSection<AvailabilityForm>(
+    status.data
+      ? {
+          override:
+            status.data.is_open_override === true
+              ? "open"
+              : status.data.is_open_override === false
+                ? "closed"
+                : "schedule",
+          acceptsScheduled: status.data.accepts_scheduled_orders,
+        }
+      : null,
+    { override: "schedule", acceptsScheduled: true },
+  );
+
+  const hours = useSection<HoursForm>(
+    status.data
+      ? { week: weekFromStatus(status.data.hours), timezone: status.data.timezone || "Africa/Harare" }
+      : null,
+    { week: emptyWeek(), timezone: "Africa/Harare" },
+  );
+
+  const profile = useSection<ProfileForm>(
+    restaurant
+      ? {
+          name: restaurant.name ?? "",
+          description: restaurant.description ?? "",
+          imageUrl: restaurant.image_url ?? "",
+          bannerUrl: restaurant.banner_url ?? "",
+          cuisines: restaurant.categories ?? [],
+        }
+      : null,
+    { name: "", description: "", imageUrl: "", bannerUrl: "", cuisines: [] },
+  );
+
+  const location = useSection<LocationForm>(
+    restaurant
+      ? {
+          address: restaurant.address ?? "",
+          pin:
+            restaurant.location?.coordinates?.length === 2
+              ? { lng: restaurant.location.coordinates[0]!, lat: restaurant.location.coordinates[1]! }
+              : null,
+        }
+      : null,
+    { address: "", pin: null },
+  );
+
+  const delivery = useSection<DeliveryForm>(
+    restaurant
+      ? {
+          prepMin: String(restaurant.delivery_time_min ?? 30),
+          prepMax: String(restaurant.delivery_time_max ?? 45),
+          deliveryFee: String(restaurant.delivery_fee_usd ?? 2),
+          freeThreshold:
+            restaurant.free_delivery_threshold != null ? String(restaurant.free_delivery_threshold) : "",
+        }
+      : null,
+    { prepMin: "30", prepMax: "45", deliveryFee: "2", freeThreshold: "" },
+  );
+
+  const contact = useSection<ContactForm>(
+    user ? { fullName: user.full_name ?? "", email: user.email ?? "" } : null,
+    { fullName: "", email: "" },
+  );
+
   const [savingAvailability, setSavingAvailability] = React.useState(false);
-  const [confirmDelist, setConfirmDelist] = React.useState(false);
-
-  /* --- Hours --------------------------------------------------------- */
-  const [week, setWeek] = React.useState<Week>(emptyWeek());
-  const [timezone, setTimezone] = React.useState("Africa/Harare");
   const [savingHours, setSavingHours] = React.useState(false);
-
-  /* --- Profile ------------------------------------------------------- */
-  const [name, setName] = React.useState("");
-  const [description, setDescription] = React.useState("");
-  const [imageUrl, setImageUrl] = React.useState("");
-  const [bannerUrl, setBannerUrl] = React.useState("");
-  const [cuisines, setCuisines] = React.useState<string[]>([]);
+  const [savingProfile, setSavingProfile] = React.useState(false);
+  const [savingLocation, setSavingLocation] = React.useState(false);
+  const [savingDelivery, setSavingDelivery] = React.useState(false);
+  const [savingContact, setSavingContact] = React.useState(false);
+  const [confirmDelist, setConfirmDelist] = React.useState(false);
   const [cuisineDraft, setCuisineDraft] = React.useState("");
   const [cuisineGap, setCuisineGap] = React.useState(false);
-  const [savingProfile, setSavingProfile] = React.useState(false);
 
-  /* --- Location ------------------------------------------------------ */
-  const [address, setAddress] = React.useState("");
-  const [pin, setPin] = React.useState<Coords | null>(null);
   const [addressQuery, setAddressQuery] = React.useState("");
   const [addressHits, setAddressHits] = React.useState<GeocodeHit[]>([]);
   const [searchingAddress, setSearchingAddress] = React.useState(false);
-  const [savingLocation, setSavingLocation] = React.useState(false);
 
-  /* --- Delivery ------------------------------------------------------ */
-  const [prepMin, setPrepMin] = React.useState("30");
-  const [prepMax, setPrepMax] = React.useState("45");
-  const [deliveryFee, setDeliveryFee] = React.useState("2");
-  const [freeThreshold, setFreeThreshold] = React.useState("");
-  const [savingDelivery, setSavingDelivery] = React.useState(false);
-
-  /* --- Contact ------------------------------------------------------- */
-  const [fullName, setFullName] = React.useState("");
-  const [email, setEmail] = React.useState("");
-  const [savingContact, setSavingContact] = React.useState(false);
-
-  /* --- Hydration ----------------------------------------------------- */
-  const restaurant = session.restaurant;
-  const user = session.user;
-
-  const resetAvailability = React.useCallback(() => {
-    const data = status.data;
-    setOverrideChoice(
-      data?.is_open_override === true ? "open" : data?.is_open_override === false ? "closed" : "schedule",
-    );
-    setAcceptsScheduled(data?.accepts_scheduled_orders ?? true);
-  }, [status.data]);
-
-  const resetHours = React.useCallback(() => {
-    setWeek(weekFromStatus(status.data?.hours));
-    setTimezone(status.data?.timezone || "Africa/Harare");
-  }, [status.data]);
-
-  const resetProfile = React.useCallback(() => {
-    setName(restaurant?.name ?? "");
-    setDescription(restaurant?.description ?? "");
-    setImageUrl(restaurant?.image_url ?? "");
-    setBannerUrl(restaurant?.banner_url ?? "");
-    setCuisines(restaurant?.categories ?? []);
-    setCuisineDraft("");
-  }, [restaurant]);
-
-  const resetLocation = React.useCallback(() => {
-    setAddress(restaurant?.address ?? "");
-    const coords = restaurant?.location?.coordinates;
-    setPin(coords && coords.length === 2 ? { lng: coords[0], lat: coords[1] } : null);
-    setAddressQuery("");
-    setAddressHits([]);
-  }, [restaurant]);
-
-  const resetDelivery = React.useCallback(() => {
-    setPrepMin(String(restaurant?.delivery_time_min ?? 30));
-    setPrepMax(String(restaurant?.delivery_time_max ?? 45));
-    setDeliveryFee(String(restaurant?.delivery_fee_usd ?? 2));
-    setFreeThreshold(restaurant?.free_delivery_threshold != null ? String(restaurant.free_delivery_threshold) : "");
-  }, [restaurant]);
-
-  const resetContact = React.useCallback(() => {
-    setFullName(user?.full_name ?? "");
-    setEmail(user?.email ?? "");
-  }, [user]);
-
-  React.useEffect(resetAvailability, [resetAvailability]);
-  React.useEffect(resetHours, [resetHours]);
-  React.useEffect(resetProfile, [resetProfile]);
-  React.useEffect(resetLocation, [resetLocation]);
-  React.useEffect(resetDelivery, [resetDelivery]);
-  React.useEffect(resetContact, [resetContact]);
+  const anyDirty =
+    availability.dirty ||
+    hours.dirty ||
+    profile.dirty ||
+    location.dirty ||
+    delivery.dirty ||
+    contact.dirty;
+  const guardDialog = useUnsavedGuard(anyDirty);
 
   /* --- Address search ------------------------------------------------ */
   React.useEffect(() => {
@@ -837,7 +1009,7 @@ export default function SettingsPage() {
       return;
     }
     // Nominatim asks for at most one request a second; 700 ms of quiet plus a
-    // 4-character floor keeps a dashboard well inside that.
+    // four-character floor keeps a dashboard well inside that.
     const timer = window.setTimeout(async () => {
       setSearchingAddress(true);
       try {
@@ -854,70 +1026,24 @@ export default function SettingsPage() {
     return () => window.clearTimeout(timer);
   }, [addressQuery]);
 
-  /* --- Dirty tracking ------------------------------------------------ */
-  const availabilityDirty =
-    status.data !== undefined &&
-    (overrideChoice !==
-      (status.data.is_open_override === true
-        ? "open"
-        : status.data.is_open_override === false
-          ? "closed"
-          : "schedule") ||
-      acceptsScheduled !== status.data.accepts_scheduled_orders);
-
-  const hoursDirty =
-    status.data !== undefined &&
-    (JSON.stringify(week) !== JSON.stringify(weekFromStatus(status.data.hours)) ||
-      timezone !== (status.data.timezone || "Africa/Harare"));
-
-  const profileDirty =
-    restaurant !== undefined &&
-    (name !== (restaurant.name ?? "") ||
-      description !== (restaurant.description ?? "") ||
-      imageUrl !== (restaurant.image_url ?? "") ||
-      bannerUrl !== (restaurant.banner_url ?? "") ||
-      JSON.stringify(cuisines) !== JSON.stringify(restaurant.categories ?? []));
-
-  const savedPin = restaurant?.location?.coordinates;
-  const locationDirty =
-    restaurant !== undefined &&
-    (address !== (restaurant.address ?? "") ||
-      (pin
-        ? !savedPin ||
-          Math.abs(savedPin[1]! - pin.lat) > 1e-7 ||
-          Math.abs(savedPin[0]! - pin.lng) > 1e-7
-        : false));
-
-  const deliveryDirty =
-    restaurant !== undefined &&
-    (prepMin !== String(restaurant.delivery_time_min ?? 30) ||
-      prepMax !== String(restaurant.delivery_time_max ?? 45) ||
-      deliveryFee !== String(restaurant.delivery_fee_usd ?? 2) ||
-      freeThreshold !==
-        (restaurant.free_delivery_threshold != null ? String(restaurant.free_delivery_threshold) : ""));
-
-  const contactDirty =
-    user !== undefined && (fullName !== (user.full_name ?? "") || email !== (user.email ?? ""));
-
-  const anyDirty =
-    availabilityDirty || hoursDirty || profileDirty || locationDirty || deliveryDirty || contactDirty;
-  const guardDialog = useUnsavedGuard(anyDirty);
-
   /* --- Saves --------------------------------------------------------- */
-  function applyRestaurant(updated: Restaurant) {
-    session.patchRestaurant(updated);
-  }
 
   async function saveAvailability() {
     if (!restaurantId) return;
     setSavingAvailability(true);
     try {
       const next = await patchStoreStatus(restaurantId, {
-        is_open_override: overrideChoice === "schedule" ? null : overrideChoice === "open",
-        accepts_scheduled_orders: acceptsScheduled,
+        is_open_override:
+          availability.value.override === "schedule" ? null : availability.value.override === "open",
+        accepts_scheduled_orders: availability.value.acceptsScheduled,
         resume: true,
       });
       status.mutate(next);
+      availability.commit({
+        override:
+          next.is_open_override === true ? "open" : next.is_open_override === false ? "closed" : "schedule",
+        acceptsScheduled: next.accepts_scheduled_orders,
+      });
       toast.success("Availability saved", { description: next.availability.reason });
     } catch (error) {
       toast.error("Availability did not save", {
@@ -935,7 +1061,7 @@ export default function SettingsPage() {
       const next = await patchStoreStatus(restaurantId, { pause_minutes: minutes });
       status.mutate(next);
       toast.success(`Paused for ${minutes} minutes`, {
-        description: "Zvingo re-opens you automatically when the timer runs out.",
+        description: "Zvingo starts taking orders again by itself when the timer runs out.",
       });
     } catch (error) {
       toast.error("Could not pause the store", {
@@ -952,7 +1078,7 @@ export default function SettingsPage() {
     try {
       const next = await patchStoreStatus(restaurantId, { resume: true });
       status.mutate(next);
-      toast.success("Pause cancelled");
+      toast.success("Pause cancelled", { description: next.availability.reason });
     } catch (error) {
       toast.error("Could not resume", { description: error instanceof Error ? error.message : undefined });
     } finally {
@@ -968,7 +1094,9 @@ export default function SettingsPage() {
       const next = await patchStoreStatus(restaurantId, { is_active: listed });
       status.mutate(next);
       session.patchRestaurant({ is_active: listed });
-      toast.success(listed ? "Your restaurant is listed again" : "Your restaurant is delisted");
+      toast.success(listed ? "Your restaurant is listed again" : "Your restaurant is delisted", {
+        description: next.availability.reason,
+      });
     } catch (error) {
       toast.error("Could not change your listing", {
         description: error instanceof Error ? error.message : undefined,
@@ -978,7 +1106,7 @@ export default function SettingsPage() {
     }
   }
 
-  const hourProblems = weekProblems(week);
+  const hourProblems = weekProblems(hours.value.week);
 
   async function saveHours() {
     if (!restaurantId) return;
@@ -988,9 +1116,13 @@ export default function SettingsPage() {
     }
     setSavingHours(true);
     try {
-      const next = await patchStoreStatus(restaurantId, { hours: week, timezone });
+      const next = await patchStoreStatus(restaurantId, {
+        hours: hours.value.week,
+        timezone: hours.value.timezone,
+      });
       status.mutate(next);
       session.patchRestaurant({ operating_hours: next.operating_hours });
+      hours.commit({ week: weekFromStatus(next.hours), timezone: next.timezone });
       toast.success("Opening hours saved", {
         description: next.operating_hours
           ? `Customers now see: ${next.operating_hours}.`
@@ -1007,30 +1139,39 @@ export default function SettingsPage() {
 
   async function saveProfile() {
     if (!restaurantId) return;
-    if (!name.trim()) {
+    const form = profile.value;
+    if (!form.name.trim()) {
       toast.error("Your restaurant needs a name");
       return;
     }
     setSavingProfile(true);
     try {
       const updated = await endpoints.catalog.updateRestaurant(restaurantId, {
-        name: name.trim(),
-        description: description.trim(),
-        image_url: imageUrl,
-        banner_url: bannerUrl,
-        categories: cuisines,
+        name: form.name.trim(),
+        description: form.description.trim(),
+        image_url: form.imageUrl,
+        banner_url: form.bannerUrl,
+        categories: form.cuisines,
       });
-      applyRestaurant(updated);
+      session.patchRestaurant(updated);
       // `RestaurantUpdate` has no `categories` field, so the server quietly
       // ignores it. Say so rather than showing a tick over a discarded edit.
-      const kept = JSON.stringify(updated.categories ?? []) === JSON.stringify(cuisines);
-      setCuisineGap(!kept);
-      if (kept) {
+      const saved = updated.categories ?? [];
+      const keptTags = JSON.stringify(saved) === JSON.stringify(form.cuisines);
+      setCuisineGap(!keptTags);
+      profile.commit({
+        name: updated.name ?? form.name.trim(),
+        description: updated.description ?? "",
+        imageUrl: updated.image_url ?? "",
+        bannerUrl: updated.banner_url ?? "",
+        cuisines: saved,
+      });
+      if (keptTags) {
         toast.success("Profile saved");
       } else {
-        setCuisines(updated.categories ?? []);
         toast.warning("Saved, except your cuisine tags", {
-          description: "Zvingo cannot change cuisine tags after a restaurant is created yet. Everything else saved.",
+          description:
+            "Zvingo cannot change cuisine tags after a restaurant is created yet. Everything else saved.",
         });
       }
     } catch (error) {
@@ -1044,6 +1185,7 @@ export default function SettingsPage() {
 
   async function saveLocation() {
     if (!restaurantId) return;
+    const { address, pin } = location.value;
     if (!pin) {
       toast.error("Set the pickup pin first", {
         description: "Drivers need a point to collect from. Use your current location or drag the pin.",
@@ -1052,11 +1194,17 @@ export default function SettingsPage() {
     }
     setSavingLocation(true);
     try {
-      const updated = await endpoints.catalog.updateRestaurant(restaurantId, {
+      const updated = await api.put<Restaurant>(`/catalog/restaurants/${restaurantId}`, {
         address: address.trim(),
-        ...({ lat: pin.lat, lng: pin.lng } as Partial<Restaurant>),
+        lat: pin.lat,
+        lng: pin.lng,
       });
-      applyRestaurant(updated);
+      session.patchRestaurant(updated);
+      const coords = updated.location?.coordinates;
+      location.commit({
+        address: updated.address ?? address.trim(),
+        pin: coords?.length === 2 ? { lng: coords[0]!, lat: coords[1]! } : pin,
+      });
       toast.success("Pickup point saved", { description: "Drivers will be sent to this pin." });
     } catch (error) {
       toast.error("Pickup point did not save", {
@@ -1069,8 +1217,9 @@ export default function SettingsPage() {
 
   async function saveDelivery() {
     if (!restaurantId) return;
-    const min = Number(prepMin);
-    const max = Number(prepMax);
+    const form = delivery.value;
+    const min = Number(form.prepMin);
+    const max = Number(form.prepMax);
     if (!Number.isFinite(min) || !Number.isFinite(max) || min < 1 || max < min) {
       toast.error("Check your prep times", {
         description: "The fastest time must be at least 1 minute and no more than the slowest.",
@@ -1082,10 +1231,17 @@ export default function SettingsPage() {
       const updated = await endpoints.catalog.updateRestaurant(restaurantId, {
         delivery_time_min: Math.round(min),
         delivery_time_max: Math.round(max),
-        delivery_fee_usd: Number(deliveryFee) || 0,
-        ...(freeThreshold === "" ? {} : { free_delivery_threshold: Number(freeThreshold) }),
+        delivery_fee_usd: Number(form.deliveryFee) || 0,
+        ...(form.freeThreshold === "" ? {} : { free_delivery_threshold: Number(form.freeThreshold) }),
       });
-      applyRestaurant(updated);
+      session.patchRestaurant(updated);
+      delivery.commit({
+        prepMin: String(updated.delivery_time_min),
+        prepMax: String(updated.delivery_time_max),
+        deliveryFee: String(updated.delivery_fee_usd),
+        freeThreshold:
+          updated.free_delivery_threshold != null ? String(updated.free_delivery_threshold) : "",
+      });
       toast.success("Delivery settings saved");
     } catch (error) {
       toast.error("Delivery settings did not save", {
@@ -1097,20 +1253,20 @@ export default function SettingsPage() {
   }
 
   async function saveContact() {
-    if (!fullName.trim()) {
+    const form = contact.value;
+    if (!form.fullName.trim()) {
       toast.error("Your name cannot be empty");
       return;
     }
     setSavingContact(true);
     try {
       const updated = await endpoints.auth.updateMe({
-        full_name: fullName.trim(),
-        ...(email.trim() ? { email: email.trim() } : {}),
+        full_name: form.fullName.trim(),
+        ...(form.email.trim() ? { email: form.email.trim() } : {}),
       });
-      // Keep the session cache in step so the shell shows the new name.
+      contact.commit({ fullName: updated.full_name, email: updated.email ?? "" });
+      // Refresh the cached profile so the shell shows the new name too.
       session.refresh().catch(() => undefined);
-      setFullName(updated.full_name);
-      setEmail(updated.email ?? "");
       toast.success("Contact details saved");
     } catch (error) {
       toast.error("Contact details did not save", {
@@ -1169,8 +1325,11 @@ export default function SettingsPage() {
     );
   }
 
-  const availability: Availability | undefined = status.data?.availability;
-  const pauseUntil = status.data?.pause_until ?? null;
+  const live: Availability | undefined = status.data?.availability;
+  const liveTone = statusTone(live?.status ?? "closed");
+  const pillTone =
+    liveTone === "open" ? "success" : liveTone === "paused" ? "warning" : liveTone === "unlisted" ? "error" : "neutral";
+  const paused = Boolean(status.data?.pause_until) && live?.status === "paused";
 
   return (
     <PageContainer>
@@ -1185,13 +1344,13 @@ export default function SettingsPage() {
               title="Are you open?"
               description="This decides whether customers can order right now. It beats your opening hours."
               icon={Store}
-              dirty={availabilityDirty}
+              dirty={availability.dirty}
               saving={savingAvailability}
               onSave={() => void saveAvailability()}
-              onReset={resetAvailability}
+              onReset={availability.reset}
               footerNote={
-                availability
-                  ? `Right now: ${availability.reason}. Local time ${availability.local_time} (${availability.timezone}).`
+                live
+                  ? `Right now: ${live.reason}. Local time ${live.local_time} (${live.timezone}).`
                   : undefined
               }
             >
@@ -1207,26 +1366,15 @@ export default function SettingsPage() {
               ) : (
                 <>
                   <div className="flex flex-wrap items-center gap-3 rounded-md bg-neutral-50 p-3">
-                    <StatusPill
-                      tone={
-                        statusTone(availability?.status ?? "closed") === "open"
-                          ? "success"
-                          : statusTone(availability?.status ?? "closed") === "paused"
-                            ? "warning"
-                            : statusTone(availability?.status ?? "closed") === "unlisted"
-                              ? "error"
-                              : "neutral"
-                      }
-                      label={availability?.reason ?? "Unknown"}
-                    />
-                    {availability?.closes_at && (
+                    <StatusPill tone={pillTone} label={live?.reason ?? "Unknown"} />
+                    {live?.closes_at && (
                       <span className="type-caption tabular-figures text-text-secondary">
-                        Closes at {localClock(availability.closes_at)}
+                        Closes at {localClock(live.closes_at)}
                       </span>
                     )}
-                    {availability?.opens_at && !availability.is_open && (
+                    {live?.opens_at && !live.is_open && (
                       <span className="type-caption tabular-figures text-text-secondary">
-                        Next open {localDayLabel(availability.opens_at)} {localClock(availability.opens_at)}
+                        Next open {localDayLabel(live.opens_at)} {localClock(live.opens_at)}
                       </span>
                     )}
                   </div>
@@ -1234,8 +1382,10 @@ export default function SettingsPage() {
                   <RadioGroup
                     label="Ordering switch"
                     variant="card"
-                    value={overrideChoice}
-                    onValueChange={(value) => setOverrideChoice(value)}
+                    value={availability.value.override}
+                    onValueChange={(value: OverrideChoice) =>
+                      availability.set((prev) => ({ ...prev, override: value }))
+                    }
                     options={[
                       {
                         value: "schedule",
@@ -1257,12 +1407,17 @@ export default function SettingsPage() {
                     ]}
                   />
 
-                  {pauseUntil ? (
+                  {paused ? (
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-warning-surface p-3">
                       <p className="type-body text-warning">
-                        Paused until {localClock(availability?.opens_at)} — orders resume automatically.
+                        {live?.reason} — orders resume automatically.
                       </p>
-                      <Button variant="secondary" size="md" onClick={() => void resume()} loading={savingAvailability}>
+                      <Button
+                        variant="secondary"
+                        size="md"
+                        onClick={() => void resume()}
+                        loading={savingAvailability}
+                      >
                         Resume now
                       </Button>
                     </div>
@@ -1284,8 +1439,10 @@ export default function SettingsPage() {
                   )}
 
                   <Switch
-                    checked={acceptsScheduled}
-                    onCheckedChange={setAcceptsScheduled}
+                    checked={availability.value.acceptsScheduled}
+                    onCheckedChange={(next) =>
+                      availability.set((prev) => ({ ...prev, acceptsScheduled: next }))
+                    }
                     label="Take pre-orders while closed"
                     description="Customers can schedule an order for later even when you are shut."
                   />
@@ -1319,10 +1476,10 @@ export default function SettingsPage() {
               title="Opening hours"
               description="The whole week, in your own time. Zvingo opens and closes you automatically."
               icon={Clock}
-              dirty={hoursDirty}
+              dirty={hours.dirty}
               saving={savingHours}
               onSave={() => void saveHours()}
-              onReset={resetHours}
+              onReset={hours.reset}
               saveLabel="Save hours"
               footerNote={
                 hourProblems.length ? (
@@ -1338,16 +1495,20 @@ export default function SettingsPage() {
                 <>
                   <Select
                     label="Time zone"
-                    value={timezone}
-                    onChange={(e) => setTimezone(e.target.value)}
+                    value={hours.value.timezone}
+                    onChange={(e) => hours.set((prev) => ({ ...prev, timezone: e.target.value }))}
                     options={TIMEZONES}
                     help="Every time below is wall-clock time in this zone."
                   />
-                  <HoursEditor week={week} onChange={setWeek} disabled={savingHours} />
+                  <HoursEditor
+                    week={hours.value.week}
+                    onChange={(week) => hours.set((prev) => ({ ...prev, week }))}
+                    disabled={savingHours}
+                  />
                   <div className="rounded-md bg-neutral-50 p-3">
                     <p className="type-overline text-text-secondary">Preview</p>
                     <ul className="mt-1.5 grid gap-0.5 type-caption sm:grid-cols-2">
-                      {week.map((day) => (
+                      {hours.value.week.map((day) => (
                         <li key={day.day} className="flex justify-between gap-3 tabular-figures">
                           <span className="text-text-secondary">{DAY_SHORT[day.day]}</span>
                           <span className={day.intervals.length ? "text-text-primary" : "text-text-tertiary"}>
@@ -1371,22 +1532,22 @@ export default function SettingsPage() {
               title="Restaurant profile"
               description="Your name, story and photography as customers see them."
               icon={Building2}
-              dirty={profileDirty}
+              dirty={profile.dirty}
               saving={savingProfile}
               onSave={() => void saveProfile()}
-              onReset={resetProfile}
+              onReset={profile.reset}
             >
               <Input
                 label="Restaurant name"
                 required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                value={profile.value.name}
+                onChange={(e) => profile.set((prev) => ({ ...prev, name: e.target.value }))}
                 maxLength={80}
               />
               <Textarea
                 label="Description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                value={profile.value.description}
+                onChange={(e) => profile.set((prev) => ({ ...prev, description: e.target.value }))}
                 maxLength={280}
                 showCount
                 help="One or two sentences on what makes your food worth ordering."
@@ -1394,13 +1555,18 @@ export default function SettingsPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <p className="type-caption mb-2 font-semibold text-text-primary">Logo</p>
-                  <ImageUpload value={imageUrl} onChange={setImageUrl} placeholder="Upload logo" help="Square photos look best. Shown next to your name." />
+                  <ImageUpload
+                    value={profile.value.imageUrl}
+                    onChange={(url) => profile.set((prev) => ({ ...prev, imageUrl: url }))}
+                    placeholder="Upload logo"
+                    help="Square photos look best. Shown next to your name."
+                  />
                 </div>
                 <div>
                   <p className="type-caption mb-2 font-semibold text-text-primary">Storefront banner</p>
                   <ImageUpload
-                    value={bannerUrl}
-                    onChange={setBannerUrl}
+                    value={profile.value.bannerUrl}
+                    onChange={(url) => profile.set((prev) => ({ ...prev, bannerUrl: url }))}
                     placeholder="Upload banner"
                     help="A wide photo of your food, shown at the top of your page."
                   />
@@ -1413,7 +1579,7 @@ export default function SettingsPage() {
                   How customers filter for you: Pizza, Sadza, Grill, Vegetarian.
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  {cuisines.map((tag) => (
+                  {profile.value.cuisines.map((tag) => (
                     <span
                       key={tag}
                       className="inline-flex items-center gap-1 rounded-sm bg-neutral-100 py-1 pl-2.5 pr-1 type-caption font-semibold text-neutral-800"
@@ -1421,7 +1587,12 @@ export default function SettingsPage() {
                       {tag}
                       <button
                         type="button"
-                        onClick={() => setCuisines(cuisines.filter((entry) => entry !== tag))}
+                        onClick={() =>
+                          profile.set((prev) => ({
+                            ...prev,
+                            cuisines: prev.cuisines.filter((entry) => entry !== tag),
+                          }))
+                        }
                         className="zv-touch flex h-6 w-6 items-center justify-center rounded-full hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-action"
                         aria-label={`Remove ${tag}`}
                       >
@@ -1429,7 +1600,9 @@ export default function SettingsPage() {
                       </button>
                     </span>
                   ))}
-                  {!cuisines.length && <span className="type-caption text-text-tertiary">No tags yet.</span>}
+                  {!profile.value.cuisines.length && (
+                    <span className="type-caption text-text-tertiary">No tags yet.</span>
+                  )}
                 </div>
                 <div className="mt-2 flex flex-wrap items-end gap-2">
                   <Input
@@ -1443,7 +1616,11 @@ export default function SettingsPage() {
                       if (e.key !== "Enter") return;
                       e.preventDefault();
                       const tag = cuisineDraft.trim();
-                      if (tag && !cuisines.includes(tag)) setCuisines([...cuisines, tag]);
+                      profile.set((prev) =>
+                        tag && !prev.cuisines.includes(tag)
+                          ? { ...prev, cuisines: [...prev.cuisines, tag] }
+                          : prev,
+                      );
                       setCuisineDraft("");
                     }}
                   />
@@ -1453,7 +1630,11 @@ export default function SettingsPage() {
                     size="md"
                     onClick={() => {
                       const tag = cuisineDraft.trim();
-                      if (tag && !cuisines.includes(tag)) setCuisines([...cuisines, tag]);
+                      profile.set((prev) =>
+                        tag && !prev.cuisines.includes(tag)
+                          ? { ...prev, cuisines: [...prev.cuisines, tag] }
+                          : prev,
+                      );
                       setCuisineDraft("");
                     }}
                   >
@@ -1475,16 +1656,16 @@ export default function SettingsPage() {
               title="Pickup address"
               description="Where the driver walks in. Get this wrong and every delivery is late."
               icon={MapPin}
-              dirty={locationDirty}
+              dirty={location.dirty}
               saving={savingLocation}
               onSave={() => void saveLocation()}
-              onReset={resetLocation}
+              onReset={location.reset}
               saveLabel="Save pickup point"
             >
               <Textarea
                 label="Street address"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
+                value={location.value.address}
+                onChange={(e) => location.set((prev) => ({ ...prev, address: e.target.value }))}
                 rows={2}
                 maxLength={200}
                 help="Shown to the driver, including the shop number or landmark."
@@ -1507,8 +1688,10 @@ export default function SettingsPage() {
                         <button
                           type="button"
                           onClick={() => {
-                            setPin({ lat: hit.lat, lng: hit.lng });
-                            if (!address.trim()) setAddress(hit.display_name);
+                            location.set((prev) => ({
+                              address: prev.address.trim() || hit.display_name,
+                              pin: { lat: hit.lat, lng: hit.lng },
+                            }));
                             setAddressHits([]);
                             setAddressQuery("");
                           }}
@@ -1523,32 +1706,16 @@ export default function SettingsPage() {
                 )}
               </div>
 
-              <LocationPicker value={pin} onChange={setPin} disabled={savingLocation} />
+              <LocationPicker
+                value={location.value.pin}
+                onChange={(pin) => location.set((prev) => ({ ...prev, pin }))}
+                disabled={savingLocation}
+              />
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Input
-                  label="Latitude"
-                  type="number"
-                  step="0.000001"
-                  inputSize="sm"
-                  value={pin ? pin.lat.toFixed(6) : ""}
-                  onChange={(e) => {
-                    const lat = Number(e.target.value);
-                    if (Number.isFinite(lat)) setPin({ lat, lng: pin?.lng ?? 31.0335 });
-                  }}
-                />
-                <Input
-                  label="Longitude"
-                  type="number"
-                  step="0.000001"
-                  inputSize="sm"
-                  value={pin ? pin.lng.toFixed(6) : ""}
-                  onChange={(e) => {
-                    const lng = Number(e.target.value);
-                    if (Number.isFinite(lng)) setPin({ lat: pin?.lat ?? -17.8252, lng });
-                  }}
-                />
-              </div>
+              <CoordinateFields
+                pin={location.value.pin}
+                onChange={(pin) => location.set((prev) => ({ ...prev, pin }))}
+              />
             </SettingsSection>
 
             {/* ---------------- Delivery ---------------- */}
@@ -1556,10 +1723,10 @@ export default function SettingsPage() {
               title="Delivery and prep time"
               description="The estimate customers see at checkout, and what they pay for delivery."
               icon={Clock}
-              dirty={deliveryDirty}
+              dirty={delivery.dirty}
               saving={savingDelivery}
               onSave={() => void saveDelivery()}
-              onReset={resetDelivery}
+              onReset={delivery.reset}
             >
               <div className="grid gap-4 sm:grid-cols-2">
                 <Input
@@ -1567,17 +1734,17 @@ export default function SettingsPage() {
                   type="number"
                   min="1"
                   step="1"
-                  value={prepMin}
-                  onChange={(e) => setPrepMin(e.target.value)}
+                  value={delivery.value.prepMin}
+                  onChange={(e) => delivery.set((prev) => ({ ...prev, prepMin: e.target.value }))}
                 />
                 <Input
                   label="Slowest, in minutes"
                   type="number"
                   min="1"
                   step="1"
-                  value={prepMax}
-                  onChange={(e) => setPrepMax(e.target.value)}
-                  help={`Customers see “${prepMin || "?"}–${prepMax || "?"} min”.`}
+                  value={delivery.value.prepMax}
+                  onChange={(e) => delivery.set((prev) => ({ ...prev, prepMax: e.target.value }))}
+                  help={`Customers see “${delivery.value.prepMin || "?"}–${delivery.value.prepMax || "?"} min”.`}
                 />
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -1587,8 +1754,8 @@ export default function SettingsPage() {
                   min="0"
                   step="0.25"
                   prefix="$"
-                  value={deliveryFee}
-                  onChange={(e) => setDeliveryFee(e.target.value)}
+                  value={delivery.value.deliveryFee}
+                  onChange={(e) => delivery.set((prev) => ({ ...prev, deliveryFee: e.target.value }))}
                 />
                 <Input
                   label="Free delivery over"
@@ -1596,12 +1763,12 @@ export default function SettingsPage() {
                   min="0"
                   step="0.5"
                   prefix="$"
-                  value={freeThreshold}
-                  onChange={(e) => setFreeThreshold(e.target.value)}
+                  value={delivery.value.freeThreshold}
+                  onChange={(e) => delivery.set((prev) => ({ ...prev, freeThreshold: e.target.value }))}
                   placeholder="No free-delivery threshold"
                   help={
-                    freeThreshold
-                      ? `Orders over ${formatMoney(Number(freeThreshold) || 0)} ship free.`
+                    delivery.value.freeThreshold
+                      ? `Orders over ${formatMoney(Number(delivery.value.freeThreshold) || 0)} ship free.`
                       : "Leave blank to always charge the fee."
                   }
                 />
@@ -1610,8 +1777,8 @@ export default function SettingsPage() {
                 <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                 <span>
                   <strong className="font-semibold text-text-primary">Delivery radius is set by Zvingo,</strong>{" "}
-                  not per restaurant — dispatch matches drivers by distance from your pin. There is no per-restaurant
-                  radius to set yet.
+                  not per restaurant — dispatch matches drivers by distance from your pin. There is no
+                  per-restaurant radius to set yet.
                 </span>
               </p>
             </SettingsSection>
@@ -1621,24 +1788,24 @@ export default function SettingsPage() {
               title="Account contact"
               description="How Zvingo reaches you about orders, payouts and outages."
               icon={Phone}
-              dirty={contactDirty}
+              dirty={contact.dirty}
               saving={savingContact}
               onSave={() => void saveContact()}
-              onReset={resetContact}
+              onReset={contact.reset}
             >
               <Input
                 label="Your name"
                 required
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
+                value={contact.value.fullName}
+                onChange={(e) => contact.set((prev) => ({ ...prev, fullName: e.target.value }))}
                 maxLength={120}
               />
               <Input
                 label="Email"
                 type="email"
                 leftIcon={<Mail className="h-4 w-4" />}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={contact.value.email}
+                onChange={(e) => contact.set((prev) => ({ ...prev, email: e.target.value }))}
                 placeholder="you@restaurant.co.zw"
                 help="Used for receipts and account notices."
               />
@@ -1669,8 +1836,8 @@ export default function SettingsPage() {
               <div className="space-y-3 p-4">
                 <p className="type-body text-text-secondary">
                   Zvingo does not store merchant payout accounts yet, so there is nothing here to fill in. Rather
-                  than show you a form that throws your bank details away, we have left it out until the backend can
-                  hold them.
+                  than show you a form that throws your bank details away, we have left it out until the backend
+                  can hold them.
                 </p>
                 <p className="type-caption text-text-secondary">
                   Until then, payouts are arranged by the Zvingo finance team from the order ledger. Your settled
@@ -1682,12 +1849,19 @@ export default function SettingsPage() {
             {/* ---------------- Sign out ---------------- */}
             <Card className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="type-body-strong text-text-primary">Signed in as {user?.full_name || "merchant"}</p>
+                <p className="type-body-strong text-text-primary">
+                  Signed in as {user?.full_name || "merchant"}
+                </p>
                 <p className="type-caption text-text-secondary">
                   {formatPhone(user?.phone)} · {user?.role || "merchant"}
                 </p>
               </div>
-              <Button variant="destructive" size="md" onClick={signOut} leftIcon={<LogOut className="h-4 w-4" />}>
+              <Button
+                variant="destructive"
+                size="md"
+                onClick={signOut}
+                leftIcon={<LogOut className="h-4 w-4" />}
+              >
                 Sign out
               </Button>
             </Card>
@@ -1697,10 +1871,10 @@ export default function SettingsPage() {
           <aside className="space-y-4 xl:sticky xl:top-6">
             <Card flush className="overflow-hidden">
               <div className="relative h-32 bg-neutral-900">
-                {bannerUrl ? (
+                {profile.value.bannerUrl ? (
                   <div
                     className="absolute inset-0 bg-cover bg-center"
-                    style={{ backgroundImage: `url("${bannerUrl}")` }}
+                    style={{ backgroundImage: `url("${profile.value.bannerUrl}")` }}
                     aria-hidden="true"
                   />
                 ) : (
@@ -1708,10 +1882,10 @@ export default function SettingsPage() {
                 )}
                 <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-neutral-900/70 to-transparent" />
                 <div className="absolute bottom-3 left-3 flex items-end gap-3">
-                  {imageUrl ? (
+                  {profile.value.imageUrl ? (
                     <div
                       className="h-12 w-12 rounded-md border-2 border-neutral-0 bg-cover bg-center"
-                      style={{ backgroundImage: `url("${imageUrl}")` }}
+                      style={{ backgroundImage: `url("${profile.value.imageUrl}")` }}
                       aria-hidden="true"
                     />
                   ) : (
@@ -1720,9 +1894,10 @@ export default function SettingsPage() {
                     </span>
                   )}
                   <div className="pb-0.5 text-neutral-0">
-                    <p className="type-h3">{name || "Your restaurant"}</p>
+                    <p className="type-h3">{profile.value.name || "Your restaurant"}</p>
                     <p className="type-caption opacity-80">
-                      {prepMin}–{prepMax} min · {formatMoney(Number(deliveryFee) || 0)} delivery
+                      {delivery.value.prepMin}–{delivery.value.prepMax} min ·{" "}
+                      {formatMoney(Number(delivery.value.deliveryFee) || 0)} delivery
                     </p>
                   </div>
                 </div>
@@ -1730,11 +1905,12 @@ export default function SettingsPage() {
               <div className="space-y-3 p-4">
                 <StoreStatusPill />
                 <p className="type-caption line-clamp-3 text-text-secondary">
-                  {description || "Add a description so customers know what you are famous for."}
+                  {profile.value.description ||
+                    "Add a description so customers know what you are famous for."}
                 </p>
-                {!!cuisines.length && (
+                {!!profile.value.cuisines.length && (
                   <div className="flex flex-wrap gap-1.5">
-                    {cuisines.slice(0, 5).map((tag) => (
+                    {profile.value.cuisines.slice(0, 5).map((tag) => (
                       <Badge key={tag} tone="neutral">
                         {tag}
                       </Badge>
@@ -1743,7 +1919,7 @@ export default function SettingsPage() {
                 )}
                 <p className="flex items-start gap-2 type-caption text-text-secondary">
                   <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-text-tertiary" aria-hidden="true" />
-                  {address || "No pickup address set yet."}
+                  {location.value.address || "No pickup address set yet."}
                 </p>
               </div>
             </Card>
@@ -1771,7 +1947,9 @@ export default function SettingsPage() {
         confirmLabel="Remove my listing"
         cancelLabel="Stay listed"
         onCancel={() => setConfirmDelist(false)}
-        onConfirm={() => void setListed(false)}
+        onConfirm={async () => {
+          await setListed(false);
+        }}
       />
 
       {guardDialog}

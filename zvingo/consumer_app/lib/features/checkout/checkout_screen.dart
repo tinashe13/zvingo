@@ -133,6 +133,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final quote = _placedQuote ?? liveQuote;
     assert(quote.reconciles, 'Checkout quote must reconcile to the cent');
 
+    // A promo with a minimum stops qualifying when a line is removed, so the
+    // code is re-checked against the server whenever the basket moves rather
+    // than being quietly rejected at submission.
+    ref.listen<Money>(cartSubtotalProvider, (previous, next) {
+      if (previous == null || previous == next) return;
+      if (!ref.read(promoProvider).isApplied) return;
+      ref.read(promoProvider.notifier).revalidate(subtotal: next);
+    });
+
     // One listener for the whole screen: when the prompt on the customer's
     // phone settles, celebrate exactly once.
     ref.listen<PaymentSession>(paymentProvider, (previous, next) {
@@ -473,6 +482,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       return;
     }
 
+    _celebrated = true;
     await _celebrate(result.primaryOrderId, settled, restaurant, location);
   }
 
@@ -548,27 +558,34 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   void _retryPayment() {
     final result = ref.read(orderPlacementProvider).result;
-    if (result == null) {
+    final quote = _placedQuote;
+    if (result == null || quote == null) {
       ref.read(orderPlacementProvider.notifier).dismissError();
       return;
     }
-    final subtotal = ref.read(cartSubtotalProvider);
+    final error = Payment.validatePhone(_phoneController.text);
+    if (error != null) {
+      setState(() => _phoneError = error);
+      return;
+    }
     ref.read(paymentProvider.notifier).initiatePayment(
           orderId: result.primaryOrderId,
           method: _method,
           phone: _phoneController.text,
           currency: _settlementCurrency,
-          amount: subtotal,
+          amount: _amountToCharge(quote),
         );
   }
 
   void _openPaymentScreen() {
     final result = ref.read(orderPlacementProvider).result;
-    if (result == null) return;
-    final subtotal = ref.read(cartSubtotalProvider);
+    final quote = _placedQuote;
+    if (result == null || quote == null) return;
     ref.read(paymentProvider.notifier).reset();
+    // The payment screen quotes in USD and converts for display, so hand it the
+    // USD total rather than whatever settlement currency was chosen here.
     context.push(
-      '/payment/${result.primaryOrderId}?amount=${subtotal.major}',
+      '/payment/${result.primaryOrderId}?amount=${quote.total.major}',
     );
   }
 

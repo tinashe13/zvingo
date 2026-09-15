@@ -210,7 +210,7 @@ class _HelpScreenState extends ConsumerState<HelpScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Still stuck?', style: AppTextStyles.h3),
+                const Text('Still stuck?', style: AppTextStyles.h3),
                 const SizedBox(height: AppSpacing.xxs),
                 Text(
                   'Our team answers ${SupportContact.hours}.',
@@ -349,14 +349,14 @@ class _HelpScreenState extends ConsumerState<HelpScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _ContactRow(
+              const _ContactRow(
                 icon: Icons.mail_outline_rounded,
                 title: 'Email us',
                 value: SupportContact.email,
                 copyLabel: 'Email address copied',
               ),
               const SizedBox(height: AppSpacing.xs),
-              _ContactRow(
+              const _ContactRow(
                 icon: Icons.chat_bubble_outline_rounded,
                 title: 'WhatsApp',
                 value: SupportContact.whatsapp,

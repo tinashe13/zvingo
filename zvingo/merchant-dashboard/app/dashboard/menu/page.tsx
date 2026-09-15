@@ -8,7 +8,6 @@ import {
   ChevronDown,
   Copy,
   FolderInput,
-  GripVertical,
   Info,
   LocateFixed,
   Pencil,
@@ -845,10 +844,6 @@ function ItemRow({
           />
         </div>
       )}
-      {!canOrder && (
-        <GripVertical className="mt-2 h-4 w-4 shrink-0 text-neutral-300" aria-hidden="true" />
-      )}
-
       <SafeImage
         src={item.image_url || item.images?.[0]}
         alt={item.name}

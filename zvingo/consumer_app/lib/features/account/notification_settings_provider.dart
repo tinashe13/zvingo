@@ -123,7 +123,7 @@ class NotificationSettings extends _$NotificationSettings {
   /// single toggle is a single-field body. On failure the previous value is put
   /// back — a switch that stays flipped after a failed save is a lie about what
   /// the server will actually do.
-  Future<bool> update(
+  Future<bool> apply(
     NotificationPreferences Function(NotificationPreferences) change,
     Map<String, dynamic> payload,
   ) async {

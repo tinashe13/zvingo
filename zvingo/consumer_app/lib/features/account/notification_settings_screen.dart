@@ -173,7 +173,7 @@ class NotificationSettingsScreen extends ConsumerWidget {
     final messenger = ScaffoldMessenger.of(context);
     final ok = await ref
         .read(notificationSettingsProvider.notifier)
-        .update(change, payload);
+        .apply(change, payload);
     if (!ok) {
       messenger.showSnackBar(
         SnackBar(
@@ -307,7 +307,7 @@ class _QuietHoursCard extends ConsumerWidget {
       await _setWindow(context, ref, start: _defaultStart, end: _defaultEnd);
       return;
     }
-    await ref.read(notificationSettingsProvider.notifier).update(
+    await ref.read(notificationSettingsProvider.notifier).apply(
           (p) => p.copyWith(clearQuietHours: true),
           {'quiet_hours_start': null, 'quiet_hours_end': null},
         );
@@ -320,7 +320,7 @@ class _QuietHoursCard extends ConsumerWidget {
     required String end,
   }) async {
     final messenger = ScaffoldMessenger.of(context);
-    final ok = await ref.read(notificationSettingsProvider.notifier).update(
+    final ok = await ref.read(notificationSettingsProvider.notifier).apply(
           (p) => p.copyWith(quietHoursStart: start, quietHoursEnd: end),
           {'quiet_hours_start': start, 'quiet_hours_end': end},
         );

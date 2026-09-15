@@ -77,6 +77,12 @@ class OrderResponse(BaseModel):
     driver_name: Optional[str] = None
     merchant_id: Optional[str] = None
     consumer_id: Optional[str] = None
+    # Who the food is for. Populated only for viewers entitled to it -- the
+    # order's merchant, its assigned driver, the consumer themselves, or an
+    # admin -- so a kitchen can name the order and call about it, and a driver
+    # can reach the customer at the door. Absent for anyone else.
+    consumer_name: Optional[str] = None
+    consumer_phone: Optional[str] = None
     items: List[OrderItem] = []
     pickup_lat: Optional[float] = None
     pickup_lng: Optional[float] = None

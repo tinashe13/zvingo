@@ -106,7 +106,7 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
     await Clipboard.setData(ClipboardData(text: body.toString()));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
+      const SnackBar(
         content: Text(
           'Request copied. Send it to ${SupportContact.email} from any mail app.',
         ),
@@ -210,7 +210,7 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Before you go', style: AppTextStyles.h3),
+                const Text('Before you go', style: AppTextStyles.h3),
                 const SizedBox(height: AppSpacing.xxs),
                 Text(
                   'If something went wrong, our team would rather fix it than '
@@ -250,7 +250,7 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
               value: _understood,
               onChanged: (value) =>
                   setState(() => _understood = value ?? false),
-              title: Text(
+              title: const Text(
                 'I understand this permanently deletes my Zvingo account and '
                 'cannot be undone.',
                 style: AppTextStyles.body,
@@ -268,21 +268,21 @@ class _WhatHappensCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ZvCard(
+    return const ZvCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('What happens when you delete', style: AppTextStyles.h3),
-          const SizedBox(height: AppSpacing.md),
-          const _Line(
+          SizedBox(height: AppSpacing.md),
+          _Line(
             icon: Icons.delete_outline_rounded,
             tone: ZvTone.error,
             title: 'Removed',
             body: 'Your name, email, phone, saved addresses and delivery '
                 'notes, saved stores and notification settings.',
           ),
-          const SizedBox(height: AppSpacing.sm),
-          const _Line(
+          SizedBox(height: AppSpacing.sm),
+          _Line(
             icon: Icons.receipt_long_outlined,
             tone: ZvTone.warning,
             title: 'Kept',
@@ -290,8 +290,8 @@ class _WhatHappensCard extends StatelessWidget {
                 'anti-fraud rules require. They are no longer linked to a '
                 'usable account.',
           ),
-          const SizedBox(height: AppSpacing.sm),
-          const _Line(
+          SizedBox(height: AppSpacing.sm),
+          _Line(
             icon: Icons.lock_outline_rounded,
             tone: ZvTone.neutral,
             title: 'Signed out everywhere',

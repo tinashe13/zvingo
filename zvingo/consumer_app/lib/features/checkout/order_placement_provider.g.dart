@@ -6,7 +6,7 @@ part of 'order_placement_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$orderPlacementHash() => r'69260a28b3b9d1854ea1c32ace1b1daca564c297';
+String _$orderPlacementHash() => r'395d51aa6a6f581da56f1100eebfd92d2625b8d5';
 
 /// See also [OrderPlacement].
 @ProviderFor(OrderPlacement)

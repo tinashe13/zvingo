@@ -21,6 +21,59 @@ double zvTextScale(BuildContext context) =>
 double restaurantRailHeight(BuildContext context, {double width = 176}) =>
     width * 9 / 16 + 40 + 78 * zvTextScale(context);
 
+/// Icon + value, like `ZvMetaItem`, but with a **flexible** label.
+///
+/// `ZvMetaItem` puts its `Text` directly in a `Row` with no `Flexible`, so a
+/// long value ("25–40 min" at 200% text scale) overflows inside a 176px rail
+/// card. This is the same visual, laid out so the label ellipsises instead.
+/// (Upstream fix requested — see the C1 report.)
+class MetaItem extends StatelessWidget {
+  const MetaItem({
+    super.key,
+    required this.icon,
+    required this.label,
+    this.tint,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color? tint;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: tint ?? AppColors.textSecondary),
+        const SizedBox(width: 3),
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.time,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Keeps a fixed-size badge inside its box at any text scale by scaling it
+/// down rather than overflowing.
+class ShrinkToFit extends StatelessWidget {
+  const ShrinkToFit({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: AlignmentDirectional.centerStart,
+        child: child,
+      );
+}
+
 /// How a restaurant card frames its numbers.
 enum RestaurantCardMode {
   /// Delivery: fee and ETA lead, distance is secondary.
@@ -140,18 +193,26 @@ class RestaurantCard extends ConsumerWidget {
                               runSpacing: AppSpacing.xxs,
                               children: [
                                 if (promotion != null)
-                                  ZvBadge.deal(label: _shortPromo(promotion))
+                                  ShrinkToFit(
+                                    child: ZvBadge.deal(
+                                      label: _shortPromo(promotion),
+                                    ),
+                                  )
                                 else if (restaurant.deliveryFee == 0 &&
                                     mode == RestaurantCardMode.delivery)
-                                  const ZvBadge(
-                                    label: 'Free delivery',
-                                    tone: ZvTone.success,
-                                    icon: Icons.pedal_bike_rounded,
+                                  const ShrinkToFit(
+                                    child: ZvBadge(
+                                      label: 'Free delivery',
+                                      tone: ZvTone.success,
+                                      icon: Icons.pedal_bike_rounded,
+                                    ),
                                   ),
                                 if (restaurant.isZvingoPlus)
-                                  const ZvBadge(
-                                    label: 'Zvingo+',
-                                    icon: Icons.verified_rounded,
+                                  const ShrinkToFit(
+                                    child: ZvBadge(
+                                      label: 'Zvingo+',
+                                      icon: Icons.verified_rounded,
+                                    ),
                                   ),
                               ],
                             ),
@@ -286,25 +347,25 @@ class RestaurantMetaLine extends StatelessWidget {
       children: [
         if (pickup) ...[
           if (distanceLabel != null)
-            ZvMetaItem(
+            MetaItem(
               icon: Icons.directions_walk_rounded,
               label: distanceLabel!,
             ),
-          ZvMetaItem(
+          MetaItem(
             icon: Icons.shopping_bag_outlined,
             label: 'Ready in ${restaurant.deliveryTimeMin} min',
           ),
-          const ZvMetaItem(
+          const MetaItem(
             icon: Icons.savings_outlined,
             label: 'No delivery fee',
             tint: AppColors.success,
           ),
         ] else ...[
-          ZvMetaItem(
+          MetaItem(
             icon: Icons.schedule_rounded,
             label: restaurant.deliveryTime,
           ),
-          ZvMetaItem(
+          MetaItem(
             icon: Icons.pedal_bike_rounded,
             label: restaurant.deliveryFee == 0
                 ? 'Free'
@@ -312,7 +373,7 @@ class RestaurantMetaLine extends StatelessWidget {
             tint: restaurant.deliveryFee == 0 ? AppColors.success : null,
           ),
           if (distanceLabel != null)
-            ZvMetaItem(
+            MetaItem(
               icon: Icons.place_outlined,
               label: distanceLabel!,
             ),
@@ -386,7 +447,11 @@ class RestaurantRailCard extends StatelessWidget {
                               compact: true,
                             )
                           : promotion != null
-                              ? ZvBadge.deal(label: _shortPromo(promotion))
+                              ? ShrinkToFit(
+                                  child: ZvBadge.deal(
+                                    label: _shortPromo(promotion),
+                                  ),
+                                )
                               : const SizedBox.shrink(),
                     ),
                   ),
@@ -410,19 +475,19 @@ class RestaurantRailCard extends StatelessWidget {
                     runSpacing: AppSpacing.xxs,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      ZvMetaItem(
+                      MetaItem(
                         icon: Icons.star_rounded,
                         label: restaurant.rating.toStringAsFixed(1),
                         tint: AppColors.rating,
                       ),
                       if (mode == RestaurantCardMode.pickup &&
                           store.distanceLabel != null)
-                        ZvMetaItem(
+                        MetaItem(
                           icon: Icons.directions_walk_rounded,
                           label: store.distanceLabel!,
                         )
                       else
-                        ZvMetaItem(
+                        MetaItem(
                           icon: Icons.schedule_rounded,
                           label: restaurant.deliveryTime,
                         ),

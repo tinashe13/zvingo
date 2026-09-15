@@ -968,13 +968,13 @@ class _NearbyRow extends StatelessWidget {
                     runSpacing: AppSpacing.xxs,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      ZvMetaItem(
+                      MetaItem(
                         icon: Icons.star_rounded,
                         label: store.restaurant.rating.toStringAsFixed(1),
                         tint: AppColors.rating,
                       ),
                       if (store.distanceLabel != null)
-                        ZvMetaItem(
+                        MetaItem(
                           icon: Icons.place_outlined,
                           label: store.distanceLabel!,
                         ),

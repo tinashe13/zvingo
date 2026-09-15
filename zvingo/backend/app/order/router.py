@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import Annotated, List, Optional
+from typing import Annotated, Any, List, Optional
 from app.order.schemas import (
     CheckoutCreate,
     CheckoutResponse,
@@ -96,8 +96,17 @@ def _state_str(state) -> str:
         return str(state)
 
 
-def _to_response(order: Order, driver_name: Optional[str] = None) -> OrderResponse:
-    """Build the wire representation of an order."""
+def _to_response(
+    order: Order,
+    driver_name: Optional[str] = None,
+    consumer: Optional[Any] = None,
+) -> OrderResponse:
+    """Build the wire representation of an order.
+
+    ``consumer`` is the customer's ``User``, and is passed only when the caller
+    has established the viewer is entitled to see it. Leave it out and the
+    identity fields stay empty rather than leaking.
+    """
     return OrderResponse(
         id=str(order.id),
         state=order.state,
@@ -107,6 +116,8 @@ def _to_response(order: Order, driver_name: Optional[str] = None) -> OrderRespon
         driver_name=driver_name,
         merchant_id=order.merchant_id,
         consumer_id=order.consumer_id,
+        consumer_name=getattr(consumer, "full_name", None) if consumer else None,
+        consumer_phone=getattr(consumer, "phone", None) if consumer else None,
         items=[_item(i) for i in (order.items or [])],
         pickup_lat=_lat(order.pickup_location),
         pickup_lng=_lng(order.pickup_location),
@@ -115,6 +126,27 @@ def _to_response(order: Order, driver_name: Optional[str] = None) -> OrderRespon
         delivery_instructions=order.delivery_instructions,
         group_id=order.group_id,
     )
+
+
+async def _users_by_id(ids) -> dict:
+    """Fetch several users in one query, keyed by string id.
+
+    Order lists previously resolved each name with its own round trip, so a
+    board of 30 orders cost 30 extra queries.
+    """
+    wanted = {str(i) for i in ids if i}
+    if not wanted:
+        return {}
+    try:
+        from app.order.service import _document_id
+
+        users = await User.find(
+            {"_id": {"$in": [_document_id(i) for i in wanted]}}
+        ).to_list()
+        return {str(u.id): u for u in users}
+    except Exception:
+        # A malformed id in the set must not blank out the whole board.
+        return {}
 
 
 async def _get_driver_name(driver_id: Optional[str]) -> Optional[str]:
@@ -349,7 +381,19 @@ async def get_order_group(
         raise HTTPException(status_code=404, detail="Order group not found")
     for order in orders:
         await _assert_order_access(order, current_user)
-    return [_to_response(o) for o in orders]
+    # The merchant owns these orders, so they may see who each one is for.
+    # Batched: one query for every consumer and driver on the page.
+    people = await _users_by_id(
+        [o.consumer_id for o in orders] + [o.driver_id for o in orders]
+    )
+    return [
+        _to_response(
+            o,
+            driver_name=getattr(people.get(str(o.driver_id)), "full_name", None),
+            consumer=people.get(str(o.consumer_id)),
+        )
+        for o in orders
+    ]
 
 
 @router.post("/{order_id}/reorder", response_model=OrderResponse)

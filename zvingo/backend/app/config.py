@@ -161,6 +161,11 @@ class Settings(BaseSettings):
     SCHEDULED_POLL_INTERVAL_SECONDS: int = 15
     SCHEDULED_DISPATCH_LEAD_MINUTES: int = 15
 
+    # Geocoding. Nominatim's usage policy requires a User-Agent that identifies
+    # the application AND gives them someone to contact before they block you.
+    # Unset is legal but means the first warning is the ban.
+    NOMINATIM_CONTACT_EMAIL: Optional[str] = None
+
     # Observability
     LOG_LEVEL: str = "INFO"
     LOG_JSON: bool = False  # force JSON logs (always on in production)
