@@ -8,9 +8,11 @@ Four invariants this module exists to hold:
    :mod:`app.payment.state_machine`, so an illegal or repeated transition is
    refused rather than silently applied.
 3. **Provider notifications are idempotent.** Paynow retries its result-URL
-   callback until it gets a 2xx. Each notification is logged with a dedupe key
-   and, independently, the state machine refuses the repeat — two layers, so a
-   retry cannot double-credit or re-dispatch even if the log write fails.
+   callback until it gets a 2xx. Each notification is *claimed* before it is
+   acted on — the receipt is inserted first and its unique dedupe key means
+   only one worker's insert survives — and, independently, the state machine
+   refuses the repeat. Two layers, so a retry cannot double-credit or
+   re-dispatch even if the receipt cannot be written at all.
 4. **Nothing is marked settled that did not settle.** Refunds in particular are
    never marked complete on Zvingo's side until a human records proof that
    Paynow returned the money.
@@ -23,6 +25,7 @@ from decimal import Decimal
 from typing import Any, Dict, Optional, Tuple
 
 import structlog
+from pymongo.errors import DuplicateKeyError
 
 from app.config import settings
 from app.finance import exchange
@@ -193,6 +196,8 @@ class PaymentService:
         else:
             amount_usd_cents = to_minor(amount_usd, DEFAULT_CURRENCY)
 
+        # Resolving the rate also pins it to the order, so every later quote,
+        # retry and refund for this order uses the same number.
         rate = await PaymentService.get_exchange_rate(currency, order_id)
         rate = Decimal(str(rate))
         if currency == DEFAULT_CURRENCY:
@@ -204,6 +209,14 @@ class PaymentService:
                 currency if is_supported_currency(currency) else DEFAULT_CURRENCY,
             )
 
+        # Copy the pin's provenance onto the payment so the record carries the
+        # rate it was converted at, and where that rate came from, forever.
+        fx_source, fx_effective_at = ("base", utc_now()) if currency == DEFAULT_CURRENCY else (None, None)
+        if currency != DEFAULT_CURRENCY:
+            lock = await exchange.get_order_rate_lock(order_id, currency)
+            if lock is not None:
+                fx_source, fx_effective_at = lock.source, lock.rate_effective_at
+
         payment = Payment(
             order_id=order_id,
             consumer_id=consumer_id,
@@ -211,6 +224,8 @@ class PaymentService:
             amount_local_cents=amount_local_cents,
             currency=currency,
             fx_rate_micros=exchange.to_micros(rate),
+            fx_source=fx_source,
+            fx_effective_at=fx_effective_at,
             fx_pinned_at=utc_now(),
             breakdown=breakdown.as_dict() if breakdown is not None else None,
             method=method,
@@ -515,21 +530,29 @@ class PaymentService:
         """Handle a Paynow status update.
 
         Authentication happens in the router before this is called; this method
-        owns *idempotency* and *state safety*. The ``poll_url`` the caller sends
-        is recorded for audit but deliberately never used: only the poll URL
-        Paynow gave us at initiation is ever polled.
+        owns *idempotency* and *state safety*.
+
+        Idempotency works by **claiming** the notification before acting on it:
+        the receipt is inserted first, and its unique ``dedupe_key`` index means
+        only one worker's insert can succeed. A retry — or a second worker
+        handling the same retry concurrently — loses the claim and returns
+        without touching the payment. The state machine is the second line of
+        defence if the claim cannot be written at all.
+
+        The ``poll_url`` the caller sends is recorded for audit but deliberately
+        never used: only the poll URL Paynow gave us at initiation is polled.
         """
         payment = await Payment.find_one(Payment.paynow_reference == reference)
         if not payment:
-            logger.warn("Webhook for unknown payment", reference=reference)
-            await PaymentService._log_notification(
+            logger.warning("Webhook for unknown payment", reference=reference)
+            await PaymentService._claim_notification(
+                dedupe_key=build_dedupe_key(reference, status, None, str(paynow_reference or "")),
                 payment=None,
                 reference=reference,
                 reported_status=status,
                 payload=payload,
                 signature_verified=signature_verified,
                 source=source,
-                accepted=False,
                 action="unknown-payment",
                 paynow_reference=paynow_reference,
             )
@@ -545,7 +568,19 @@ class PaymentService:
         dedupe_key = build_dedupe_key(
             str(payment.id), status, amount_minor, extra=str(paynow_reference or "")
         )
-        if await PaymentService._notification_seen(dedupe_key):
+        receipt, claimed = await PaymentService._claim_notification(
+            dedupe_key=dedupe_key,
+            payment=payment,
+            reference=reference,
+            reported_status=status,
+            payload=payload,
+            signature_verified=signature_verified,
+            source=source,
+            action="processing",
+            amount_minor=amount_minor,
+            paynow_reference=paynow_reference,
+        )
+        if not claimed:
             logger.info(
                 "Duplicate payment notification ignored",
                 payment_id=str(payment.id),
@@ -562,60 +597,35 @@ class PaymentService:
             amount_minor=amount_minor,
             source=source,
         )
-
-        await PaymentService._log_notification(
-            payment=payment,
-            reference=reference,
-            reported_status=status,
-            payload=payload,
-            signature_verified=signature_verified,
-            source=source,
-            accepted=True,
-            action=action,
-            amount_minor=amount_minor,
-            dedupe_key=dedupe_key,
-            paynow_reference=paynow_reference,
-        )
+        await PaymentService._close_receipt(receipt, action)
         return payment
 
     @staticmethod
-    async def _notification_seen(dedupe_key: str) -> bool:
-        """True when this exact notification has already been processed.
-
-        A failure here is not fatal: the state machine independently refuses to
-        re-apply a transition, so the worst case of a log outage is an extra
-        audit gap, not a double credit.
-        """
-        try:
-            existing = await PaymentNotification.find_one(
-                PaymentNotification.dedupe_key == dedupe_key
-            )
-            return existing is not None
-        except Exception as exc:
-            logger.warning("Notification dedupe log unavailable", error=str(exc))
-            return False
-
-    @staticmethod
-    async def _log_notification(
+    async def _claim_notification(
         *,
+        dedupe_key: str,
         payment: Optional[Payment],
         reference: str,
         reported_status: str,
         payload: Optional[Dict[str, Any]],
         signature_verified: bool,
         source: NotificationSource,
-        accepted: bool,
         action: str,
         amount_minor: Optional[int] = None,
-        dedupe_key: Optional[str] = None,
         paynow_reference: Optional[str] = None,
-    ) -> None:
-        key = dedupe_key or build_dedupe_key(
-            str(getattr(payment, "id", reference)), reported_status, amount_minor
-        )
+    ):
+        """Insert the receipt that claims this notification.
+
+        Returns ``(receipt, claimed)``. ``claimed`` is ``False`` only when the
+        receipt already existed — the unique index rejecting the insert *is* the
+        idempotency guarantee. If the log is unavailable for any other reason we
+        proceed anyway and lean on the state machine, because refusing to settle
+        a payment the customer has made would be the worse failure.
+        """
+        record = None
         try:
             record = PaymentNotification(
-                dedupe_key=key,
+                dedupe_key=dedupe_key,
                 payment_id=str(payment.id) if payment is not None else None,
                 order_id=getattr(payment, "order_id", None),
                 reference=reference,
@@ -625,18 +635,50 @@ class PaymentService:
                 reported_amount_minor=amount_minor,
                 currency=getattr(payment, "charge_currency", DEFAULT_CURRENCY),
                 signature_verified=signature_verified,
-                accepted=accepted,
+                accepted=payment is not None,
                 action=action,
-                anomaly=action if action.startswith("anomaly") or action.startswith("rejected") else None,
                 payload=_safe_payload(payload),
             )
             await record.insert()
+            return record, True
+        except DuplicateKeyError:
+            return None, False
         except Exception as exc:
+            existing = await PaymentService._notification_seen(dedupe_key)
+            if existing:
+                return None, False
             logger.warning(
-                "Could not write payment notification log",
+                "Notification dedupe log unavailable; relying on the state machine",
                 reference=reference,
                 error=str(exc),
             )
+            return record, True
+
+    @staticmethod
+    async def _close_receipt(receipt, action: str) -> None:
+        """Record what the notification actually caused, for audit."""
+        if receipt is None:
+            return
+        try:
+            receipt.action = action
+            receipt.anomaly = (
+                action if action.startswith(("anomaly", "rejected")) else None
+            )
+            await receipt.save()
+        except Exception as exc:
+            logger.warning("Could not finalise payment notification log", error=str(exc))
+
+    @staticmethod
+    async def _notification_seen(dedupe_key: str) -> bool:
+        """True when this exact notification has already been recorded."""
+        try:
+            existing = await PaymentNotification.find_one(
+                PaymentNotification.dedupe_key == dedupe_key
+            )
+            return existing is not None
+        except Exception as exc:
+            logger.warning("Notification dedupe log unavailable", error=str(exc))
+            return False
 
     @staticmethod
     async def get_payment_for_order(order_id: str) -> Optional[Payment]:

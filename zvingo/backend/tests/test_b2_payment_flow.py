@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from pymongo.errors import DuplicateKeyError
 
 from app.payment.models import (
     NotificationSource,
@@ -196,6 +197,8 @@ def install_payment(monkeypatch, module, payment, seen_keys=None):
     notifications = []
 
     class FakeNotification:
+        """Enforces the unique dedupe_key index the real collection carries."""
+
         class _Field:
             def __eq__(self, other):
                 return ("eq", other)
@@ -204,10 +207,16 @@ def install_payment(monkeypatch, module, payment, seen_keys=None):
 
         def __init__(self, **kwargs):
             self.__dict__.update(kwargs)
+            self.anomaly = None
 
         async def insert(self):
+            if self.dedupe_key in seen:
+                raise DuplicateKeyError("dedupe_key_1")
             notifications.append(self)
             seen.add(self.dedupe_key)
+            return self
+
+        async def save(self):
             return self
 
         @classmethod
@@ -249,10 +258,12 @@ async def test_a_retried_webhook_settles_only_once(monkeypatch):
     settle_hook.assert_awaited_once()
     assert len(notifications) == 1
 
-    # Even if the dedupe log were unavailable, the state machine refuses the
-    # repeat: PAID -> PAID is a no-op.
+    # Even if the dedupe log were unavailable entirely, the state machine
+    # refuses the repeat: PAID -> PAID is a no-op.
     monkeypatch.setattr(
-        module.PaymentService, "_notification_seen", AsyncMock(return_value=False)
+        module.PaymentService,
+        "_claim_notification",
+        AsyncMock(return_value=(None, True)),
     )
     await module.PaymentService.handle_webhook(
         reference=fields["reference"], status="Paid", poll_url="",
@@ -462,3 +473,145 @@ def test_payment_initiate_rejects_an_unsupported_currency():
 
 def test_notification_source_values_cover_every_intake_path():
     assert {s.value for s in NotificationSource} == {"WEBHOOK", "POLL", "MANUAL", "MOCK"}
+
+
+@pytest.mark.asyncio
+async def test_initiation_pins_the_rate_onto_the_payment_record(monkeypatch):
+    """The payment itself carries the rate it was converted at, and its source."""
+    from decimal import Decimal
+
+    import app.payment.service as module
+    from app.finance import exchange
+
+    created = []
+
+    class FakePayment:
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+            self.id = "p1"
+            self.poll_url = None
+            self.paynow_reference = None
+            created.append(self)
+
+        async def insert(self):
+            return self
+
+        async def save(self):
+            return self
+
+    monkeypatch.setattr(module, "Payment", FakePayment)
+    monkeypatch.setattr(
+        module.PaymentService, "get_exchange_rate", AsyncMock(return_value=Decimal("13.5"))
+    )
+    monkeypatch.setattr(
+        exchange,
+        "get_order_rate_lock",
+        AsyncMock(return_value=SimpleNamespace(
+            source="rbz", rate_effective_at=None, rate=Decimal("13.5")
+        )),
+    )
+    monkeypatch.setattr(
+        module.paynow_client,
+        "send_mobile",
+        AsyncMock(return_value=SimpleNamespace(
+            success=True, poll_url="https://www.paynow.co.zw/interface/poll/x",
+            reference="ZVINGO-p1",
+        )),
+    )
+
+    from app.finance.fee_calculator import build_breakdown
+
+    breakdown = build_breakdown(subtotal_minor=2000, delivery_fee_minor=1000)
+    payment = await module.PaymentService.initiate_payment(
+        "o1", "c1", 0, PaymentMethod.ECOCASH, "+263771234567", "ZIG",
+        breakdown=breakdown,
+    )
+    assert payment.amount_usd_cents == 3000
+    assert payment.amount_local_cents == 40500        # 3000 * 13.5
+    assert payment.fx_rate_micros == 13_500_000
+    assert payment.fx_source == "rbz"
+    assert payment.status == PaymentStatus.AWAITING_DELIVERY
+    # The breakdown the customer was shown is frozen onto the payment.
+    assert payment.breakdown["customer_total_minor"] == 3000
+    assert payment.breakdown["driver_share_minor"] == 850
+
+
+@pytest.mark.asyncio
+async def test_a_usd_payment_needs_no_conversion(monkeypatch):
+    import app.payment.service as module
+
+    class FakePayment:
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+            self.id = "p1"
+            self.poll_url = None
+            self.paynow_reference = None
+
+        async def insert(self):
+            return self
+
+        async def save(self):
+            return self
+
+    monkeypatch.setattr(module, "Payment", FakePayment)
+    monkeypatch.setattr(
+        module.paynow_client,
+        "send_mobile",
+        AsyncMock(return_value=SimpleNamespace(success=False, error="declined")),
+    )
+    payment = await module.PaymentService.initiate_payment(
+        "o1", "c1", 31.50, PaymentMethod.CARD, "+263771234567", "USD"
+    )
+    assert payment.amount_usd_cents == 3150
+    assert payment.amount_local_cents == 3150
+    assert payment.fx_source == "base"
+    assert payment.status == PaymentStatus.FAILED
+
+
+@pytest.mark.asyncio
+async def test_two_workers_racing_the_same_notification_settle_it_once(monkeypatch):
+    """The receipt's unique index is the mutex: one worker wins, one stops."""
+    import asyncio
+
+    import app.payment.service as module
+
+    payment = a_payment()
+    notifications = install_payment(monkeypatch, module, payment)
+    settle_hook = AsyncMock()
+    monkeypatch.setattr(module.PaymentService, "_on_payment_success", settle_hook)
+    monkeypatch.setattr(module.PaymentService, "_record_settlement_ledger", AsyncMock())
+
+    async def deliver():
+        return await module.PaymentService.handle_webhook(
+            reference="ZVINGO-abc12345", status="Paid", poll_url="",
+            amount="31.50", paynow_reference="1234567", signature_verified=True,
+        )
+
+    await asyncio.gather(deliver(), deliver(), deliver())
+    assert payment.status == PaymentStatus.PAID
+    settle_hook.assert_awaited_once()
+    assert len(notifications) == 1
+    assert notifications[0].action == "settled"
+
+
+@pytest.mark.asyncio
+async def test_the_receipt_records_what_the_notification_caused(monkeypatch):
+    import app.payment.service as module
+
+    payment = a_payment()
+    notifications = install_payment(monkeypatch, module, payment)
+    monkeypatch.setattr(module.PaymentService, "_on_payment_success", AsyncMock())
+    monkeypatch.setattr(module.PaymentService, "_record_settlement_ledger", AsyncMock())
+
+    await module.PaymentService.handle_webhook(
+        reference="ZVINGO-abc12345", status="Paid", poll_url="",
+        amount="31.50", signature_verified=True,
+        payload={"status": "Paid", "hash": "SECRET"},
+    )
+    receipt = notifications[-1]
+    assert receipt.action == "settled"
+    assert receipt.anomaly is None
+    assert receipt.signature_verified is True
+    assert receipt.reported_amount_minor == 3150
+    # The signature is redacted before the delivery is stored.
+    assert receipt.payload["hash"] == "<redacted>"

@@ -302,6 +302,8 @@ async def test_usd_is_usable_in_production_without_any_published_rate(redis, mon
     monkeypatch.setattr(exchange, "_is_production", lambda: True)
     quote = await exchange.resolve_rate_for_order("USD", "order-1")
     assert quote.rate == Decimal(1)
+    # Nothing to pin: the base currency's rate is 1 by definition.
+    assert locks == []
 
 
 # ── the cached-payload view used by GET /finance/rates ──────────────

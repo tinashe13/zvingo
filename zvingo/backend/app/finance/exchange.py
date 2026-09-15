@@ -480,21 +480,23 @@ async def resolve_rate_for_order(
             raise StaleExchangeRateError(message)
         logger.warning("Stale exchange rate used outside production", detail=message)
 
-    if order_id:
+    # USD is the base currency: its rate is 1 by definition and can never move,
+    # so there is nothing to pin.
+    if order_id and code != DEFAULT_CURRENCY:
         quote = await _pin(order_id, quote)
     return quote
 
 
 async def _pin(order_id: str, quote: RateQuote) -> RateQuote:
     """Write the order's rate lock; if one was created concurrently, use that."""
-    lock = OrderRateLock(
-        order_id=order_id,
-        currency=quote.currency,
-        rate_micros=to_micros(quote.rate),
-        rate_effective_at=quote.effective_at,
-        source=quote.source,
-    )
     try:
+        lock = OrderRateLock(
+            order_id=order_id,
+            currency=quote.currency,
+            rate_micros=to_micros(quote.rate),
+            rate_effective_at=quote.effective_at,
+            source=quote.source,
+        )
         await lock.insert()
     except Exception as exc:
         existing = await get_order_rate_lock(order_id, quote.currency)

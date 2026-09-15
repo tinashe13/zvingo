@@ -516,7 +516,20 @@ async def test_db_initialization(monkeypatch):
     monkeypatch.setattr(module, "init_beanie", init)
     await module.init_db()
     assert init.await_args.kwargs["database"] is database
-    assert len(init.await_args.kwargs["document_models"]) == 9
+    registered = init.await_args.kwargs["document_models"]
+    # Assert by name rather than by count: an unregistered Beanie Document
+    # raises at first use, so the check that matters is that every collection
+    # the app writes to is present. A bare count breaks whenever a model is
+    # added and says nothing about which one is missing.
+    names = {model.__name__ for model in registered}
+    assert len(registered) == len(names)
+    assert {
+        "User", "Order", "Dispatch", "Restaurant", "Promotion", "Payment",
+        "DriverEarning", "Review", "ChatMessage",
+        # Money path — see app/db/session.py.
+        "LedgerEntry", "ExchangeRate", "OrderRateLock", "RefundRequest",
+        "PaymentNotification",
+    } <= names
 
 
 @pytest.mark.asyncio
