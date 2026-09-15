@@ -25,6 +25,7 @@ from decimal import Decimal
 from typing import Any, Dict, Optional, Tuple
 
 import structlog
+from fastapi import HTTPException
 from pymongo.errors import DuplicateKeyError
 
 from app.config import settings
@@ -62,11 +63,37 @@ from app.time_utils import utc_now
 logger = structlog.get_logger()
 
 # Method to Paynow provider mapping
+#: Payment methods Zvingo can actually charge, mapped to their Paynow provider
+#: code. CARD is deliberately absent: Paynow's mobile endpoint cannot take a
+#: card, and there is no card rail here. Anything not in this map is refused --
+#: see _provider_for.
 METHOD_PROVIDER_MAP = {
     PaymentMethod.ECOCASH: "ecocash",
     PaymentMethod.ONEMONEY: "onemoney",
     PaymentMethod.INNBUCKS: "innbucks",
 }
+
+
+def _provider_for(method) -> str:
+    """Paynow provider code for a payment method.
+
+    This used to be ``METHOD_PROVIDER_MAP.get(method, "ecocash")``. Since CARD
+    is in the PaymentMethod enum but not in the map, selecting card would fall
+    through the default and silently charge the customer's **EcoCash wallet**
+    instead -- taking money from a rail they never chose. An unsupported method
+    is now refused loudly rather than quietly redirected.
+    """
+    provider = METHOD_PROVIDER_MAP.get(method)
+    if provider is None:
+        name = getattr(method, "value", method)
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{name} payments are not available. "
+                "Please pay with EcoCash, OneMoney or InnBucks."
+            ),
+        )
+    return provider
 
 # Paynow status strings that mean a state we handle distinctly.
 _TERMINAL_FAILURE_STATES = {
@@ -236,7 +263,7 @@ class PaymentService:
 
         # Send to Paynow. Paynow's API takes major units, so convert exactly
         # once, here, at the boundary.
-        provider = METHOD_PROVIDER_MAP.get(method, "ecocash")
+        provider = _provider_for(method)
         charge_currency = currency if is_supported_currency(currency) else DEFAULT_CURRENCY
         charge_amount = float(minor_to_decimal(amount_local_cents, charge_currency))
 

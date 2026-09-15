@@ -1,6 +1,6 @@
 import asyncio
 import json
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Header, Query, Request
 from typing import Annotated, List, Optional
 from sse_starlette.sse import EventSourceResponse
 import redis.asyncio as aioredis
@@ -8,7 +8,7 @@ import redis.asyncio as aioredis
 from app.config import settings
 from app.catalog.models import Restaurant
 from app.location.service import LocationService
-from app.notification.stream_auth import redeem_ticket
+from app.notification.stream_auth import authorize_stream
 
 router = APIRouter()
 
@@ -34,7 +34,12 @@ async def nearby_restaurants(
 
 
 @router.get("/driver/{driver_id}/track")
-async def track_driver(request: Request, driver_id: str, ticket: str = ""):
+async def track_driver(
+    request: Request,
+    driver_id: str,
+    ticket: str = "",
+    authorization: Optional[str] = Header(default=None),
+):
     """SSE stream of a driver's live position, for consumer order tracking.
 
     Requires a ticket from ``POST /notification/stream-ticket`` for the
@@ -43,7 +48,7 @@ async def track_driver(request: Request, driver_id: str, ticket: str = ""):
     follow them in real time. The ticket is only issued to that driver, an
     admin, or a participant in an order they are currently delivering.
     """
-    await redeem_ticket(ticket, f"driver_loc_{driver_id}")
+    await authorize_stream(f"driver_loc_{driver_id}", ticket, authorization)
     async def event_generator():
         r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
         pubsub = r.pubsub()

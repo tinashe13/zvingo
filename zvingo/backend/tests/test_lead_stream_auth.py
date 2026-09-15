@@ -203,3 +203,78 @@ async def test_the_consumer_of_an_in_flight_order_may_follow_its_driver(
     )
 
     assert await stream_auth.issue_ticket("driver_loc_dave", user("alice"))
+
+
+# ── dual-mode: header for native clients, ticket for browsers ─────────────
+
+@pytest.mark.asyncio
+async def test_a_native_client_may_authenticate_with_a_bearer_header(
+    redis, monkeypatch
+):
+    """Both Flutter apps use Dio, which can set Authorization.
+
+    For them a header beats a ticket: no credential in a URL, and no extra
+    round trip before every reconnect. Browsers still need the ticket.
+    """
+    import app.auth.models as auth_models
+    import app.auth.tokens as tokens
+
+    monkeypatch.setattr(tokens, "decode_token", lambda _t: {"sub": "alice"})
+    monkeypatch.setattr(
+        auth_models.User,
+        "get",
+        AsyncMock(return_value=SimpleNamespace(id="alice", role="consumer", is_active=True)),
+    )
+
+    assert await stream_auth.authorize_stream(
+        "consumer_alice", None, "Bearer good-token"
+    ) == "alice"
+
+
+@pytest.mark.asyncio
+async def test_a_bearer_header_still_obeys_channel_authorization(redis, monkeypatch):
+    """A valid token is not a licence to read someone else's channel."""
+    import app.auth.models as auth_models
+    import app.auth.tokens as tokens
+
+    monkeypatch.setattr(tokens, "decode_token", lambda _t: {"sub": "alice"})
+    monkeypatch.setattr(
+        auth_models.User,
+        "get",
+        AsyncMock(return_value=SimpleNamespace(id="alice", role="consumer", is_active=True)),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await stream_auth.authorize_stream("consumer_bob", None, "Bearer good-token")
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_a_deactivated_account_cannot_open_a_stream(redis, monkeypatch):
+    import app.auth.models as auth_models
+    import app.auth.tokens as tokens
+
+    monkeypatch.setattr(tokens, "decode_token", lambda _t: {"sub": "alice"})
+    monkeypatch.setattr(
+        auth_models.User,
+        "get",
+        AsyncMock(return_value=SimpleNamespace(id="alice", role="consumer", is_active=False)),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await stream_auth.authorize_stream("consumer_alice", None, "Bearer good-token")
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_a_garbage_header_does_not_fall_through_to_open_access(redis, monkeypatch):
+    import app.auth.tokens as tokens
+
+    def _boom(_t):
+        raise ValueError("bad signature")
+
+    monkeypatch.setattr(tokens, "decode_token", _boom)
+
+    with pytest.raises(HTTPException) as exc:
+        await stream_auth.authorize_stream("consumer_alice", None, "Bearer forged")
+    assert exc.value.status_code == 403

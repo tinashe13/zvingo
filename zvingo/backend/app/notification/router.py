@@ -2,7 +2,7 @@ import asyncio
 import json
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, field_validator
 from sse_starlette.sse import EventSourceResponse
 from app.auth.models import User
@@ -11,7 +11,7 @@ from app.catalog.hours import InvalidHours, format_hhmm, parse_hhmm
 from app.config import settings
 from app.notification.fcm import fcm_status
 from app.notification.preferences import get_preferences, set_preferences
-from app.notification.stream_auth import issue_ticket, redeem_ticket
+from app.notification.stream_auth import authorize_stream, issue_ticket
 import redis.asyncio as redis
 import structlog
 
@@ -107,7 +107,12 @@ async def create_stream_ticket(
 
 
 @router.get("/events/{channel_id}")
-async def message_stream(request: Request, channel_id: str, ticket: str = ""):
+async def message_stream(
+    request: Request,
+    channel_id: str,
+    ticket: str = "",
+    authorization: Optional[str] = Header(default=None),
+):
     """SSE stream of real-time updates for one channel.
 
     Requires a ticket from ``POST /notification/stream-ticket``. Before this
@@ -115,7 +120,7 @@ async def message_stream(request: Request, channel_id: str, ticket: str = ""):
     read any merchant's live orders, any order's chat, or any driver's
     position -- restaurant ids are published by the public catalog listing.
     """
-    await redeem_ticket(ticket, channel_id)
+    await authorize_stream(channel_id, ticket, authorization)
     async def event_generator():
         r = None
         pubsub = None

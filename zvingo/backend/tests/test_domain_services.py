@@ -362,7 +362,7 @@ async def test_payment_exchange_initiation_and_completion(monkeypatch):
         success=False, error="declined"
     )
     failed = await module.PaymentService.initiate_payment(
-        "order", "consumer", 10, PaymentMethod.CARD, "+263", "USD"
+        "order", "consumer", 10, PaymentMethod.ECOCASH, "+263", "USD"
     )
     assert failed.amount_local_cents == 1000 and failed.status == PaymentStatus.FAILED
 

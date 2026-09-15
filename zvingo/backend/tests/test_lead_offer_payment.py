@@ -88,3 +88,33 @@ def test_cash_is_not_a_supported_payment_method():
     from app.payment.models import PaymentMethod
 
     assert "CASH" not in {m.value for m in PaymentMethod}
+
+
+# ── payment rail safety ───────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_an_unsupported_method_is_refused_not_silently_rerouted():
+    """CARD is in the PaymentMethod enum but has no Paynow rail.
+
+    The provider lookup used to be ``.get(method, "ecocash")``, so choosing card
+    fell through the default and charged the customer's EcoCash wallet -- money
+    taken from a rail they never picked. It must refuse instead.
+    """
+    from fastapi import HTTPException
+
+    from app.payment.models import PaymentMethod
+    from app.payment.service import METHOD_PROVIDER_MAP, _provider_for
+
+    assert PaymentMethod.CARD not in METHOD_PROVIDER_MAP
+
+    with pytest.raises(HTTPException) as exc:
+        _provider_for(PaymentMethod.CARD)
+    assert exc.value.status_code == 400
+    assert "ecocash" not in str(exc.value.detail).lower().split("please")[0]
+
+    for method in (
+        PaymentMethod.ECOCASH,
+        PaymentMethod.ONEMONEY,
+        PaymentMethod.INNBUCKS,
+    ):
+        assert _provider_for(method) == METHOD_PROVIDER_MAP[method]

@@ -560,7 +560,7 @@ async def test_a_usd_payment_needs_no_conversion(monkeypatch):
         AsyncMock(return_value=SimpleNamespace(success=False, error="declined")),
     )
     payment = await module.PaymentService.initiate_payment(
-        "o1", "c1", 31.50, PaymentMethod.CARD, "+263771234567", "USD"
+        "o1", "c1", 31.50, PaymentMethod.ECOCASH, "+263771234567", "USD"
     )
     assert payment.amount_usd_cents == 3150
     assert payment.amount_local_cents == 3150

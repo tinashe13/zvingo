@@ -175,3 +175,37 @@ async def redeem_ticket(ticket: Optional[str], channel: str) -> str:
         raise forbidden("Stream ticket is not valid for this channel")
 
     return user_id
+
+async def authorize_stream(
+    channel: str,
+    ticket: Optional[str],
+    authorization: Optional[str],
+) -> str:
+    """Authorize an SSE subscription by ticket **or** bearer header.
+
+    Browsers need the ticket: ``EventSource`` cannot set a header. Native
+    clients (both Flutter apps use Dio) can send ``Authorization`` normally, and
+    for them a header is strictly better than a ticket -- no credential in a
+    URL, and no extra round trip before every reconnect.
+
+    Returns the authorized user id.
+    """
+    if authorization:
+        scheme, _, token = authorization.partition(" ")
+        if scheme.lower() == "bearer" and token:
+            from app.auth.models import User
+            from app.auth.tokens import decode_token
+
+            try:
+                claims = decode_token(token)
+            except Exception:
+                raise forbidden("Invalid credentials for this stream")
+
+            user = await User.get(claims.get("sub"))
+            if user is None or not getattr(user, "is_active", True):
+                raise forbidden("Invalid credentials for this stream")
+
+            await authorize_channel(channel, user)
+            return _uid(user.id)
+
+    return await redeem_ticket(ticket, channel)

@@ -331,21 +331,28 @@ class _MiniStat extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 18, color: iconColor),
-            Gap.hXs,
-            Text(
-              value,
-              style: AppTextStyles.metric
-                  .copyWith(color: AppColors.textPrimary, fontSize: 18),
-            ),
-          ],
+        // Scales down rather than overflowing: at 200% text scale a
+        // four-figure delivery count plus its icon is wider than half a 320px
+        // card.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 18, color: iconColor),
+              Gap.hXs,
+              Text(
+                value,
+                style: AppTextStyles.metric
+                    .copyWith(color: AppColors.textPrimary, fontSize: 18),
+              ),
+            ],
+          ),
         ),
         Gap.xxs,
         Text(
           label,
+          textAlign: TextAlign.center,
           style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
         ),
       ],
